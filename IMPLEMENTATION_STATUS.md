@@ -116,11 +116,76 @@ caller (or a future runner integration) constructs them from adjudication data. 
 logging is likewise a library a production routing layer would call; the benchmark run itself
 doesn't route production traffic, so it correctly has no opinion here.
 
+## Fifth pass: NVIDIA NIM provider + Model Registry + deterministic Router + orchestration
+
+The architecture requirement changed mid-session: from a fixed 2-4 model pool on Groq to "Quintek
+maintains an evaluated pool of AI configurations, measures them against Quintek-specific tasks,
+filters them through safety gates, and routes each task to the strongest eligible configuration" --
+provider-agnostic, registry-driven, with NVIDIA NIM as the initial (not permanent) provider.
+
+- **`benchmark/providers/nvidia.py`** — `NVIDIAProvider`, NVIDIA NIM's OpenAI-compatible
+  `/v1/chat/completions` over `urllib.request` (stdlib, no new dependency). The API key is read
+  from `NVIDIA_API_KEY` at call time only — never a constructor argument, never written to disk by
+  this module. 13 tests, all against a mocked HTTP layer (auth header, request body, JSON-in-content
+  parsing, 429 retry-then-succeed, retries-exhausted, connection failure, and a test asserting the
+  key literally never appears in `.manifest()`'s output, since that dict is what ends up in
+  `report.json`).
+- **`benchmark/registry.py`** — `Registry` / `ModelCandidate`, JSON-file-backed, atomic writes.
+  Candidate identity is derived from the same fields as `docs/CANDIDATE_DEFINITION.md` (provider +
+  model + version + prompt version + retrieval version + config), so re-registering an identical
+  configuration returns the same candidate rather than a duplicate. Lifecycle
+  (`REGISTERED -> BENCHMARK_REQUIRED -> EVALUATING -> ELIGIBLE/FAILED -> PRODUCTION -> DEPRECATED`)
+  is enforced by an explicit transition table, not convention — skipping straight to `PRODUCTION`,
+  or leaving `FAILED`/`DEPRECATED`, raises. Only `ELIGIBLE`/`PRODUCTION` candidates are ever
+  returned by `eligible_candidates()`. 14 tests.
+- **`benchmark/tasks.py`** — `TaskType` enum (`SOURCE_PROCESSING` .. `REVISION_SELECTION`), each
+  mapped to the registry gate IDs that measure fitness for it and the capabilities it requires — the
+  join key between "what Quintek needs to do" and "what the benchmark measured."
+- **`benchmark/router.py`** — `Router.select(task, policy, ...)`: capability filter -> safety filter
+  (excludes any candidate whose latest run is not `production_eligible`, or whose task-relevant gate
+  status is `fail`) -> score -> policy. Five policies (`QUALITY_FIRST` default,
+  `COST_OPTIMIZED`/`LATENCY_OPTIMIZED` with graceful fallback to `QUALITY_FIRST` when no
+  cost/latency hint is given, `BALANCED`, `EXPERIMENTAL` seeded-random for evidence collection). No
+  step calls a model — `test_no_llm_call_anywhere_in_selection` asserts this structurally by
+  scanning the module source. 11 tests, including the exact acceptance scenario from the
+  architecture spec: three candidates, one scores highest on question generation but fails
+  `GATE-SAFETY-CME`, and must be excluded from routing regardless of its raw score.
+- **`benchmark/orchestration.py`** — `Orchestrator.generate(task, prompt, policy)`: routes, calls
+  the provider, and on failure excludes that candidate and re-routes (`max_fallbacks`), recording
+  every attempt — success, failure, or "no eligible candidate" — to an append-only `ExecutionLog`,
+  never silently switching models. `CallLimiter` bounds concurrency (semaphore), call count, and
+  token budget for *production* traffic, deliberately separate from `runner.Budget` (which scopes
+  one benchmark *run*, a different lifetime). 10 tests, including one that actually blocks a second
+  thread on a concurrency limit of 1 and unblocks it on release.
+- **`benchmark/analytics_api.py` extended** — `/ai/reliability`, `/ai/candidates`,
+  `/ai/candidates/<id>`, `/ai/candidates/<id>/tasks`, `/ai/benchmark`, `/ai/leaderboard` (overall or
+  `?task=` for a task-specific ranking), `/ai/routing/current` (what's routed where, right now — "why
+  did Quintek use this model"), `/ai/how-it-works` (static, and tested to never claim one model is
+  globally best). Added alongside the existing `/api/*` routes, not replacing them —
+  `test_original_api_routes_still_work_unchanged` guards that.
+- **`benchmark/analytics.py` extended** — `normalized_track_score`/`task_leaderboard`, shared by the
+  router and the new leaderboard endpoint (moved out of `router.py` during this pass so the
+  direction-normalization logic exists in exactly one place).
+
+**End-to-end verified, not just unit-tested:** a full `Registry -> Router -> Orchestrator ->
+ExecutionLog/RoutingLog` run against a real (scripted) provider, and a real `serve-analytics`
+process hit over an actual socket with `curl` (`/ai/how-it-works`, `/ai/candidates`,
+`/ai/benchmark`), both by hand outside the test suite, both working.
+
+**What's still not verified: a live call to NVIDIA NIM itself.** This sandbox's egress policy
+rejects the CONNECT to `integrate.api.nvidia.com:443` outright (403 at the gateway, confirmed via
+`$HTTPS_PROXY/__agentproxy/status`, not a bad key or a transient failure) — per that proxy's own
+guidance, a policy denial is reported, not retried or routed around. The adapter is fully unit-
+tested against a mocked HTTP layer and ready to run unchanged the moment the environment's network
+policy allows the host, or when run outside this sandbox.
+
 ## Not built
 
 | Component | Why |
 |---|---|
-| Real provider adapters | Need API keys and a cost budget. The abstraction (including retry/timeout) is done; each adapter is ~40 lines. |
+| Live-verified NVIDIA NIM calls | The adapter is real and fully unit-tested against mocked HTTP; this sandbox's egress policy blocks the host itself (see "Fifth pass" above), so no call has actually reached NVIDIA yet. |
+| Other provider adapters (OpenAI/Anthropic/Google/local) | The abstraction supports them (see `providers/base.py`, `providers/nvidia.py` as the template); none exist yet because nothing has asked for one. |
+| Product-side persistence (notebooks, questions, question provenance, source ingestion) | Out of this repository's scope by design — this repo is the benchmark harness plus the orchestration layer a product backend calls into (`benchmark/orchestration.py`), not the product backend itself. `ExecutionRecord` carries everything a product's "question provenance" table would need to reference (`execution_id`, `candidate_id`, `prompt_version`, tokens, latency); attaching that to an actual question/notebook record happens in a different codebase. |
 | LLM judge (Tier 2) | **No pipeline exists at all** — `benchmark/judges/__init__.py` is a 0-byte file, not a partial implementation. What exists is judge-independence *enforcement* (`integrity.py:_judge_family`, tested) and the scorers that would consume a judge's verdict. Nothing calls an LLM to judge anything, because that needs a live provider and API keys this environment doesn't have. Said plainly because an earlier summary of this work described Phase 2 as more complete than this. |
 | A real reviewer pool | Cannot be built by a model — see `docs/REVIEW_CAPACITY.md`. The `ReviewQueue` / `SeniorAdjudicationQueue` / `GoldChallengeLedger` workflow exists and is tested against synthetic labels; it is the mechanism reviewers would use, not a substitute for them. |
 | Generation prompt templates | `benchmark/prompts/` is still an empty stub. `score_generation_rubric` (the scoring side) is built and tested; eliciting a generation from a real candidate needs a live provider this environment doesn't have. |

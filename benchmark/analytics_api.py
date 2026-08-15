@@ -8,7 +8,7 @@ framework/language. Treat the endpoints and response shapes as the contract
 to reimplement in whatever stack the product actually ships on -- not as a
 prescription that this stdlib server is meant to run in production.
 
-Endpoints:
+Endpoints (original, frontend-contract-shaped):
 
   GET /api/candidates                    -> CandidateSummary[]  (frontend contract)
   GET /api/leaderboard                    -> LeaderboardEntry[]  (rank != eligibility)
@@ -20,9 +20,23 @@ Endpoints:
   GET /api/routing?task=&candidate=&execution_id=
                                           -> RoutingDecision[]
 
+Endpoints (added for the NVIDIA/model-registry architecture -- same data,
+`/ai/*` naming, plus registry- and router-aware views the `/api/*` set
+didn't need):
+
+  GET /ai/reliability?candidate=<id>      -> alias of /api/ai-overview
+  GET /ai/candidates                      -> alias of /api/candidates
+  GET /ai/candidates/<id>                 -> CandidateSummary + tracks + registry entry
+  GET /ai/candidates/<id>/tasks            -> task types this candidate is CURRENTLY routed for
+  GET /ai/benchmark                       -> registry status counts + calibration state + leaderboard
+  GET /ai/leaderboard?task=<TASK_TYPE>     -> overall leaderboard, or task-specific if `task` given
+  GET /ai/routing/current                  -> every task type's current routing decision (section 17)
+  GET /ai/how-it-works                     -> static description of the selection architecture
+
 Every response is computed server-side from what's already on disk under
-`runs/`. Nothing here performs statistics -- see analytics.py's module
-docstring for why that separation is the point.
+`runs/` (and the registry file, for the registry-aware endpoints). Nothing
+here performs statistics -- see analytics.py's module docstring for why that
+separation is the point.
 """
 
 from __future__ import annotations
@@ -33,6 +47,33 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import analytics as an
+from .registry import Registry
+from .router import Router, RoutingPolicy
+from .tasks import TaskType, gate_ids_for
+
+
+HOW_IT_WORKS = {
+    "steps": [
+        {"step": 1, "name": "Model pool", "description":
+         "Several candidate AI configurations are registered -- different base models, "
+         "prompts, and settings, each a distinct entry in the Model Registry."},
+        {"step": 2, "name": "Benchmark", "description":
+         "Every candidate is tested against a fixed, independent set of tasks it has never "
+         "seen, across every benchmark track."},
+        {"step": 3, "name": "Performance", "description":
+         "Results are scored per task, with sample size and uncertainty always attached -- "
+         "never a bare number."},
+        {"step": 4, "name": "Safety gates", "description":
+         "A candidate that fails a mandatory safety gate is excluded from selection "
+         "regardless of how high its other scores are."},
+        {"step": 5, "name": "Task-specific selection", "description":
+         "The eligible candidate with the strongest measured result on a given task is the "
+         "one routed to that task -- and only that task. No single model is 'Quintek's AI'."},
+    ],
+    "principle": "Quintek maintains an evaluated pool of AI configurations, measures them "
+                 "against Quintek-specific tasks, filters them through safety gates, and "
+                 "routes each task to the strongest eligible configuration.",
+}
 
 
 class AnalyticsAPI:
@@ -43,10 +84,13 @@ class AnalyticsAPI:
 
     def __init__(self, runs_root: str | Path, *,
                  failures: list[an.FailureRecord] | None = None,
-                 routing_log_path: str | Path | None = None):
+                 routing_log_path: str | Path | None = None,
+                 registry_path: str | Path | None = None):
         self.archive = an.RunArchive(runs_root)
         self._failures = failures or []
         self.routing_log = an.RoutingLog(routing_log_path) if routing_log_path else None
+        self.registry = Registry(registry_path) if registry_path else None
+        self.router = Router(self.registry, self.archive) if self.registry else None
 
     def _latest(self, candidate_id: str):
         result = self.archive.latest_run_for_candidate(candidate_id)
@@ -115,10 +159,110 @@ class AnalyticsAPI:
                 )
                 return 200, {"routing": [d.as_dict() for d in decisions]}
 
+            # -- /ai/* -----------------------------------------------------
+
+            if path == "/ai/reliability":
+                cid = one("candidate")
+                if not cid:
+                    return 400, {"error": "missing required query param 'candidate'"}
+                try:
+                    return 200, an.ai_overview(self._latest(cid))
+                except KeyError:
+                    return 404, {"error": f"no benchmark run found for candidate '{cid}'"}
+
+            if path == "/ai/candidates":
+                results = [self.archive.latest_run_for_candidate(c)
+                          for c in self.archive.candidates()]
+                return 200, {"candidates": [an.candidate_summary(r) for r in results if r]}
+
+            if path == "/ai/how-it-works":
+                return 200, HOW_IT_WORKS
+
+            if path == "/ai/benchmark":
+                return self._benchmark_summary()
+
+            if path == "/ai/leaderboard":
+                task_param = one("task")
+                if task_param:
+                    try:
+                        task = TaskType(task_param)
+                    except ValueError:
+                        return 400, {"error": f"unknown task type '{task_param}'"}
+                    return 200, {"task": task.value,
+                                "leaderboard": an.task_leaderboard(self.archive, list(gate_ids_for(task)))}
+                board = an.leaderboard(self.archive)
+                enriched = []
+                for entry in board:
+                    d = entry.as_dict()
+                    result = self.archive.latest_run_for_candidate(entry.candidate_id)
+                    manifest = (result.run.candidate_manifest or {}) if result else {}
+                    d["provider"] = manifest.get("provider")
+                    d["model"] = manifest.get("model_id")
+                    enriched.append(d)
+                return 200, {"leaderboard": enriched}
+
+            if path == "/ai/routing/current":
+                if self.router is None:
+                    return 400, {"error": "no model registry configured for this API instance"}
+                current = {}
+                for task in TaskType:
+                    result = self.router.select(task, policy=RoutingPolicy.QUALITY_FIRST)
+                    current[task.value] = {
+                        "selected_candidate": result.selected_candidate,
+                        "eligible_candidates": result.eligible_candidates,
+                        "reason": result.reason,
+                    }
+                return 200, {"routing_current": current}
+
+            if path.startswith("/ai/candidates/"):
+                rest = path[len("/ai/candidates/"):].strip("/")
+                parts = rest.split("/") if rest else []
+                if len(parts) == 1 and parts[0]:
+                    return self._candidate_detail(parts[0])
+                if len(parts) == 2 and parts[1] == "tasks":
+                    return self._candidate_tasks(parts[0])
+                return 404, {"error": f"no such endpoint: {path}"}
+
             return 404, {"error": f"no such endpoint: {path}"}
 
         except Exception as exc:  # a broken response must say so, never fabricate data
             return 500, {"error": f"{type(exc).__name__}: {exc}"}
+
+    def _benchmark_summary(self) -> tuple[int, dict]:
+        board = an.leaderboard(self.archive)
+        registry_counts: dict[str, int] = {}
+        if self.registry is not None:
+            for c in self.registry.all():
+                registry_counts[c.status] = registry_counts.get(c.status, 0) + 1
+        return 200, {
+            "candidate_count": len(board),
+            "registry_status_counts": registry_counts,
+            "leaderboard": [e.as_dict() for e in board],
+        }
+
+    def _candidate_detail(self, candidate_id: str) -> tuple[int, dict]:
+        try:
+            result = self._latest(candidate_id)
+        except KeyError:
+            return 404, {"error": f"no benchmark run found for candidate '{candidate_id}'"}
+        detail = an.candidate_summary(result)
+        detail["tracks"] = an.student_track_results(result)
+        detail["production_eligible"] = result.production_eligible
+        detail["safety_status"] = result.safety_status
+        if self.registry is not None:
+            entry = self.registry.get(candidate_id)
+            detail["registry"] = entry.as_dict() if entry else None
+        return 200, detail
+
+    def _candidate_tasks(self, candidate_id: str) -> tuple[int, dict]:
+        if self.router is None:
+            return 400, {"error": "no model registry configured for this API instance"}
+        current_tasks = []
+        for task in TaskType:
+            result = self.router.select(task, policy=RoutingPolicy.QUALITY_FIRST)
+            if result.selected_candidate == candidate_id:
+                current_tasks.append(task.value)
+        return 200, {"candidate_id": candidate_id, "currently_routed_for": current_tasks}
 
 
 def make_handler(api: AnalyticsAPI):
@@ -141,8 +285,10 @@ def make_handler(api: AnalyticsAPI):
 
 def serve(runs_root: str | Path, *, host: str = "127.0.0.1", port: int = 8420,
           failures: list[an.FailureRecord] | None = None,
-          routing_log_path: str | Path | None = None) -> None:
-    api = AnalyticsAPI(runs_root, failures=failures, routing_log_path=routing_log_path)
+          routing_log_path: str | Path | None = None,
+          registry_path: str | Path | None = None) -> None:
+    api = AnalyticsAPI(runs_root, failures=failures, routing_log_path=routing_log_path,
+                       registry_path=registry_path)
     server = ThreadingHTTPServer((host, port), make_handler(api))
     print(f"benchmark analytics reference API on http://{host}:{port}  (Ctrl+C to stop)")
     try:
@@ -159,7 +305,9 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Reference analytics API (stdlib http.server)")
     p.add_argument("--runs-root", default="runs")
     p.add_argument("--routing-log", default=None)
+    p.add_argument("--registry", default=None)
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8420)
     args = p.parse_args()
-    serve(args.runs_root, host=args.host, port=args.port, routing_log_path=args.routing_log)
+    serve(args.runs_root, host=args.host, port=args.port, routing_log_path=args.routing_log,
+          registry_path=args.registry)

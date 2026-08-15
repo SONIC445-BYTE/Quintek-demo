@@ -5,3 +5,13 @@ runs/*
 !runs/.gitkeep
 .venv/
 *.egg-info/
+
+# Secrets and local orchestration state -- never committed. API keys are
+# read only from environment variables at call time (see
+# benchmark/providers/nvidia.py's module docstring); nothing in this repo
+# writes one to disk, but this is a defense-in-depth backstop.
+.env
+.env.*
+registry.json
+executions.jsonl
+routing.jsonl

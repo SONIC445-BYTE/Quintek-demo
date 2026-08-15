@@ -3,18 +3,25 @@
 The benchmark is NOT considered built until all of these exist and pass tests.
 
 Status below was produced by running `python -m pytest tests/ -v` against this repository
-(119 tests, all passing at the time this checklist was last updated) and by reading every
+(181 tests, all passing at the time this checklist was last updated) and by reading every
 module listed, not by trusting a prior claim of completion — see `V0_4_CHANGELOG.md` item 1
 for why that distinction matters. See `IMPLEMENTATION_STATUS.md` in the repo root for the
 fuller account, including what is explicitly NOT built and why.
 
-`benchmark/analytics.py` and `benchmark/analytics_api.py` (43 of the 119 tests) are a data layer
-built on top of this checklist's items, not a new phase of the benchmark itself: they read
-`report.json`/`manifest.json` from `runs/` and reshape it for a leaderboard, comparison, failure
-analytics, and the student-facing `AIOverview`/`TrackResult`/`CandidateSummary` contract. See
-`IMPLEMENTATION_STATUS.md`'s "Fourth pass" section for a real aggregation bug this layer's own
-tests caught and fixed (an unweighted mean that blended an error-rate gate into an accuracy-like
-ranking score).
+`benchmark/analytics.py` and `benchmark/analytics_api.py` are a data layer built on top of this
+checklist's items, not a new phase of the benchmark itself: they read `report.json`/`manifest.json`
+from `runs/` and reshape it for a leaderboard, comparison, failure analytics, and the student-facing
+`AIOverview`/`TrackResult`/`CandidateSummary` contract. See `IMPLEMENTATION_STATUS.md`'s "Fourth
+pass" section for a real aggregation bug this layer's own tests caught and fixed (an unweighted
+mean that blended an error-rate gate into an accuracy-like ranking score).
+
+`benchmark/registry.py`, `router.py`, `orchestration.py`, and `providers/nvidia.py` are a further
+layer on top of that: a Model Registry with an enforced lifecycle, a deterministic task-to-candidate
+router (safety overrides performance, structurally — see "Fifth pass" in `IMPLEMENTATION_STATUS.md`
+for the exact acceptance-test scenario this is verified against), an orchestrator that logs every
+execution and falls back on failure without ever silently switching models, and a real NVIDIA NIM
+provider adapter, unit-tested against a mocked HTTP layer pending network access this sandbox's
+egress policy currently blocks.
 
 This checklist does not use the master prompt's Phase 0-5 numbering directly, but maps onto
 it: Core = Phase 0, Tracks = Phase 1 + the deterministic half of Phase 4, **Judge-dependent

@@ -81,7 +81,8 @@ def cmd_serve_analytics(args) -> int:
     """Reference analytics API over runs/ -- see benchmark/analytics_api.py."""
     from .analytics_api import serve
 
-    serve(args.runs_root, host=args.host, port=args.port, routing_log_path=args.routing_log)
+    serve(args.runs_root, host=args.host, port=args.port, routing_log_path=args.routing_log,
+          registry_path=args.registry)
     return 0
 
 
@@ -106,6 +107,7 @@ def main(argv=None) -> int:
     sa = sub.add_parser("serve-analytics", help="run the reference analytics JSON API")
     sa.add_argument("--runs-root", default="runs")
     sa.add_argument("--routing-log", default=None)
+    sa.add_argument("--registry", default=None)
     sa.add_argument("--host", default="127.0.0.1")
     sa.add_argument("--port", type=int, default=8420)
     sa.set_defaults(func=cmd_serve_analytics)

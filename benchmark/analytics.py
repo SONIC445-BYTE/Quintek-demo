@@ -454,6 +454,55 @@ class LeaderboardEntry:
         )
 
 
+def normalized_track_score(track: TrackResult) -> float | None:
+    """
+    Puts a gate estimate on a 'higher is better' scale by inverting
+    lower-is-better (`upper`/`equal` direction) gates: `1 - estimate`.
+
+    This is a DIFFERENT fix from `_ranking_score`'s: that function excludes
+    error-rate gates from its average entirely, because the official
+    ranking number should never blend incompatible scales. This function
+    exists for callers that need SOME signal from every gate relevant to a
+    task (benchmark/router.py's task scoring, `task_leaderboard` below) --
+    they invert rather than drop, producing an approximate, direction-
+    consistent tie-breaker, not a scored result. Never use this for a
+    number that could be read as an official score.
+    """
+    if track.score is None:
+        return None
+    return track.score if track.direction == "lower" else 1.0 - track.score
+
+
+def task_leaderboard(archive: "RunArchive", gate_ids: list[str]) -> list[dict]:
+    """
+    Ranks every candidate's latest run by normalized mean score over the
+    given gate_ids, independent of Model Registry status -- this reflects
+    benchmark evidence, not production eligibility. For eligibility-aware
+    production selection, use `benchmark.router.Router`, which additionally
+    excludes any candidate whose latest run is not `production_eligible`.
+    """
+    rows = []
+    for cid in archive.candidates():
+        result = archive.latest_run_for_candidate(cid)
+        if result is None:
+            continue
+        relevant = [t for t in result.tracks if t.gate_id in gate_ids]
+        normalized = [normalized_track_score(t) for t in relevant]
+        normalized = [n for n in normalized if n is not None]
+        score = (sum(normalized) / len(normalized)) if normalized else None
+        manifest = result.run.candidate_manifest or {}
+        rows.append({
+            "candidate_id": cid, "provider": manifest.get("provider"),
+            "model": manifest.get("model_id"), "score": score,
+            "status": result.student_status,
+            "production_eligible": result.production_eligible,
+        })
+    rows.sort(key=lambda r: (r["score"] is None, -(r["score"] or 0.0)))
+    for i, r in enumerate(rows, start=1):
+        r["rank"] = i
+    return rows
+
+
 def _ranking_score(result: CandidateBenchmarkResult) -> float | None:
     """
     Mean of measured track estimates. Sort key only -- never written back
