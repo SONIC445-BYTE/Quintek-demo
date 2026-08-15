@@ -70,6 +70,52 @@ keys, so they're closed rather than left as footnotes:
    3x/item and asserts real disagreement is observed, not just that the code path executes
    without error.
 
+## Fourth pass: benchmark analytics data layer (student frontend contract + admin analytics)
+
+A frontend implementation spec asked for two things beyond the harness itself: a student-facing
+"AI Reliability" UI consuming a typed API contract (never a hardcoded score), and an admin analytics
+data layer (leaderboard, comparison, failure analytics, routing analytics, historical runs) that
+precomputes everything so the frontend is a pure visualization layer.
+
+- **`benchmark/analytics.py`** — entities (`BenchmarkRun`, `CandidateBenchmarkResult`, `TrackResult`,
+  `BenchmarkCaseResult`, `FailureRecord`, `CriticalErrorRecord`, `RoutingDecision`,
+  `HumanReviewResult`), a read-only `RunArchive` over `runs/` supporting the candidate -> runs ->
+  versions -> tracks traversal, a leaderboard with ranking explicitly separated from production
+  eligibility, a two-candidate comparison, filterable failure analytics, an append-only
+  `RoutingLog`, and `ai_overview`/`student_track_results`/`candidate_summary` producing the exact
+  `AIOverview`/`TrackResult`/`CandidateSummary` shapes the frontend contract specifies. The
+  registry's technical outcome states (PASS/CONDITIONAL/FAIL/NO_PASS_CAPABILITY_GAP/INCOMPLETE/
+  INVALID_RUN/NOT_VALID_FOR_PRODUCTION_PASS/UNEVALUABLE) map to a student-facing pass/review/fail/
+  unavailable vocabulary in one place (`RUN_STATUS_MAP`), tested for exhaustiveness against the live
+  registry rather than hand-copied.
+- **`benchmark/analytics_api.py`** — a reference-only read-only JSON API (`http.server`, stdlib,
+  zero new dependencies) exposing `/api/candidates`, `/api/leaderboard`, `/api/ai-overview`,
+  `/api/tracks`, `/api/compare`, `/api/failures`, `/api/routing`. Framed explicitly as a contract
+  reference, not a prescribed production stack — the transport (`AnalyticsAPI.handle`) is kept
+  separate from the stdlib HTTP wrapper so a real framework adapter can wrap the same core. Runnable
+  via `python -m benchmark.cli serve-analytics`.
+
+**A real bug, caught by its own test, not by re-reading the spec:** the first version of
+`_ranking_score` averaged every measured track's raw estimate together to produce a leaderboard sort
+key, including `GATE-SAFETY-CME`'s raw estimate -- which is a confirmed-CME **rate** (lower is
+better), not an accuracy-like score. A candidate with 99% accuracy and a 2% confirmed-CME rate
+averaged to 50.5%, which sorted *below* a safer candidate with a merely-good 91% accuracy and no
+CME gate at all. That is the exact "aggregate that averages a failed/dangerous signal away" failure
+mode `docs/SCORECARD_SPEC.md` exists to prevent on the official scorecard -- and it reappeared here,
+in a code path that only ever claimed to be a display convenience. `test_ranking_never_implies_eligibility`
+in `tests/test_analytics.py` failed on first run and caught it; the same defect existed a second time
+in the grouped per-track score for the frontend's "Concept understanding" track (blending
+`GATE-C-F1`, higher-is-better, with `GATE-C-MERGE`, an error rate) and was fixed the same way.
+**Fixed:** every score aggregation in `analytics.py` now excludes `direction != "lower"` gates (error
+rates, zero-tolerance safety gates) from any numeric average; their PASS/FAIL status still
+participates in status roll-ups via worst-status-wins, which is direction-agnostic and correct.
+
+**What this does NOT do:** `FailureRecord`/`CriticalErrorRecord`/`HumanReviewResult` are defined and
+fully testable, but nothing in `runner.py` automatically populates them from a real run yet -- a
+caller (or a future runner integration) constructs them from adjudication data. `RoutingDecision`
+logging is likewise a library a production routing layer would call; the benchmark run itself
+doesn't route production traffic, so it correctly has no opinion here.
+
 ## Not built
 
 | Component | Why |
@@ -80,6 +126,8 @@ keys, so they're closed rather than left as footnotes:
 | Generation prompt templates | `benchmark/prompts/` is still an empty stub. `score_generation_rubric` (the scoring side) is built and tested; eliciting a generation from a real candidate needs a live provider this environment doesn't have. |
 | Embedding / semantic diversity | Needs `BAAI/bge-small-en-v1.5`; not downloadable in this sandbox. Scorer signature and aggregation (`score_near_duplicate_rate`, `score_family_coverage`) are built and tested against synthetic similarity values; no real embedding has ever been computed. |
 | Full contamination battery (C1/C2/C6) | Split isolation and holdout-path access are enforced in code. Exact/near-duplicate retrieval against public corpora and a temporal holdout need an external corpus this environment doesn't have. |
+| Automatic `FailureRecord`/`CriticalErrorRecord` capture during a run | The entities and the query layer (`failure_analytics`) are built and tested against hand-built records. Nothing in `runner.py` constructs them automatically from a real run's outputs yet -- needs per-track failure classification, which depends on the same real-corpus/real-model gap as everything else. |
+| A production stack for `analytics_api.py` | Deliberately stdlib-only and framework-agnostic (see its module docstring). It is a reference implementation of the contract, not a recommendation to actually run `http.server` in production. |
 | Exploratory-metrics reporting path | `SAMPLE_SIZE_AND_STATISTICS.md` distinguishes primary gates from exploratory/descriptive metrics; `report.json` has no field for the latter. The new per-family injection breakdown is exploratory in spirit but is returned by its own function, not folded into a general-purpose reporting path. |
 | **The corpus** | **Cannot be built by a model.** ~3,850 expert-authored items, 800–1,200 hours. A model authoring gold it will be graded against is the exact failure the benchmark exists to prevent. |
 
