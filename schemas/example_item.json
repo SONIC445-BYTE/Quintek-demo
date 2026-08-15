@@ -1,0 +1,26 @@
+{
+  "id":"QA-PRIVATE-0001",
+  "track":"medical_qa",
+  "split":"holdout",
+  "subject":"medicine",
+  "topic":"example",
+  "difficulty":"hard",
+  "competency":"clinical_reasoning",
+  "prompt":"<BENCHMARK ITEM>",
+  "gold":{
+    "answer":"B",
+    "accepted_answers":["B"],
+    "concept_ids":["medicine.example.primary"],
+    "supporting_concept_ids":["biochemistry.example.support"],
+    "rationale":"<VERIFIED RATIONALE>"
+  },
+  "provenance":{
+    "type":"private_expert_authored",
+    "source_id":"PRIVATE-REDACTED"
+  },
+  "adjudication":{
+    "status":"verified",
+    "reviewers":2
+  },
+  "severity":"high"
+}

@@ -1,0 +1,82 @@
+benchmark_version: v0.4
+mode: full   # smoke | standard | full  — only 'full' may yield an official PASS
+
+# ---------------------------------------------------------------------------
+# THRESHOLDS AND SAMPLE SIZES ARE NOT DEFINED HERE.
+# They live in configs/gate_registry_v0_4.json, the single source of truth.
+# v0.3 duplicated them across this file, the registry, and three prose docs,
+# and they drifted apart. tests/test_spec_consistency.py enforces the rule.
+# ---------------------------------------------------------------------------
+gate_registry: configs/gate_registry_v0_4.json
+
+# --- Review configuration -------------------------------------------------
+# max_attainable_outcome is COMPUTED from this block before the run starts and
+# printed at the top of the report. A run that cannot produce a PASS should say
+# so before it spends the budget. See docs/REVIEW_CAPACITY.md.
+review:
+  mode: developmental          # developmental | reduced_scope | full
+  reviewer_count: 1
+  subjects_in_scope: []        # empty = all subjects
+  # With reviewer_count < 2, Cohen's kappa is mathematically undefined,
+  # GATE-REL-KAPPA-CRITICAL is UNEVALUABLE, and the ceiling is:
+  #   NOT_VALID_FOR_PRODUCTION_PASS
+
+# --- Budget ---------------------------------------------------------------
+# v0.3 specified a single ambiguous ceiling of 25,000 calls without stating
+# whether it was per-candidate or global. Measured against v0.3's own required
+# sample sizes, one full run costs ~9,200 calls, so that ceiling silently
+# capped a bake-off at two candidates — in a benchmark whose stated purpose is
+# comparing candidates. v0.4 declares both scopes explicitly.
+budget:
+  scope: per_candidate
+  per_candidate:
+    max_calls: 15000           # ~9,200 measured + headroom for retries/variance
+    max_input_tokens: 18000000
+    max_output_tokens: 6000000
+    max_cost_usd: 250
+    max_wall_minutes: 720
+    max_retries_per_item: 2
+  global:
+    max_candidates: 6
+    max_calls: 90000
+    max_cost_usd: 1500
+  on_exhaustion: INCOMPLETE    # never convertible to PASS
+
+# --- Cost estimation ------------------------------------------------------
+# The runner MUST perform a dry-run cost projection before executing and abort
+# if the projection exceeds budget. Discovering exhaustion mid-track produces a
+# partially-scored run, which is the state most likely to be quietly reported
+# as if complete.
+preflight:
+  require_cost_projection: true
+  abort_if_projection_exceeds_budget: true
+  projection_assumes_tokens_in: 1200
+  projection_assumes_tokens_out: 400
+
+# --- Execution ------------------------------------------------------------
+variance:
+  sentinel_fraction: 0.10
+  dev_characterization_runs: 3
+  # variance thresholds: see GATE-REL-VARIANCE-* in the gate registry
+
+embedding:
+  model: BAAI/bge-small-en-v1.5
+  # Part of the benchmark manifest. Changing it creates a new benchmark version.
+  # Similarity thresholds: see GATE-H-DUP in the gate registry.
+
+judge:
+  tier: 2
+  require_different_model_family_from_candidate: true
+  require_different_provider_when_available: true
+  same_family_judge_may_gate_pass: false
+
+caching:
+  enabled: true
+  key: [candidate_id, benchmark_version, item_id, prompt_hash, execution_config_hash]
+
+# --- Integrity ------------------------------------------------------------
+integrity:
+  fail_closed: true            # any precondition failure => INVALID_RUN, metrics withheld
+  holdout_path_access_test: true
+  forbidden_artifact_scan: true
+  detect_post_hoc_gate_edits: true

@@ -1,0 +1,136 @@
+"""
+Provider abstraction.
+
+The runner must not know which model it is evaluating. Everything a scorecard
+needs to reproduce a result travels in GenerationResponse.
+
+No silent failure: a provider error is recorded as an error, never as an empty
+answer that scores as wrong. Those are different events and conflating them
+biases every accuracy figure downward in a way that looks like model weakness.
+
+Retry/timeout: `timeout_seconds` is passed through to `_call` on every
+attempt so a concrete provider can hand it to its own HTTP client (the
+correct place to enforce a network timeout -- a wrapper-level alarm/thread
+timeout cannot safely cancel an in-flight request in a generic way). The base
+class owns the retry loop and the accounting: how many attempts were made,
+and whether the final attempt still failed, both travel in the response so a
+report never hides how many tries a number cost.
+"""
+
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass, field
+from typing import Protocol
+
+
+@dataclass
+class GenerationRequest:
+    item_id: str
+    prompt: str
+    system: str = ""
+    max_tokens: int = 1024
+    temperature: float = 0.0
+    metadata: dict = field(default_factory=dict)
+
+
+@dataclass
+class RetryPolicy:
+    max_retries: int = 2
+    timeout_seconds: float = 30.0
+    backoff_base_seconds: float = 0.0
+
+
+@dataclass
+class GenerationResponse:
+    item_id: str
+    raw_output: str
+    parsed: dict | None
+    provider: str
+    model: str
+    model_version: str
+    latency_ms: float
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    error: str | None = None
+    attempts: int = 1
+    request_metadata: dict = field(default_factory=dict)
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
+
+    def as_dict(self) -> dict:
+        return {
+            "item_id": self.item_id, "raw_output": self.raw_output, "parsed": self.parsed,
+            "provider": self.provider, "model": self.model, "model_version": self.model_version,
+            "latency_ms": round(self.latency_ms, 2), "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens, "error": self.error, "attempts": self.attempts,
+            "request_metadata": self.request_metadata,
+        }
+
+
+class ModelProvider(Protocol):
+    name: str
+    model: str
+    model_version: str
+    model_family: str
+
+    def generate(self, request: GenerationRequest) -> GenerationResponse: ...
+
+
+class BaseProvider:
+    name = "base"
+    model = "unset"
+    model_version = "unset"
+    model_family = "unset"
+    retry_policy: RetryPolicy = RetryPolicy()
+
+    def generate(self, request: GenerationRequest) -> GenerationResponse:
+        """
+        Retries up to `retry_policy.max_retries` additional times on any
+        exception from `_call` (including a concrete provider raising
+        TimeoutError once its own client-level timeout fires). The response
+        records every attempt count; a value that only succeeded on retry is
+        not the same evidence as one that succeeded first try, and a report
+        that discards that distinction hides instability.
+        """
+        start = time.perf_counter()
+        attempt = 0
+        raw, parsed, tin, tout, err = "", None, None, None, None
+        while True:
+            attempt += 1
+            try:
+                raw, parsed, tin, tout = self._call(request, self.retry_policy.timeout_seconds)
+                err = None
+                break
+            except Exception as exc:
+                raw, parsed, tin, tout = "", None, None, None
+                err = f"{type(exc).__name__}: {exc}"
+                if attempt > self.retry_policy.max_retries:
+                    break
+                if self.retry_policy.backoff_base_seconds:
+                    time.sleep(self.retry_policy.backoff_base_seconds * attempt)
+        return GenerationResponse(
+            item_id=request.item_id, raw_output=raw, parsed=parsed,
+            provider=self.name, model=self.model, model_version=self.model_version,
+            latency_ms=(time.perf_counter() - start) * 1000,
+            input_tokens=tin, output_tokens=tout, error=err, attempts=attempt,
+            request_metadata={"temperature": request.temperature,
+                              "max_tokens": request.max_tokens},
+        )
+
+    def _call(self, request: GenerationRequest, timeout_seconds: float):
+        """
+        Concrete providers implement this and pass `timeout_seconds` to their
+        own client (e.g. `requests.post(..., timeout=timeout_seconds)`),
+        raising on timeout or transport failure so the retry loop above can
+        act on it.
+        """
+        raise NotImplementedError
+
+    def manifest(self) -> dict:
+        return {"provider": self.name, "model_id": self.model,
+                "model_version": self.model_version, "model_family": self.model_family,
+                "retry_policy": {"max_retries": self.retry_policy.max_retries,
+                                 "timeout_seconds": self.retry_policy.timeout_seconds}}
