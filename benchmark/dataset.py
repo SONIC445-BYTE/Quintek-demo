@@ -36,6 +36,14 @@ MIN_SUBJECTS = 5
 MIN_CME_CATEGORIES = 4
 MIN_CME_CATEGORY_SHARE = 0.10
 
+# From docs/INJECTION_BATTERY.md "Attack families" PI-01..PI-10. This is a
+# corpus-composition sanity check (structural, like the safety-holdout
+# distribution above), not a scoring gate -- there is no registered threshold
+# for it in configs/gate_registry_v0_4.json, and there must never be one
+# invented here. A battery missing an entire attack family has an unmeasured
+# blind spot regardless of how the aggregate attack-success rate reads.
+ATTACK_FAMILIES = {f"PI-{i:02d}" for i in range(1, 11)}
+
 
 @dataclass
 class ValidationReport:
@@ -45,6 +53,7 @@ class ValidationReport:
     warnings: list[str] = field(default_factory=list)
     by_track: dict = field(default_factory=dict)
     by_split: dict = field(default_factory=dict)
+    by_attack_family: dict = field(default_factory=dict)
     dataset_hash: str = ""
 
     def as_dict(self) -> dict:
@@ -52,6 +61,7 @@ class ValidationReport:
             "ok": self.ok, "n_items": self.n_items,
             "errors": self.errors, "warnings": self.warnings,
             "by_track": self.by_track, "by_split": self.by_split,
+            "by_attack_family": self.by_attack_family,
             "dataset_hash": self.dataset_hash,
         }
 
@@ -166,6 +176,15 @@ def validate(path: str | Path) -> ValidationReport:
         if item.track == "fake_mastery" and not item.concept_id:
             rep.errors.append(f"line {lineno}: fake_mastery item '{item.id}' has no concept_id")
 
+        if item.track == "injection":
+            fam = item.gold.get("attack_family")
+            if not fam:
+                rep.errors.append(f"line {lineno}: injection item '{item.id}' has no "
+                                  "gold.attack_family; per-family coverage cannot be verified")
+            elif fam not in ATTACK_FAMILIES:
+                rep.errors.append(f"line {lineno}: injection item '{item.id}' has unknown "
+                                  f"attack_family '{fam}', must be one of {sorted(ATTACK_FAMILIES)}")
+
         prompts_by_split[item.split].add(item.prompt.strip())
 
     # Split isolation: a holdout item duplicated into dev is a contamination path.
@@ -202,6 +221,20 @@ def validate(path: str | Path) -> ValidationReport:
                 rep.errors.append(
                     f"CME category '{cat}' targeted by {count/n:.1%} of safety items, "
                     f"maximum {MAX_CME_CATEGORY_SHARE:.0%}")
+
+    # Injection battery coverage (docs/INJECTION_BATTERY.md, per
+    # docs/INTEGRITY_CI.md "injection battery smoke test"). A missing family
+    # is a blind spot no aggregate attack-success rate can reveal.
+    injection = [i for i in items if i.track == "injection"]
+    if injection:
+        by_family = Counter(i.gold.get("attack_family") for i in injection)
+        rep.by_attack_family = dict(by_family)
+        missing = ATTACK_FAMILIES - set(by_family)
+        if missing:
+            rep.errors.append(
+                f"injection battery missing attack famil{'y' if len(missing)==1 else 'ies'} "
+                f"{sorted(missing)}: docs/INJECTION_BATTERY.md defines {len(ATTACK_FAMILIES)}, "
+                "an untested family is an unmeasured blind spot regardless of the aggregate rate")
 
     rep.n_items = len(items)
     rep.by_track = dict(Counter(i.track for i in items))

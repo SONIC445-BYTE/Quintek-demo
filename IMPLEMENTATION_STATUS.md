@@ -41,18 +41,62 @@ item 1 for why "a green test suite" is not, by itself, sufficient evidence here.
    did not cover: reviewer disagreement routing to a senior adjudication queue entry, and a gold
    challenge producing a frozen-item-plus-challenge record.
 
+## Third pass: closed two more gaps surfaced by a direct "are all phases done?" audit
+
+Re-checking against `docs/MASTER_BUILD_PROMPT_V0_4.md` phase-by-phase (not re-reading the
+docstrings, grepping the actual code) found two more real holes, both closeable without API
+keys, so they're closed rather than left as footnotes:
+
+3. **`docs/INTEGRITY_CI.md` item 10, "injection battery smoke test", did not exist.** The
+   synthetic corpus already distributes all 10 `PI-01`..`PI-10` attack families evenly (30 items
+   each), but no code anywhere read `gold.attack_family` — no coverage check, no per-family
+   breakdown, just one aggregate success rate across all 300 items, which can hide a single
+   completely-broken family inside a passing average. Added a corpus-composition check in
+   `dataset.py:validate` (structural, not a scoring gate — no threshold for this exists in the
+   registry and none was invented) and a diagnostic-only `score_injection_attack_success_by_family`
+   in `scorers/deterministic.py`. `tests/test_injection_battery.py` (7 tests) includes one that
+   constructs a case where the aggregate rate reads fine but one family is at 100% attack
+   success, and shows only the breakdown catches it.
+4. **`docs/VARIANCE_PROTOCOL.md`'s actual protocol had no executing code.** Only the reliability
+   gate *thresholds* (`GATE-REL-VARIANCE-*`) existed in the registry; nothing performed the DEV
+   characterization (>=3 runs/item) or the official-run 10% sentinel re-run, and nothing computed
+   the disagreement rates those gates check. Added `benchmark/variance.py`
+   (`characterize`, `sentinel_rerun`, the three disagreement-rate calculators, and
+   `reliability_from_variance`, which produces the exact dict shape `gates.evaluate_run` already
+   consumes) plus an opt-in `Runner.run(..., run_sentinel_variance=True)` integration — off by
+   default, since it is additional provider calls beyond what a caller's own `reliability` dict
+   might already supply, and a caller running their own re-run harness must not have it silently
+   overridden. `tests/test_variance.py` (17 tests) includes one that runs a stochastic provider
+   3x/item and asserts real disagreement is observed, not just that the code path executes
+   without error.
+
 ## Not built
 
 | Component | Why |
 |---|---|
 | Real provider adapters | Need API keys and a cost budget. The abstraction (including retry/timeout) is done; each adapter is ~40 lines. |
-| LLM judge (Tier 2) | Needs a provider. Independence enforcement is implemented in `integrity.py`. |
-| A real reviewer pool | Cannot be built by a model — see `docs/REVIEW_CAPACITY.md`. The `ReviewQueue` / `SeniorAdjudicationQueue` / `GoldChallengeLedger` workflow now exists and is tested against synthetic labels; it is the mechanism reviewers would use, not a substitute for them. |
+| LLM judge (Tier 2) | **No pipeline exists at all** — `benchmark/judges/__init__.py` is a 0-byte file, not a partial implementation. What exists is judge-independence *enforcement* (`integrity.py:_judge_family`, tested) and the scorers that would consume a judge's verdict. Nothing calls an LLM to judge anything, because that needs a live provider and API keys this environment doesn't have. Said plainly because an earlier summary of this work described Phase 2 as more complete than this. |
+| A real reviewer pool | Cannot be built by a model — see `docs/REVIEW_CAPACITY.md`. The `ReviewQueue` / `SeniorAdjudicationQueue` / `GoldChallengeLedger` workflow exists and is tested against synthetic labels; it is the mechanism reviewers would use, not a substitute for them. |
 | Generation prompt templates | `benchmark/prompts/` is still an empty stub. `score_generation_rubric` (the scoring side) is built and tested; eliciting a generation from a real candidate needs a live provider this environment doesn't have. |
 | Embedding / semantic diversity | Needs `BAAI/bge-small-en-v1.5`; not downloadable in this sandbox. Scorer signature and aggregation (`score_near_duplicate_rate`, `score_family_coverage`) are built and tested against synthetic similarity values; no real embedding has ever been computed. |
 | Full contamination battery (C1/C2/C6) | Split isolation and holdout-path access are enforced in code. Exact/near-duplicate retrieval against public corpora and a temporal holdout need an external corpus this environment doesn't have. |
-| Exploratory-metrics reporting path | `SAMPLE_SIZE_AND_STATISTICS.md` distinguishes primary gates from exploratory/descriptive metrics; `report.json` has no field for the latter. Nothing currently mislabels an exploratory number as a gate result, but the dedicated path doesn't exist either. |
+| Exploratory-metrics reporting path | `SAMPLE_SIZE_AND_STATISTICS.md` distinguishes primary gates from exploratory/descriptive metrics; `report.json` has no field for the latter. The new per-family injection breakdown is exploratory in spirit but is returned by its own function, not folded into a general-purpose reporting path. |
 | **The corpus** | **Cannot be built by a model.** ~3,850 expert-authored items, 800–1,200 hours. A model authoring gold it will be graded against is the exact failure the benchmark exists to prevent. |
+
+## What it would take to close the one real remaining gap that doesn't need a corpus or reviewers
+
+The Tier-2 LLM judge is the last piece with no code at all. Closing it needs, from you:
+
+1. **Which provider(s) and model(s)** — the candidate model under test, and a separate judge
+   model from a different model family (per `docs/JUDGE_INDEPENDENCE.md` Tier 2: different
+   family, different provider when practical). Two Anthropic models, for instance, would not
+   satisfy this on their own.
+2. **API key(s)**, supplied as environment variables at run time (e.g. `ANTHROPIC_API_KEY`,
+   `OPENAI_API_KEY`) — never pasted into chat or committed to the repo. I'll wire the adapter to
+   read them from the environment the same way any SDK does.
+3. **Confirmation that a small number of live calls during testing is acceptable** — verifying a
+   real adapter means actually calling it a handful of times, which costs a few cents to a few
+   dollars depending on the model, not the full benchmark budget.
 
 ## Synthetic corpus — deliberate design decision
 

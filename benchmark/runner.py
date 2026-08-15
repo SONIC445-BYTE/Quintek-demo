@@ -26,6 +26,7 @@ from .gates import GateRegistry, Measurement, evaluate_run
 from .integrity import IntegrityChecker, sha256_file, sha256_text
 from .providers.base import GenerationRequest, ModelProvider, RetryPolicy
 from .reports.scorecard import render_scorecard, write_report
+from .variance import VarianceConfig, reliability_from_variance, sentinel_rerun
 
 
 @dataclass
@@ -137,7 +138,18 @@ class Runner:
         reliability: dict | None = None,
         integrity_ctx: dict | None = None,
         run_id: str | None = None,
+        run_sentinel_variance: bool = False,
     ) -> dict:
+        """
+        `run_sentinel_variance=True` performs the docs/VARIANCE_PROTOCOL.md
+        sentinel re-run (a random `variance.sentinel_fraction` of medical_qa
+        items, re-executed in a second batch against the same provider) after
+        the main pass, and merges GATE-REL-VARIANCE-ANSWER into `reliability`
+        unless the caller already supplied a value for it. Off by default: it
+        is additional provider calls beyond what `project_cost` already
+        reserves headroom for, and a caller building `reliability` from a
+        real re-run harness of their own should not have this override it.
+        """
         run_id = run_id or f"run-{uuid.uuid4().hex[:10]}"
         run_dir = self.root / "runs" / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
@@ -196,6 +208,29 @@ class Runner:
 
         (run_dir / "errors.jsonl").write_text(
             "\n".join(json.dumps(e) for e in errors))
+
+        # Sentinel re-run (docs/VARIANCE_PROTOCOL.md), opt-in. A random sample
+        # of the deterministic-choice track is re-executed in a second batch
+        # against the same provider, never overwriting the original responses
+        # written above, and the disagreement rate is merged into reliability
+        # unless the caller already supplied GATE-REL-VARIANCE-ANSWER.
+        if run_sentinel_variance:
+            qa_items = [it for it in items if it.track == "medical_qa" and it.id in responses]
+            if qa_items:
+                var_cfg = VarianceConfig.from_yaml(self.config)
+                pairs = sentinel_rerun(
+                    provider, qa_items, responses, var_cfg,
+                    store_path=run_dir / "variance_sentinel_rerun.jsonl",
+                )
+                variance_reliability = reliability_from_variance(answer_pairs=pairs)
+                reliability = dict(reliability or {})
+                reliability.setdefault("GATE-REL-VARIANCE-ANSWER",
+                                       variance_reliability["GATE-REL-VARIANCE-ANSWER"])
+                (run_dir / "variance_summary.json").write_text(json.dumps({
+                    "sentinel_n": len(pairs),
+                    "sentinel_fraction_configured": var_cfg.sentinel_fraction,
+                    "GATE-REL-VARIANCE-ANSWER": reliability["GATE-REL-VARIANCE-ANSWER"],
+                }, indent=2))
 
         # Integrity
         ctx = dict(integrity_ctx or {})

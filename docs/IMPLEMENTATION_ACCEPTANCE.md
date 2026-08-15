@@ -3,10 +3,34 @@
 The benchmark is NOT considered built until all of these exist and pass tests.
 
 Status below was produced by running `python -m pytest tests/ -v` against this repository
-(52 tests, all passing at the time this checklist was last updated) and by reading every
+(76 tests, all passing at the time this checklist was last updated) and by reading every
 module listed, not by trusting a prior claim of completion — see `V0_4_CHANGELOG.md` item 1
 for why that distinction matters. See `IMPLEMENTATION_STATUS.md` in the repo root for the
 fuller account, including what is explicitly NOT built and why.
+
+This checklist does not use the master prompt's Phase 0-5 numbering directly, but maps onto
+it: Core = Phase 0, Tracks = Phase 1 + the deterministic half of Phase 4, **Judge-dependent
+tracks below = Phase 2, and it is the one phase with a real, unstarted hole** — Human review =
+Phase 3, Integrity = Phase 5. Asked plainly "is every phase done": no. Phases 0, 1, 3, 4, 5 are
+built and tested to the limits of what this environment can supply (no API keys, no corpus, no
+reviewers). Phase 2 has independence *enforcement* and the *scorers* that would consume a
+judge's verdict, but no judge pipeline at all.
+
+## Judge-dependent tracks (Phase 2)
+- [x] judge independence tiers defined and checkable — `docs/JUDGE_INDEPENDENCE.md` +
+      `configs/gate_registry_v0_4.json:judge_tiers`, `benchmark/integrity.py:_judge_independence`
+- [x] same-family judge cannot be the sole basis for PASS — `_judge_family`, tested by
+      `test_scenario_8_same_family_judge_blocks_pass`
+- [x] deterministic-vs-judge disagreement — deterministic wins, per
+      `docs/JUDGE_INDEPENDENCE.md`; `test_scenario_3_deterministic_wins_for_deterministic_properties`
+- [x] scorers that consume a judge's or human rater's verdict — `score_generation_rubric`,
+      `score_validation_false_approval`
+- [ ] **an actual Tier-2 LLM judge pipeline — does not exist.** `benchmark/judges/__init__.py`
+      is a 0-byte file. Nothing in this repository has ever called an LLM to judge anything.
+      Needs: a provider adapter for the judge model, a provider adapter for the candidate model
+      (a different model family, per Tier 2), and API keys for both, none of which a model can
+      supply for itself. See `IMPLEMENTATION_STATUS.md` for exactly what's needed from a human
+      to close this.
 
 ## Core
 - [x] Dataset loader — `benchmark/dataset.py:load`
@@ -81,6 +105,15 @@ fuller account, including what is explicitly NOT built and why.
       candidate manifest
 - [x] same-family judge cannot gate PASS — `_judge_family`, exercised by
       `test_scenario_8_same_family_judge_blocks_pass`
+- [x] injection battery smoke test (`docs/INTEGRITY_CI.md` item 10) — `dataset.py:validate`
+      now checks all 10 `PI-01`..`PI-10` attack families are represented in the injection split
+      (structural corpus check, not a scoring gate — no threshold invented); diagnostic
+      per-family breakdown in `score_injection_attack_success_by_family`.
+      `tests/test_injection_battery.py`
+- [x] stochastic variance protocol test (`docs/INTEGRITY_CI.md` item 9) — `benchmark/variance.py`
+      implements DEV characterization and the sentinel re-run for real, feeding
+      `GATE-REL-VARIANCE-*` from actual re-executions rather than only declaring the threshold;
+      wired into `Runner.run(..., run_sentinel_variance=True)`, opt-in. `tests/test_variance.py`
 
 ## Statistics
 - [x] minimum n enforced — `evaluate_gate` returns `UNEVALUABLE` below registered `min_n`,
