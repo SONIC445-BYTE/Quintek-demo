@@ -179,11 +179,42 @@ guidance, a policy denial is reported, not retried or routed around. The adapter
 tested against a mocked HTTP layer and ready to run unchanged the moment the environment's network
 policy allows the host, or when run outside this sandbox.
 
+## Sixth pass: a real, persistent, committed Model Registry
+
+Everything in the "Fifth pass" registry work existed only inside test fixtures (`tmp_path`-scoped,
+never written to the repo). This pass seeds a real one:
+
+- **`tools_seed_model_registry.py`** — reads five general-purpose-appropriate model IDs straight
+  from a live `GET /v1/models` call against `integrate.api.nvidia.com` (not guessed), and registers
+  them into `configs/model_registry.json`, now committed. Four general-purpose candidates across
+  distinct model families/lineages (`meta/llama-3.3-70b-instruct`, `openai/gpt-oss-120b`,
+  `google/gemma-3-12b-it`, `nvidia/llama-3.1-nemotron-70b-instruct`) plus one medical-domain
+  specialist (`writer/palmyra-med-70b`, deliberately registered with a **narrower** capability set —
+  no evidence supports claiming it's good at long-context source processing or concept extraction,
+  so the seed doesn't claim that). NVIDIA hosts 100+ endpoints; embedding, vision, translation, and
+  safety-moderation models (`nvidia/nv-embed-v1`, `meta/llama-3.2-11b-vision-instruct`,
+  `meta/llama-guard-4-12b`, etc.) were deliberately excluded — see the script's module docstring for
+  why lumping those in as ordinary candidates would be dishonest.
+- **Every seeded candidate is `REGISTERED` and nothing more.** None are `ELIGIBLE`/`PRODUCTION` --
+  that requires a real benchmark run against real gold data, which doesn't exist (see "The corpus
+  does not exist" in README.md). `test_no_seeded_candidate_is_fabricated_eligible` in
+  `tests/test_model_registry_seed.py` asserts this directly, and a further test points a real
+  `Router` at the real seed with an empty run archive and confirms it correctly returns "no eligible
+  candidate" for all nine task types — verified behavior, not an assumption.
+- **`benchmark/cli.py serve-analytics`** now defaults `--registry` to this seed file when present,
+  so the reference API works out of the box. Manually verified over a real socket: `/ai/benchmark`
+  reports `{"REGISTERED": 5}` and zero leaderboard entries (no runs yet, correctly); `/ai/routing/current`
+  reports `selected_candidate: null` for every task with an explicit reason, not a silent default.
+- 9 new tests, including one confirming the seeded file isn't accidentally shadowed by the
+  `registry.json` entry in `.gitignore` (different filename, `model_registry.json`, so this one stays
+  committed while ad hoc local registries created during development stay ignored).
+
 ## Not built
 
 | Component | Why |
 |---|---|
-| Live-verified NVIDIA NIM calls | The adapter is real and fully unit-tested against mocked HTTP; this sandbox's egress policy blocks the host itself (see "Fifth pass" above), so no call has actually reached NVIDIA yet. |
+| ~~Live-verified NVIDIA NIM calls~~ | **Done, this pass.** Network access was granted mid-session; a real `NVIDIAProvider` call against `meta/llama-3.1-70b-instruct` returned a real, correctly-parsed response (`{"answer": "B"}`, 63 input / 7 output tokens, ~23.5s latency). No longer a gap. |
+| A real benchmark run against any registered candidate | The registry now has 5 real candidates (see "Sixth pass"), but none has been benchmarked — still blocked on the corpus, same root cause as everything else in this table. |
 | Other provider adapters (OpenAI/Anthropic/Google/local) | The abstraction supports them (see `providers/base.py`, `providers/nvidia.py` as the template); none exist yet because nothing has asked for one. |
 | Product-side persistence (notebooks, questions, question provenance, source ingestion) | Out of this repository's scope by design — this repo is the benchmark harness plus the orchestration layer a product backend calls into (`benchmark/orchestration.py`), not the product backend itself. `ExecutionRecord` carries everything a product's "question provenance" table would need to reference (`execution_id`, `candidate_id`, `prompt_version`, tokens, latency); attaching that to an actual question/notebook record happens in a different codebase. |
 | LLM judge (Tier 2) | **No pipeline exists at all** — `benchmark/judges/__init__.py` is a 0-byte file, not a partial implementation. What exists is judge-independence *enforcement* (`integrity.py:_judge_family`, tested) and the scorers that would consume a judge's verdict. Nothing calls an LLM to judge anything, because that needs a live provider and API keys this environment doesn't have. Said plainly because an earlier summary of this work described Phase 2 as more complete than this. |

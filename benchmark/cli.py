@@ -104,10 +104,11 @@ def main(argv=None) -> int:
     d = sub.add_parser("demo", help="run the harness end-to-end on synthetic data")
     d.set_defaults(func=cmd_demo)
 
+    default_registry = ROOT / "configs" / "model_registry.json"
     sa = sub.add_parser("serve-analytics", help="run the reference analytics JSON API")
     sa.add_argument("--runs-root", default="runs")
     sa.add_argument("--routing-log", default=None)
-    sa.add_argument("--registry", default=None)
+    sa.add_argument("--registry", default=str(default_registry) if default_registry.exists() else None)
     sa.add_argument("--host", default="127.0.0.1")
     sa.add_argument("--port", type=int, default=8420)
     sa.set_defaults(func=cmd_serve_analytics)
