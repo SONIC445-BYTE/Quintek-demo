@@ -9,7 +9,7 @@ checked by actually running `python -m pytest tests/ -v` and the CLI (`validate`
 verification were closed rather than left silently unchecked. See `docs/V0_4_CHANGELOG.md`
 item 1 for why "a green test suite" is not, by itself, sufficient evidence here.
 
-## Built and tested (52 tests passing)
+## Built and tested (388 tests passing at the eighth pass; 52 when this table was written)
 
 | Module | Status | Notes |
 |---|---|---|
@@ -271,6 +271,66 @@ modules in Node against a live server and running the UI's own `assertSuppressio
 `report.json` output — not by asserting against a fixture of what the backend was assumed to emit.
 217 tests passing.
 
+## Eighth pass: the student engine, promotion, and the transparency screen
+
+The thirteen product phases were built in order, each with tests before moving on. This
+section records what is real, and — more usefully — what is real *code* whose behaviour has
+still never been observed against a live model.
+
+### What is built and tested
+
+| Module | What it does | Tests |
+|---|---|---|
+| `student/schema.sql` | The product schema. Three invariants from `QUINTEK_LOGIC.md` §3 are enforced in SQL rather than in application code: concepts are global (`UNIQUE(normalized_name)`), attempts are immutable (triggers that `RAISE(ABORT)` on UPDATE and DELETE), and a question links to many concepts across notebooks. | via `test_student_db.py` |
+| `student/db.py` | Connection management and auth. `PRAGMA foreign_keys = ON` per connection, because SQLite disables them by default and does so silently. PBKDF2-HMAC-SHA256 at 240,000 rounds with a per-user salt; an unknown email still costs a hash, so login timing does not enumerate users. | 17 |
+| `student/ingestion.py` | PDF and text extraction, chunking on sentence boundaries with locators carried through merges. `pypdf` is optional and its absence is reported, not swallowed. | 13 |
+| `student/concepts.py` | Concept resolution by exact match and explicit alias only. **No fuzzy auto-merge**: a false merge silently destroys a learner's distinction between two concepts and cannot be undone from the data; a false split is visible and fixable. `merge_candidates()` exists but only advises. | 15 |
+| `student/ai.py` | Resolution order: promoted deployment → deterministic router → explicitly-configured development candidate → `NoEligibleModel`. Every call is stamped with which of those it came from. | 13 |
+| `student/generation.py` | Question generation grounded in retrieved passages, with full provenance stored per question. Malformed model output is dropped, not repaired into something plausible. | 13 |
+| `student/validation.py` | Eight named checks. The validator must be a different candidate than the generator, and never sees the generator's rationale. The verdict is derived from the checks, not read off the model's own summary line. | via generation/e2e |
+| `student/knowledge.py` | R/O/G colour derivation over a five-attempt window, gap recording, and SM-2 scheduling graded on the learner's own colour rather than on raw correctness. | via `test_student_revision.py` |
+| `student/revision.py` | Priority scoring with named weights and a reason list per concept, and the eight-step adaptive selection order. `next_question` never returns the answer key. | 21 |
+| `student/notifications.py` | One learner-chosen time, computed in the learner's own zone via `zoneinfo`. Nothing here reschedules or "optimises" that time. Every firing is logged so "did it actually send" is answerable. | via e2e |
+| `student/api.py` | The learner API surface, transport-independent. | via e2e + server |
+| `student/server.py` | Stdlib HTTP transport. | 10 |
+| `student/transparency.py` | The learner-facing Quintek AI Benchmark screen's data layer. | 30 |
+| `benchmark/promotion_api.py` | The benchmark → production gate as an admin surface. | 22 |
+
+### What is real code but has never run against a live model
+
+This is the honest part. Every module above is tested, but the tests supply scripted
+providers. The following behaviours have therefore never been *observed*, only specified:
+
+- **Whether generated questions are actually good.** `QuestionGenerator` is exercised with a
+  scripted model that returns well-formed JSON. What a real model produces from a real medical
+  passage — and whether the grounding rule holds — is unmeasured.
+- **Whether validation catches anything.** The eight checks are tested against hand-built
+  inputs. No real model has ever rejected a real bad question here.
+- **Whether concept extraction produces a usable graph.** Tested with scripted extractions.
+- **End-to-end latency and cost.** Unknown. The one live NVIDIA measurement in this repo is
+  from the fifth pass, and a later attempt at a full benchmark run timed out at 180s per call
+  against endpoint capacity (recorded in the seventh pass).
+
+All of it depends on the same root cause as the rest of this table: no candidate has a passing
+benchmark run, because the corpus does not exist. Today `AIEngine.resolve()` reaches step 3 —
+an explicitly-configured development candidate — or raises. That is visible in every execution
+record rather than buried in a config file, which is the point.
+
+### Two defects found by building the transparency screen
+
+1. **The frontend invented data during an outage.** Both `quintek-eval-api.js` and
+   `quintek-report-api.js` fell back to fixtures whenever a *configured* backend failed. The
+   fixtures name real vendors and assert real scores, so a learner opening the transparency
+   screen during an outage was told, specifically and falsely, which AI was marking their work.
+   On the admin side, `getRun('abc')` returned a different run's fixture labelled `abc`. Fixed:
+   fixtures are now used only when no backend was ever configured; a configured backend that
+   fails is reported as an outage. `tests/frontend/data_origin.test.mjs`.
+2. **`schema.sql` could not add a column to an existing database.** `CREATE TABLE IF NOT
+   EXISTS` is inert against a database that already exists, so a column added to the schema
+   after deployment would never appear and the first query touching it would fail on live data.
+   Added an explicit additive-migration list in `student/db.py`, verified against a hand-built
+   old-shape database.
+
 ## Not built
 
 | Component | Why |
@@ -278,7 +338,7 @@ modules in Node against a live server and running the UI's own `assertSuppressio
 | ~~Live-verified NVIDIA NIM calls~~ | **Done, this pass.** Network access was granted mid-session; a real `NVIDIAProvider` call against `meta/llama-3.1-70b-instruct` returned a real, correctly-parsed response (`{"answer": "B"}`, 63 input / 7 output tokens, ~23.5s latency). No longer a gap. |
 | A real benchmark run against any registered candidate | The registry now has 5 real candidates (see "Sixth pass"), but none has been benchmarked — still blocked on the corpus, same root cause as everything else in this table. |
 | Other provider adapters (OpenAI/Anthropic/Google/local) | The abstraction supports them (see `providers/base.py`, `providers/nvidia.py` as the template); none exist yet because nothing has asked for one. |
-| Product-side persistence (notebooks, questions, question provenance, source ingestion) | Out of this repository's scope by design — this repo is the benchmark harness plus the orchestration layer a product backend calls into (`benchmark/orchestration.py`), not the product backend itself. `ExecutionRecord` carries everything a product's "question provenance" table would need to reference (`execution_id`, `candidate_id`, `prompt_version`, tokens, latency); attaching that to an actual question/notebook record happens in a different codebase. |
+| ~~Product-side persistence (notebooks, questions, question provenance, source ingestion)~~ | **Built, eighth pass — this row was wrong.** It said the product backend was out of scope by design; the product backend now lives in `student/` and this repo holds both halves. See the eighth-pass section below for what is real and what still needs a live model. |
 | LLM judge (Tier 2) | **No pipeline exists at all** — `benchmark/judges/__init__.py` is a 0-byte file, not a partial implementation. What exists is judge-independence *enforcement* (`integrity.py:_judge_family`, tested) and the scorers that would consume a judge's verdict. Nothing calls an LLM to judge anything, because that needs a live provider and API keys this environment doesn't have. Said plainly because an earlier summary of this work described Phase 2 as more complete than this. |
 | A real reviewer pool | Cannot be built by a model — see `docs/REVIEW_CAPACITY.md`. The `ReviewQueue` / `SeniorAdjudicationQueue` / `GoldChallengeLedger` workflow exists and is tested against synthetic labels; it is the mechanism reviewers would use, not a substitute for them. |
 | Generation prompt templates | `benchmark/prompts/` is still an empty stub. `score_generation_rubric` (the scoring side) is built and tested; eliciting a generation from a real candidate needs a live provider this environment doesn't have. |

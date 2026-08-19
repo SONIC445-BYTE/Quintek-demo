@@ -22,6 +22,23 @@ Verified by grep over `frontend/PG Revision.dc.html`:
 | `<input type="file">` | 0 |
 | `import('./quintek-eval-api.js')` | 1 (reliability screen only) |
 
+**This is still true of the shipped `.dc.html` as of the eighth pass, and it is
+now true for a different reason.** A real backend exists — `student/`, thirteen
+phases of it, 388 tests — but the design file has not been rewired to call it.
+So the two statements to keep separate are:
+
+- *The engine is not built.* — **No longer true.** Accounts, ingestion, concept
+  resolution, generation, validation, attempts, gap tracking, spaced
+  repetition, and notifications are implemented and tested in `student/`.
+- *The screens the learner touches are still simulated.* — **Still true.** Every
+  interaction in the sections below runs on in-file constants. Wiring the
+  screens to `student/api.py` is real remaining work, not a configuration flag.
+
+The one exception is the reliability/benchmark screen, which does call a
+backend, and now can call the learner backend directly (`GET /ai/eval` and
+`GET /ai/benchmark*` on `student/server.py`) rather than needing the admin
+console's server.
+
 ---
 
 ## 1. Legend
@@ -279,7 +296,23 @@ Neither controls any functionality. Both are still built for the browser by
 | Benchmark API + console wiring | Built, live-verified |
 | Student UI (all screens, navigation, R/O/G loop, graph physics) | Built |
 | Reliability screen ← benchmark | Built, the one real link |
-| Source ingestion, extraction, concept resolution | Not built (simulated) |
-| Question generation and validation | Not built (boolean flip) |
-| Spaced repetition, persistence, notifications, accounts | Not built |
+| Source ingestion, extraction, concept resolution | **Built and tested** in `student/`; the UI still simulates it |
+| Question generation and validation | **Built and tested** in `student/`; never yet run against a live model |
+| Spaced repetition, persistence, notifications, accounts | **Built and tested** in `student/`; the UI still simulates it |
+| Learner-facing AI transparency (Quintek AI Benchmark) | **Built** — data layer, routes, and honest empty states |
+| Benchmark → production promotion | **Built** — the gate is code, refusals are explained |
+| The screens calling that backend | **Not done.** The `.dc.html` still runs on in-file constants |
+| Android APK compiled | **Never** — `dl.google.com` returns 403 in this environment, so the Android SDK and Google Maven are unreachable. The Kotlin is correct by inspection only |
 | Real corpus, calibrated thresholds, reviewer pool | Not built — needs people |
+
+### What "built and tested" does and does not mean here
+
+Every module named above is covered by tests that supply a **scripted** model.
+That establishes the plumbing, the failure handling, and the invariants. It does
+not establish that a real model writes good questions, or that validation
+catches real bad ones. No candidate has a passing benchmark run, because the
+corpus does not exist, so `AIEngine.resolve()` today reaches its third step — an
+explicitly configured development candidate — or raises `NoEligibleModel`. Every
+call made that way is stamped `development_override` in the execution log, and
+the learner-facing transparency screen says so in plain language rather than
+presenting it as an evaluated result.
