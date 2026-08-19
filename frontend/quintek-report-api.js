@@ -294,10 +294,18 @@ export async function listRuns() {
    * grows without bound. The bare-array fixture shape is unwrapped to match. */
   const live = await get(ENDPOINTS.listRuns.path);
   const rows = live && Array.isArray(live.runs) ? live.runs : live;
-  /* The list endpoint returns per-run SUMMARIES (no `scores` key at all), so
-   * assertSuppression -- which is about a full report -- is applied when each
-   * run is fetched in full by getRun(), not here. */
-  return rows || FIXTURES.map(assertSuppression);
+  if (!rows) return FIXTURES.map(assertSuppression);
+
+  /* The list endpoint returns SUMMARIES -- no `scores`, no `integrity`. The
+   * console renders scorecards and integrity panels from a whole report, so
+   * each row is hydrated via GET /api/runs/:id. Summaries stay the list
+   * contract (a long-lived benchmark should not ship every score to paint a
+   * table of run ids); hydrating is the consumer's job, done here once rather
+   * than in every screen. assertSuppression applies to these full reports. */
+  const full = await Promise.all(
+    rows.map((r) => getRun(r.run_id).catch(() => null))
+  );
+  return full.filter(Boolean);
 }
 
 export async function getRun(runId) {

@@ -715,14 +715,22 @@ class Component extends DCLogic {
     import('./quintek-eval-api.js')
       .then((api) => this.setState({ api, candId: api.candidates[0].candidateId }))
       .catch((e) => this.setState({ loadError: 'evaluation data: ' + (e && e.message ? e.message : String(e)) }));
-    import('./quintek-report-api.js').then((r) => {
-      RUNS = r.FIXTURES.map(adaptRun);
+    import('./quintek-report-api.js').then(async (r) => {
+      /* Go through listRuns()/getGates() rather than reading r.FIXTURES and
+         r.GATE_REGISTRY directly. Both helpers already fall back to those
+         constants when no backend is configured, so the standalone file is
+         unchanged -- but with window.__QUINTEK_API__ set, this screen now
+         shows real runs and the registry the server actually loaded, instead
+         of demo data sitting next to a live reliability panel. */
+      const [runs, gates] = await Promise.all([r.listRuns(), r.getGates()]);
+      RUNS = runs.map(adaptRun);
       const failing = RUNS.filter((x) => x.integrity && !x.integrity.satisfied)[0];
       const ig = (failing && failing.integrity) || { failed_checks: [], passed_checks: [], details: {} };
-      CHECKS = ig.failed_checks.map((n) => [n, 0, ig.details[n] || '']).concat(ig.passed_checks.map((n) => [n, 1, '']));
-      REGISTRY = r.GATE_REGISTRY.gates.map((g) => [g.gate_id, g.metric, g.direction,
+      CHECKS = (ig.failed_checks || []).map((n) => [n, 0, (ig.details || {})[n] || '']).concat((ig.passed_checks || []).map((n) => [n, 1, '']));
+      REGISTRY = gates.gates.map((g) => [g.gate_id, g.metric, g.direction,
         g.direction === 'equal' ? g.threshold + ' \u00b7 ub 0.010' : g.threshold.toFixed(3),
         String(g.required_n), g.n_unit]);
+      if (!RUNS.length) { this.setState({ report: r, loadError: 'no benchmark runs recorded yet' }); return; }
       this.setState({ report: r, runId: RUNS[1] ? RUNS[1].id : RUNS[0].id });
     }).catch((e) => this.setState({ loadError: 'benchmark report: ' + (e && e.message ? e.message : String(e)) }));
   }
@@ -813,7 +821,12 @@ class Component extends DCLogic {
         { k: 'CANDIDATE', v: cand.label, fg: '#e8e8ec' },
         { k: 'MANIFEST', v: cand.candidateId, fg: '#dcdce2' },
         { k: 'OVERALL', v: cand.overallScore == null ? '—' : cand.overallScore + '%', fg: '#e8e8ec' },
-        { k: 'LATENCY · COST', v: cand.latencyMs == null ? 'n/a' : cand.latencyMs + 'ms · $' + cand.costPer1k.toFixed(2) + '/1k', fg: '#8a8a94' },
+        /* Latency and cost are measured independently and can each be absent
+           on their own: latency comes from recorded executions, cost from an
+           operator-supplied price list. Guarding both on latency alone threw
+           the moment a candidate had real timings but no price. */
+        { k: 'LATENCY · COST', v: (cand.latencyMs == null ? 'n/a' : cand.latencyMs + 'ms')
+            + ' · ' + (cand.costPer1k == null ? 'n/a' : '$' + cand.costPer1k.toFixed(2) + '/1k'), fg: '#8a8a94' },
         { k: 'STATUS', v: cand.status, fg: tone(cand.status).fg },
       ],
       critical: [
@@ -891,8 +904,15 @@ class Component extends DCLogic {
       ],
 
       runRows: api.runs.map((r) => ({ runId: r.runId, date: r.date, version: r.version, candidates: r.candidates,
-        cases: r.cases.toLocaleString(), calls: r.calls.toLocaleString(), cost: '$' + r.cost.toFixed(2),
-        status: r.status, duration: r.duration, fg: r.status === 'COMPLETE' ? '#2dd4bf' : '#f59e0b',
+        /* Guarded the same way CASES EVALUATED and CASES are above: a live
+           backend reports null for anything it did not measure (call counts
+           and spend need per-run telemetry and a price list), and rendering
+           that as 0 would assert a measurement nobody took. */
+        cases: r.cases != null ? r.cases.toLocaleString() : 'n/a',
+        calls: r.calls != null ? r.calls.toLocaleString() : 'n/a',
+        cost: r.cost != null ? '$' + r.cost.toFixed(2) : 'n/a',
+        status: r.status, duration: r.duration || 'n/a',
+        fg: r.status === 'COMPLETE' ? '#2dd4bf' : '#f59e0b',
         open: this.go('leaderboard') })),
       routingRows: api.routing.map((x) => ({ task: x.task, candidate: x.candidate, score: x.score + '%',
         gate: 'PASSED', policy: x.policy })),
@@ -988,16 +1008,30 @@ class Component extends DCLogic {
       reliability: run.reliability ? (() => {
         const rl = run.reliability;
         const ci = rl['GATE-REL-KAPPA-CRITICAL_ci'];
+        /* A reliability gate that was never measured is absent from this
+           object, and "measured and clean" must never be inferred from
+           "missing" -- that is the same distinction report.json draws between
+           a null and a zero. Each value is rendered only if it is actually
+           there; NOT MEASURED is a finding, not a blank. */
+        const num = (v, digits, suffix) =>
+          v == null ? null : v.toFixed(digits) + (suffix || '');
+        const row = (label, gateId, value, threshold) => ({
+          label, gateId, threshold,
+          value: value == null ? 'NOT MEASURED' : value,
+          fg: value == null ? '#7d7d87' : '#2dd4bf',
+        });
+        const kappa = num(rl['GATE-REL-KAPPA-CRITICAL'], 2);
         return [
-          { label: 'Cohen\u2019s kappa, critical labels', gateId: 'GATE-REL-KAPPA-CRITICAL',
-            value: rl['GATE-REL-KAPPA-CRITICAL'].toFixed(2) + (ci ? ' [' + ci[0].toFixed(2) + ', ' + ci[1].toFixed(2) + ']' : ''),
-            threshold: '\u2265 0.80', fg: '#2dd4bf' },
-          { label: 'Re-run answer disagreement', gateId: 'GATE-REL-VARIANCE-ANSWER',
-            value: rl['GATE-REL-VARIANCE-ANSWER'].toFixed(3), threshold: '\u2264 0.020', fg: '#2dd4bf' },
-          { label: 'Validator decision disagreement', gateId: 'GATE-REL-VARIANCE-VALIDATOR',
-            value: rl['GATE-REL-VARIANCE-VALIDATOR'].toFixed(3), threshold: '\u2264 0.030', fg: '#2dd4bf' },
-          { label: 'Generation score MAD', gateId: 'GATE-REL-VARIANCE-GENERATION',
-            value: rl['GATE-REL-VARIANCE-GENERATION'].toFixed(2) + ' / 4', threshold: '\u2264 0.20', fg: '#2dd4bf' },
+          row('Cohen\u2019s kappa, critical labels', 'GATE-REL-KAPPA-CRITICAL',
+            kappa == null ? null : kappa + (ci && ci[0] != null && ci[1] != null
+              ? ' [' + ci[0].toFixed(2) + ', ' + ci[1].toFixed(2) + ']' : ''),
+            '\u2265 0.80'),
+          row('Re-run answer disagreement', 'GATE-REL-VARIANCE-ANSWER',
+            num(rl['GATE-REL-VARIANCE-ANSWER'], 3), '\u2264 0.020'),
+          row('Validator decision disagreement', 'GATE-REL-VARIANCE-VALIDATOR',
+            num(rl['GATE-REL-VARIANCE-VALIDATOR'], 3), '\u2264 0.030'),
+          row('Generation score MAD', 'GATE-REL-VARIANCE-GENERATION',
+            num(rl['GATE-REL-VARIANCE-GENERATION'], 2, ' / 4'), '\u2264 0.20'),
         ];
       })() : [],
       withheldReason: run.withheldReason,

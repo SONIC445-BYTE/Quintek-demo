@@ -311,6 +311,16 @@ class EvalAPI:
         return ordered
 
     def runs(self) -> list[dict]:
+        """
+        The run-history rows the admin console renders.
+
+        `cases` is the largest sample size the run actually reached, which is
+        a real figure. `calls`, `cost` and `duration` are null: per-run
+        provider-call counts and wall-clock are not recorded in report.json,
+        and spend additionally needs a price list. The console renders null as
+        "n/a" -- a zero here would claim a run made no model calls and cost
+        nothing, which is a measurement, not an absence of one.
+        """
         rows = []
         for result in self.archive.all_runs():
             rows.append({
@@ -318,6 +328,10 @@ class EvalAPI:
                 "date": result.run.timestamp,
                 "version": result.run.benchmark_version,
                 "candidates": 1,
+                "cases": max((t.n for t in result.tracks), default=0),
+                "calls": None,
+                "cost": None,
+                "duration": None,
                 "status": result.run.outcome,
                 "scoresWithheld": result.run.scores_withheld,
             })

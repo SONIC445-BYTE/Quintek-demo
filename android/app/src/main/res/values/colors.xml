@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The green the student app already uses for its primary action. -->
+    <color name="quintek_green">#1E7A57</color>
+    <color name="quintek_ink">#16191A</color>
+    <color name="white">#FFFFFF</color>
+</resources>

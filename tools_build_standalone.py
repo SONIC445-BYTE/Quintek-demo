@@ -54,6 +54,7 @@ ROOT = Path(__file__).resolve().parent
 FRONTEND = ROOT / "frontend"
 VENDOR = FRONTEND / "vendor"
 DIST = FRONTEND / "dist"
+ANDROID_ASSETS = ROOT / "android" / "app" / "src" / "main" / "assets"
 
 # The .dc.html sources to build, and the title each standalone should carry.
 TARGETS = {
@@ -198,8 +199,20 @@ def build(key: str) -> Path:
     inner = re.sub(r"<title>.*?</title>", "", inner, flags=re.S | re.I)
 
     DIST.mkdir(parents=True, exist_ok=True)
-    out = DIST / (Path(filename).stem.replace(" ", "-").lower() + ".html")
-    out.write_text(f"<title>{title}</title>\n{preamble}{inner}\n", encoding="utf-8")
+    # "PG Revision.dc.html" -> "pg-revision.html". The `.dc` marks a design
+    # -component source; the built artefact is a plain page, and the Android
+    # asset names in Screens.kt depend on this exact form.
+    slug = Path(filename).stem.removesuffix(".dc").replace(" ", "-").lower()
+    out = DIST / f"{slug}.html"
+    page = f"<title>{title}</title>\n{preamble}{inner}\n"
+    out.write_text(page, encoding="utf-8")
+
+    # The Android app serves these same bundles out of its APK. Writing both
+    # from one build keeps the phone from quietly running an older screen than
+    # the browser -- the failure mode is invisible until someone compares two
+    # numbers that should match.
+    ANDROID_ASSETS.mkdir(parents=True, exist_ok=True)
+    (ANDROID_ASSETS / out.name).write_text(page, encoding="utf-8")
     return out
 
 

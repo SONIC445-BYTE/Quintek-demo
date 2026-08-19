@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      INTERNET is needed only to reach a benchmark backend the user points the
+      app at (Settings -> backend URL). Every screen ships inside the APK and
+      renders with no network at all, so the app is fully usable offline and
+      denying it nothing but live data.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Quintek"
+        android:usesCleartextTraffic="true">
+        <!--
+          usesCleartextTraffic is on because a developer pointing this at a
+          local harness will use http://192.168.x.x:8420 on their own LAN.
+          Narrow it to a domain-specific network-security-config before any
+          release outside development.
+        -->
+
+        <activity
+            android:name=".LauncherActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".WebActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:parentActivityName=".LauncherActivity" />
+
+    </application>
+
+</manifest>
