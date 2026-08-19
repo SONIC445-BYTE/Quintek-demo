@@ -49,6 +49,8 @@ from urllib.parse import parse_qs, urlparse
 from . import analytics as an
 from .registry import Registry
 from .router import Router, RoutingPolicy
+from .eval_api import EvalAPI
+from .runs_api import RunsAPI
 from .tasks import TaskType, gate_ids_for
 
 
@@ -85,12 +87,27 @@ class AnalyticsAPI:
     def __init__(self, runs_root: str | Path, *,
                  failures: list[an.FailureRecord] | None = None,
                  routing_log_path: str | Path | None = None,
-                 registry_path: str | Path | None = None):
+                 registry_path: str | Path | None = None,
+                 gate_registry_path: str | Path | None = None,
+                 config_path: str | Path | None = None,
+                 root: str | Path | None = None,
+                 run_launcher=None,
+                 execution_log_path: str | Path | None = None,
+                 costs_path: str | Path | None = None):
         self.archive = an.RunArchive(runs_root)
         self._failures = failures or []
         self.routing_log = an.RoutingLog(routing_log_path) if routing_log_path else None
         self.registry = Registry(registry_path) if registry_path else None
         self.router = Router(self.registry, self.archive) if self.registry else None
+        # The run-centric routes live in their own module; this class composes
+        # them rather than reimplementing run traversal on top of RunArchive,
+        # which parses reports into dataclasses and so cannot serve the
+        # unmodified report.json the console contract requires.
+        self.runs = RunsAPI(runs_root, gate_registry_path=gate_registry_path,
+                            config_path=config_path, root=root, run_launcher=run_launcher)
+        self.eval = EvalAPI(self.archive, registry=self.registry,
+                            execution_log_path=execution_log_path,
+                            costs_path=costs_path, failures=self._failures)
 
     def _latest(self, candidate_id: str):
         result = self.archive.latest_run_for_candidate(candidate_id)
@@ -223,9 +240,56 @@ class AnalyticsAPI:
                     return self._candidate_tasks(parts[0])
                 return 404, {"error": f"no such endpoint: {path}"}
 
+            # Published-evaluation routes: the shapes quintek-eval-api.js
+            # exports, for the student trust screen and the admin analytics
+            # screens.
+            if path == "/ai/eval":
+                return 200, self.eval.bundle(one("candidate"))
+            if path == "/ai/eval/state":
+                return 200, {"state": self.eval.state()}
+            if path == "/ai/eval/candidates":
+                return 200, {"candidates": self.eval.candidates()}
+            if path == "/ai/eval/history":
+                return 200, {"history": self.eval.history()}
+            if path == "/ai/eval/runs":
+                return 200, {"runs": self.eval.runs()}
+            if path == "/ai/eval/failures":
+                return 200, {"failures": self.eval.failures()}
+            if path == "/ai/eval/overall-by-candidate":
+                return 200, {"overallByCandidate": self.eval.overall_by_candidate()}
+            if path in ("/ai/eval/overview", "/ai/eval/tracks", "/ai/eval/track-detail"):
+                cid = one("candidate")
+                if not cid:
+                    return 400, {"error": "missing required query param 'candidate'"}
+                fn = {"/ai/eval/overview": self.eval.overview,
+                      "/ai/eval/tracks": self.eval.tracks,
+                      "/ai/eval/track-detail": self.eval.track_detail}[path]
+                value = fn(cid)
+                if value is None:
+                    return 404, {"error": f"no benchmark run found for candidate '{cid}'"}
+                key = {"/ai/eval/overview": "overview", "/ai/eval/tracks": "tracks",
+                       "/ai/eval/track-detail": "trackDetail"}[path]
+                return 200, {key: value}
+
+            # Run-centric routes (/api/runs, /api/gates, /api/datasets,
+            # /api/preflight). Delegated last so the candidate-centric routes
+            # above keep precedence on any path both could claim.
+            delegated = self.runs.handle_get(path, params)
+            if delegated is not None:
+                return delegated
+
             return 404, {"error": f"no such endpoint: {path}"}
 
         except Exception as exc:  # a broken response must say so, never fabricate data
+            return 500, {"error": f"{type(exc).__name__}: {exc}"}
+
+    def handle_post(self, path: str, body: dict) -> tuple[int, dict]:
+        try:
+            delegated = self.runs.handle_post(path, body)
+            if delegated is not None:
+                return delegated
+            return 404, {"error": f"no such endpoint: POST {path}"}
+        except Exception as exc:
             return 500, {"error": f"{type(exc).__name__}: {exc}"}
 
     def _benchmark_summary(self) -> tuple[int, dict]:
@@ -267,15 +331,43 @@ class AnalyticsAPI:
 
 def make_handler(api: AnalyticsAPI):
     class Handler(BaseHTTPRequestHandler):
+        def _send(self, status, body):
+            # A str body is already-rendered text (report.md); everything else
+            # is JSON. Content-Type follows the body, so markdown is not
+            # delivered wrapped in quotes as a JSON string.
+            if isinstance(body, str):
+                payload, ctype = body.encode("utf-8"), "text/markdown; charset=utf-8"
+            else:
+                payload, ctype = json.dumps(body, indent=2).encode("utf-8"), "application/json"
+            self.send_response(status)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(payload)))
+            # The console is served from a different origin during development.
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Headers", "content-type")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.end_headers()
+            self.wfile.write(payload)
+
         def do_GET(self):  # noqa: N802 (stdlib method name)
             parsed = urlparse(self.path)
             status, body = api.handle(parsed.path, parse_qs(parsed.query))
-            payload = json.dumps(body, indent=2).encode("utf-8")
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(payload)))
-            self.end_headers()
-            self.wfile.write(payload)
+            self._send(status, body)
+
+        def do_POST(self):  # noqa: N802 (stdlib method name)
+            parsed = urlparse(self.path)
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+                raw = self.rfile.read(length) if length else b""
+                parsed_body = json.loads(raw) if raw else {}
+            except (ValueError, json.JSONDecodeError) as exc:
+                self._send(400, {"error": f"malformed JSON body: {exc}"})
+                return
+            status, body = api.handle_post(parsed.path, parsed_body)
+            self._send(status, body)
+
+        def do_OPTIONS(self):  # noqa: N802 (stdlib method name)
+            self._send(204, {})
 
         def log_message(self, fmt, *args):  # quiet by default
             pass
@@ -286,9 +378,17 @@ def make_handler(api: AnalyticsAPI):
 def serve(runs_root: str | Path, *, host: str = "127.0.0.1", port: int = 8420,
           failures: list[an.FailureRecord] | None = None,
           routing_log_path: str | Path | None = None,
-          registry_path: str | Path | None = None) -> None:
+          registry_path: str | Path | None = None,
+          gate_registry_path: str | Path | None = None,
+          config_path: str | Path | None = None,
+          root: str | Path | None = None,
+          run_launcher=None,
+          execution_log_path: str | Path | None = None,
+          costs_path: str | Path | None = None) -> None:
     api = AnalyticsAPI(runs_root, failures=failures, routing_log_path=routing_log_path,
-                       registry_path=registry_path)
+                       registry_path=registry_path, gate_registry_path=gate_registry_path,
+                       config_path=config_path, root=root, run_launcher=run_launcher,
+                       execution_log_path=execution_log_path, costs_path=costs_path)
     server = ThreadingHTTPServer((host, port), make_handler(api))
     print(f"benchmark analytics reference API on http://{host}:{port}  (Ctrl+C to stop)")
     try:

@@ -1,0 +1,2031 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="ext-resource-dependency" content="./quintek-eval-api.js" data-resource-id="evalApi" />
+<script src="./support.js"></script>
+<template id="__bundler_thumbnail" data-bg-color="#0e1113">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#0e1113"/>
+    <rect x="430" y="170" width="340" height="460" rx="46" fill="#FAFAF8"/>
+    <rect x="470" y="236" width="170" height="18" rx="9" fill="#16191A"/>
+    <rect x="470" y="274" width="110" height="11" rx="5" fill="#B5812B"/>
+    <rect x="470" y="324" width="260" height="64" rx="10" fill="#F2EFE7"/>
+    <rect x="470" y="408" width="260" height="64" rx="10" fill="#F2EFE7"/>
+    <rect x="470" y="492" width="260" height="64" rx="10" fill="#F2EFE7"/>
+    <circle cx="496" cy="356" r="9" fill="#BC4C43"/>
+    <circle cx="496" cy="440" r="9" fill="#B5812B"/>
+    <circle cx="496" cy="524" r="9" fill="#237784"/>
+    <rect x="470" y="584" width="260" height="30" rx="7" fill="#237784"/>
+  </svg>
+</template>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0e1113;-webkit-font-smoothing:antialiased}
+a{color:#237784;text-decoration:none}a:hover{color:#2E97A5}
+*::-webkit-scrollbar{width:3px;height:3px}*::-webkit-scrollbar-thumb{background:#d7d9d6;border-radius:2px}
+@keyframes pgfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes pgpulse{0%,100%{opacity:1}50%{opacity:.35}}
+</style>
+</helmet>
+<div style="min-height:100vh;box-sizing:border-box;background:#0e1113;display:flex;flex-direction:column;align-items:center;gap:20px;padding:40px 24px 60px;font-family:'Space Grotesk',system-ui,sans-serif">
+
+<div style="display:flex;align-items:center;gap:9px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;color:#6b7275;text-transform:uppercase">PG REVISION · LEARNER · IPHONE 390</div>
+
+<div style="width:390px;height:844px;flex:none;position:relative;background:#FAFAF8;border:1px solid #23282a;border-radius:42px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 40px 110px rgba(0,0,0,.6)">
+
+  <div style="flex:none;height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5d6467">
+    <span>07:12</span><span>●●● ▮</span>
+  </div>
+
+  <sc-if value="{{ showHeader }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:2px 20px 14px">
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+        <sc-if value="{{ headerBack }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ goBack }}" style="align-self:flex-start;background:none;border:none;padding:0 0 4px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#237784">{{ backLabel }}</button>
+        </sc-if>
+        <div style="font-size:23px;font-weight:600;letter-spacing:-.02em;color:#16191A;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ headerTitle }}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;color:#7c8386">{{ headerSub }}</div>
+      </div>
+      <sc-if value="{{ showGear }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ goSettings }}" style="flex:none;width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;color:#7c8386" style-hover="color:#237784">SET</button>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <div style="flex:1;overflow-y:auto;overflow-x:hidden">
+
+    <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:10px;padding:0 16px 24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#F2EFE7;border:1px solid #E4DFD1;border-radius:6px">
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <span style="font-size:13px;font-weight:600;color:#16191A">30 questions due today</span>
+            <span style="font-size:12px;color:#6f7679">Across 3 notebooks · about 14 minutes</span>
+          </div>
+          <button onClick="{{ goRevise }}" style="min-height:44px;padding:0 14px;background:#237784;color:#fff;border:none;border-radius:5px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:#1A5963">Start</button>
+        </div>
+
+        <sc-for list="{{ notebooks }}" as="nb" hint-placeholder-count="4">
+          <button onClick="{{ nb.open }}" style="display:flex;flex-direction:column;gap:11px;width:100%;box-sizing:border-box;text-align:left;cursor:pointer;background:#fff;border:1px solid #E6E4DE;border-radius:7px;padding:14px;font-family:'Space Grotesk',sans-serif" style-hover="border-color:#237784">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;width:100%">
+              <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+                <span style="font-size:15px;font-weight:600;color:#16191A;letter-spacing:-.01em">{{ nb.title }}</span>
+                <span style="display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;color:{{ nb.subjectFg }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ nb.subjectFg }}"></span>{{ nb.subject }}</span>
+              </div>
+              <span style="flex:none;min-width:30px;text-align:center;padding:5px 8px;border-radius:20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:{{ nb.dueFg }};background:{{ nb.dueBg }};border:1px solid {{ nb.dueBd }}">{{ nb.dueLabel }}</span>
+            </div>
+            <div style="display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#7c8386">
+              <span>{{ nb.sources }} src</span><span>{{ nb.concepts }} concepts</span><span>{{ nb.questions }} Q</span>
+            </div>
+            <div style="display:flex;height:3px;width:100%;border-radius:2px;overflow:hidden;background:#EDEBE4">
+              <span style="width:{{ nb.masteredPct }};background:#237784"></span>
+              <span style="width:{{ nb.reviewPct }};background:#B5812B"></span>
+            </div>
+          </button>
+        </sc-for>
+
+        <button onClick="{{ goOnboard }}" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:52px;box-sizing:border-box;background:transparent;border:1px dashed #CFCCC2;border-radius:7px;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:13px;color:#6f7679" style-hover="border-color:#237784;color:#237784">+ New notebook</button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isToday }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:14px;padding:0 16px 24px">
+        <div style="display:flex;flex-direction:column;gap:12px;padding:15px;background:#fff;border:1px solid #E6E4DE;border-top:2px solid #BC4C43;border-radius:0 0 7px 7px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#8a9093">DO THIS NEXT</span>
+          <span style="font-family:'Source Serif 4',Georgia,serif;font-size:19px;line-height:1.35;color:#16191A;text-wrap:pretty">{{ todayHeadline }}</span>
+          <span style="font-size:12.5px;line-height:1.55;color:#5d6467;text-wrap:pretty">{{ todayWhy }}</span>
+          <button onClick="{{ goDashboard }}" style="width:100%;min-height:48px;background:#237784;color:#fff;border:none;border-radius:5px;font-family:'Space Grotesk',sans-serif;font-size:14.5px;font-weight:600;cursor:pointer" style-hover="background:#1A5963">Open revision dashboard</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <sc-for list="{{ colourCounts }}" as="c" hint-placeholder-count="3">
+            <button onClick="{{ c.go }}" style="display:flex;flex-direction:column;gap:7px;padding:12px;background:#fff;border:1px solid #E6E4DE;border-top:2px solid {{ c.color }};border-radius:0 0 6px 6px;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#16191A">{{ c.n }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.08em;color:{{ c.color }}">{{ c.label }}</span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">TOP PRIORITY GAPS</span>
+          <sc-for list="{{ topGaps }}" as="g" hint-placeholder-count="4">
+            <button onClick="{{ g.open }}" style="display:flex;align-items:center;gap:11px;width:100%;box-sizing:border-box;padding:12px;min-height:48px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid {{ g.color }};border-radius:0 5px 5px 0;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="border-color:#237784">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9aa0a2;flex:none">{{ g.rank }}</span>
+              <span style="display:flex;flex-direction:column;gap:4px;min-width:0;flex:1">
+                <span style="font-size:13.5px;color:#16191A">{{ g.name }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">{{ g.meta }}</span>
+              </span>
+              <span style="flex:none;width:8px;height:8px;border-radius:50%;background:{{ g.color }}"></span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:#F5F3EC;border-radius:5px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#8a5f13;flex:none">DEMO DATA</span>
+          <span style="font-size:11.5px;line-height:1.5;color:#6f7679;text-wrap:pretty">Counts and history on this screen are prototype values, not a live knowledge state.</span>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:16px;padding:0 16px 24px">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+          <sc-for list="{{ queueStats }}" as="q" hint-placeholder-count="4">
+            <div style="display:flex;flex-direction:column;gap:7px;padding:12px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid {{ q.color }};border-radius:0 5px 5px 0">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:19px;color:#16191A">{{ q.n }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.08em;color:{{ q.color }}">{{ q.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">SELECTION STRATEGY</span>
+          <div style="display:flex;gap:6px">
+            <sc-for list="{{ strategies }}" as="st" hint-placeholder-count="3">
+              <button onClick="{{ st.set }}" style="flex:1;min-height:40px;border-radius:5px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.04em;background:{{ st.bg }};border:1px solid {{ st.bd }};color:{{ st.fg }}">{{ st.label }}</button>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;padding:11px 12px;background:#F5F3EC;border-radius:5px">
+            <sc-for list="{{ strategyOrder }}" as="o" hint-placeholder-count="5">
+              <span style="display:flex;gap:9px;font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.5;color:#5d6467"><span style="color:#9aa0a2">{{ o.n }}</span>{{ o.label }}</span>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">HOW MANY QUESTIONS?</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8a5f13">RECOMMENDED {{ recommended }}</span>
+          </div>
+          <div style="display:flex;gap:6px">
+            <sc-for list="{{ counts }}" as="c" hint-placeholder-count="6">
+              <button onClick="{{ c.set }}" style="flex:1;min-height:46px;border-radius:5px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:12px;background:{{ c.bg }};border:1px solid {{ c.bd }};color:{{ c.fg }}">{{ c.label }}</button>
+            </sc-for>
+          </div>
+          <span style="font-size:11.5px;line-height:1.5;color:#8a9093;text-wrap:pretty">{{ countNote }}</span>
+        </div>
+
+        <button onClick="{{ startSession }}" style="width:100%;min-height:50px;background:#237784;color:#fff;border:none;border-radius:6px;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#1A5963">Start revision · {{ qCount }} questions</button>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;line-height:1.7;color:#9aa0a2">session_id is issued at start · the exact questions served are preserved</span>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isWeak }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:12px;padding:0 16px 24px">
+        <div style="display:flex;gap:6px">
+          <sc-for list="{{ weakFilters }}" as="f" hint-placeholder-count="4">
+            <button onClick="{{ f.set }}" style="flex:1;min-height:38px;border-radius:18px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;background:{{ f.bg }};border:1px solid {{ f.bd }};color:{{ f.fg }}">{{ f.label }}</button>
+          </sc-for>
+        </div>
+        <sc-for list="{{ weakGaps }}" as="g" hint-placeholder-count="5">
+          <div style="display:flex;flex-direction:column;gap:11px;padding:14px;background:#fff;border:1px solid #E6E4DE;border-left:3px solid {{ g.color }};border-radius:0 6px 6px 0">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+              <span style="font-size:14.5px;font-weight:600;color:#16191A;letter-spacing:-.01em">{{ g.name }}</span>
+              <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.08em;padding:4px 7px;border-radius:3px;color:#fff;background:{{ g.color }}">{{ g.colour }}</span>
+            </div>
+            <button onClick="{{ g.openConcept }}" style="align-self:flex-start;display:flex;align-items:center;gap:7px;background:none;border:none;padding:0;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;color:#237784">CONCEPT · {{ g.concept }} →</button>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#8a9093">EVIDENCE</span>
+              <sc-for list="{{ g.questions }}" as="q" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;background:#FAFAF8;border-radius:4px">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5d6467">{{ q.id }}</span>
+                  <span style="font-size:11px;color:#7c8386;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ q.where }}</span>
+                  <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:9px;color:{{ q.fg }}">{{ q.result }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+              <button onClick="{{ noop }}" style="display:flex;align-items:center;gap:6px;padding:8px 10px;min-height:38px;background:#FAFAF8;border:1px solid #E0DDD4;border-radius:4px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#237784" style-hover="border-color:#237784">{{ g.source }} →</button>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">{{ g.age }}</span>
+            </div>
+          </div>
+        </sc-for>
+        <sc-if value="{{ weakEmpty }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:10px;padding:28px 20px;border:1px dashed #CFCCC2;border-radius:7px;align-items:center;text-align:center">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#9aa0a2">NOTHING IN THIS STATE</span>
+            <span style="font-size:13px;line-height:1.6;color:#5d6467;max-width:250px;text-wrap:pretty">No gaps are currently marked at this level. Gaps appear here when you grade a question red or orange.</span>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isTrust }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:16px;padding:0 16px 26px">
+        <sc-if value="{{ evalUnavailable }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:11px;padding:26px 20px;border:1px dashed #CFCCC2;border-radius:7px;align-items:flex-start">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:{{ evalStateFg }}">{{ evalStateLabel }}</span>
+            <span style="font-family:'Source Serif 4',Georgia,serif;font-size:17px;line-height:1.4;color:#16191A;text-wrap:pretty">{{ evalStateTitle }}</span>
+            <span style="font-size:13px;line-height:1.6;color:#5d6467;text-wrap:pretty">{{ evalStateBody }}</span>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ evalReady }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:13px;padding:16px;background:#fff;border:1px solid #E6E4DE;border-top:2px solid {{ overallColor }};border-radius:0 0 7px 7px">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px">
+              <div style="display:flex;flex-direction:column;gap:5px">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#8a9093">RELIABILITY</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:34px;line-height:1;color:#16191A">{{ overallScore }}</span>
+              </div>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;padding:6px 9px;border-radius:3px;color:#fff;background:{{ overallColor }}">{{ overallStatus }}</span>
+            </div>
+            <span style="font-size:12.5px;line-height:1.55;color:#5d6467;text-wrap:pretty">Quintek's current AI configuration passed its most recent evaluation. This is benchmark performance on a frozen test corpus, not a guarantee about any individual answer.</span>
+            <button onClick="{{ toggleHow }}" style="align-self:flex-start;background:none;border:none;padding:8px 0;min-height:38px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;color:#237784">{{ howLabel }}</button>
+            <sc-if value="{{ howOpen }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:6px;padding:12px;background:#FAFAF8;border-radius:5px;animation:pgfade .25s ease both">
+                <sc-for list="{{ overallMeta }}" as="m" hint-placeholder-count="5">
+                  <div style="display:flex;justify-content:space-between;gap:12px;font-family:'JetBrains Mono',monospace;font-size:10.5px;line-height:1.6">
+                    <span style="color:#9aa0a2">{{ m.k }}</span><span style="color:#33393b;text-align:right">{{ m.v }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">WHAT WAS MEASURED</span>
+            <sc-for list="{{ trackRows }}" as="t" hint-placeholder-count="7">
+              <button onClick="{{ t.toggle }}" style="display:flex;flex-direction:column;gap:9px;width:100%;box-sizing:border-box;padding:13px;background:#fff;border:1px solid #E6E4DE;border-radius:6px;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="border-color:#237784">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%">
+                  <span style="font-size:13.5px;color:#16191A">{{ t.track }}</span>
+                  <span style="display:flex;align-items:center;gap:9px;flex:none">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:13.5px;color:#16191A">{{ t.score }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.06em;padding:3px 6px;border-radius:3px;color:{{ t.fg }};background:{{ t.bg }}">{{ t.status }}</span>
+                  </span>
+                </div>
+                <span style="display:block;width:100%;height:3px;background:#EDEBE4;border-radius:2px;overflow:hidden"><span style="display:block;height:3px;width:{{ t.pct }};background:{{ t.fg }}"></span></span>
+                <span style="font-size:11.5px;line-height:1.5;color:#6f7679;text-wrap:pretty">{{ t.note }}</span>
+                <sc-if value="{{ t.open }}" hint-placeholder-val="{{ true }}">
+                  <span style="display:flex;flex-direction:column;gap:5px;width:100%;padding:10px;background:#FAFAF8;border-radius:5px">
+                    <span style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5d6467"><span style="color:#9aa0a2">cases</span>{{ t.n }}</span>
+                    <span style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5d6467"><span style="color:#9aa0a2">95% CI</span>{{ t.ci }}</span>
+                    <span style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5d6467"><span style="color:#9aa0a2">benchmark</span>{{ t.version }}</span>
+                  </span>
+                </sc-if>
+              </button>
+            </sc-for>
+          </div>
+
+          <button onClick="{{ goChooses }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;padding:14px;min-height:52px;background:#fff;border:1px solid #E6E4DE;border-radius:6px;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="border-color:#237784">
+            <span style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:13.5px;font-weight:600;color:#16191A">How Quintek chooses its AI</span>
+              <span style="font-size:11.5px;color:#7c8386">Different models for different tasks, and why</span>
+            </span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#237784">→</span>
+          </button>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isChooses }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:18px;padding:0 16px 26px">
+        <span style="font-family:'Source Serif 4',Georgia,serif;font-size:16px;line-height:1.55;color:#33393b;text-wrap:pretty">No single model is best at everything. Quintek evaluates several configurations against the same frozen test set, then uses the evidence to pick a model per task.</span>
+
+        <div style="display:flex;flex-direction:column;gap:0">
+          <sc-for list="{{ pipeline }}" as="p" hint-placeholder-count="5">
+            <div style="display:flex;flex-direction:column;gap:0">
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#9aa0a2;flex:none">{{ p.n }}</span>
+                <span style="display:flex;flex-direction:column;gap:4px">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;color:#237784">{{ p.label }}</span>
+                  <span style="font-size:12px;line-height:1.5;color:#5d6467;text-wrap:pretty">{{ p.note }}</span>
+                </span>
+              </div>
+              <sc-if value="{{ p.arrow }}" hint-placeholder-val="{{ true }}">
+                <span style="align-self:center;padding:5px 0;font-family:'JetBrains Mono',monospace;font-size:12px;color:#CFCCC2">↓</span>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">CURRENTLY POWERING QUINTEK</span>
+          <sc-for list="{{ poweringRows }}" as="rt" hint-placeholder-count="4">
+            <button onClick="{{ rt.toggle }}" style="display:flex;flex-direction:column;gap:10px;width:100%;box-sizing:border-box;padding:12px 13px;background:#fff;border:1px solid #E6E4DE;border-radius:5px;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="border-color:#237784">
+              <span style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%">
+                <span style="display:flex;flex-direction:column;gap:4px;min-width:0">
+                  <span style="font-size:13px;color:#16191A">{{ rt.task }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">{{ rt.policy }}</span>
+                </span>
+                <span style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex:none">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#237784">{{ rt.candidate }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5d6467">{{ rt.score }}</span>
+                </span>
+              </span>
+              <sc-if value="{{ rt.open }}" hint-placeholder-val="{{ true }}">
+                <span style="display:flex;flex-direction:column;gap:6px;width:100%;padding:11px;background:#FAFAF8;border-radius:5px;animation:pgfade .25s ease both">
+                  <sc-for list="{{ rt.detail }}" as="dt" hint-placeholder-count="4">
+                    <span style="display:flex;justify-content:space-between;gap:12px;font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.5"><span style="color:#9aa0a2">{{ dt.k }}</span><span style="color:{{ dt.fg }}">{{ dt.v }}</span></span>
+                  </sc-for>
+                  <span style="font-size:11.5px;line-height:1.5;color:#6f7679;padding-top:3px;text-wrap:pretty">{{ rt.why }}</span>
+                </span>
+              </sc-if>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="padding:13px;background:#F5F3EC;border-radius:5px;font-size:12px;line-height:1.6;color:#5d6467;text-wrap:pretty">A configuration that fails a safety gate is never used, whatever its other scores. Question validation always runs on a different model from the one that wrote the question.</div>
+
+        <div style="height:1px;background:#E6E4DE"></div>
+
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-family:'Source Serif 4',Georgia,serif;font-size:19px;line-height:1.3;color:#16191A">Quintek AI benchmark</span>
+          <span style="font-size:12.5px;line-height:1.55;color:#5d6467;text-wrap:pretty">Performance of evaluated AI configurations on Quintek's own benchmark. This is not a general ranking of AI models — a configuration that leads here may not lead anywhere else.</span>
+        </div>
+
+        <sc-if value="{{ evalUnavailable }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:9px;padding:22px 18px;border:1px dashed #CFCCC2;border-radius:7px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:{{ evalStateFg }}">{{ evalStateLabel }}</span>
+            <span style="font-size:13px;line-height:1.55;color:#5d6467;text-wrap:pretty">{{ evalStateBody }}</span>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ evalReady }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:2px">
+            <sc-for list="{{ categories }}" as="cat" hint-placeholder-count="9">
+              <button onClick="{{ cat.set }}" style="flex:none;padding:8px 11px;min-height:36px;border-radius:18px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.04em;white-space:nowrap;background:{{ cat.bg }};border:1px solid {{ cat.bd }};color:{{ cat.fg }}">{{ cat.label }}</button>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:7px">
+            <sc-for list="{{ leaderboard }}" as="m" hint-placeholder-count="4">
+              <button onClick="{{ m.open }}" style="display:flex;flex-direction:column;gap:9px;width:100%;box-sizing:border-box;padding:13px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid {{ m.edge }};border-radius:0 6px 6px 0;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="border-color:#237784">
+                <span style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;width:100%">
+                  <span style="display:flex;align-items:baseline;gap:11px;min-width:0">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9aa0a2;flex:none">{{ m.rank }}</span>
+                    <span style="display:flex;flex-direction:column;gap:4px;min-width:0">
+                      <span style="font-size:13.5px;color:#16191A">{{ m.model }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">{{ m.provider }}</span>
+                    </span>
+                  </span>
+                  <span style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex:none">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:14px;color:{{ m.scoreFg }}">{{ m.score }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.06em;padding:3px 7px;border-radius:3px;color:#fff;background:{{ m.statusBg }}">{{ m.status }}</span>
+                  </span>
+                </span>
+                <span style="display:block;width:100%;height:16px;position:relative">
+                  <span style="position:absolute;left:0;top:6px;width:100%;height:4px;background:#EDEBE4;border-radius:2px;display:block"></span>
+                  <span style="position:absolute;left:{{ m.ciLeft }};top:6px;width:{{ m.ciWidth }};height:4px;background:{{ m.edge }};opacity:.28;border-radius:2px;display:block"></span>
+                  <span style="position:absolute;left:{{ m.pointX }};top:2px;width:2px;height:12px;background:{{ m.edge }};display:block"></span>
+                </span>
+                <span style="display:flex;justify-content:space-between;width:100%;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">
+                  <span>{{ m.ci }}</span><span>{{ m.n }}</span>
+                </span>
+                <sc-if value="{{ m.unsafe }}" hint-placeholder-val="{{ true }}">
+                  <span style="display:flex;align-items:center;gap:8px;width:100%;padding:9px 10px;background:rgba(188,76,67,.07);border-radius:4px">
+                    <span style="width:6px;height:6px;border-radius:50%;background:#BC4C43;flex:none"></span>
+                    <span style="font-size:11.5px;line-height:1.45;color:#8c3d36;text-wrap:pretty">{{ m.unsafeNote }}</span>
+                  </span>
+                </sc-if>
+              </button>
+            </sc-for>
+            <span style="font-size:11px;line-height:1.5;color:#8a9093;padding:2px;text-wrap:pretty">Bars show the 95% confidence interval. Where two intervals overlap, the difference between those scores is not meaningful.</span>
+          </div>
+
+          <button onClick="{{ goCompare }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;padding:13px;min-height:48px;background:#fff;border:1px solid #E6E4DE;border-radius:6px;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="border-color:#237784">
+            <span style="font-size:13px;color:#16191A">Compare two configurations</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#237784">→</span>
+          </button>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isModel }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:16px;padding:0 16px 26px">
+        <div style="display:flex;flex-direction:column;gap:11px;padding:15px;background:#fff;border:1px solid #E6E4DE;border-top:2px solid {{ mdEdge }};border-radius:0 0 7px 7px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#8a9093">{{ mdProvider }}</span>
+          <span style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:30px;line-height:1;color:#16191A">{{ mdScore }}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;padding:5px 8px;border-radius:3px;color:#fff;background:{{ mdEdge }}">{{ mdStatus }}</span>
+          </span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5d6467">{{ mdCi }}</span>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px;padding:14px;background:#fff;border:1px solid {{ mdCritBd }};border-left:2px solid {{ mdCritEdge }};border-radius:0 6px 6px 0">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:{{ mdCritEdge }}">CRITICAL MEDICAL ERRORS</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:15px;color:{{ mdCritEdge }}">{{ mdCrit }}</span>
+          <span style="font-size:11.5px;line-height:1.5;color:#6f7679;text-wrap:pretty">{{ mdCritNote }}</span>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">PERFORMANCE BY TASK</span>
+          <sc-for list="{{ mdTracks }}" as="t" hint-placeholder-count="10">
+            <div style="display:flex;flex-direction:column;gap:6px;padding:11px 12px;background:#fff;border:1px solid #E6E4DE;border-radius:5px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+                <span style="font-size:12.5px;color:#16191A">{{ t.name }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#16191A">{{ t.score }}</span>
+              </div>
+              <span style="display:block;height:3px;background:#EDEBE4;border-radius:2px;overflow:hidden"><span style="display:block;height:3px;width:{{ t.pct }};background:{{ t.fill }}"></span></span>
+              <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">
+                <span>{{ t.ci }}</span><span>{{ t.n }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">ACROSS BENCHMARK VERSIONS</span>
+          <div style="display:flex;align-items:flex-end;gap:0;height:150px;padding:14px 12px 0;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
+            <sc-for list="{{ mdHistory }}" as="h" hint-placeholder-count="3">
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;height:100%;justify-content:flex-end">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#16191A">{{ h.score }}</span>
+                <span style="width:38px;background:{{ h.fill }};border-radius:2px 2px 0 0;height:{{ h.h }}"></span>
+                <span style="display:flex;flex-direction:column;align-items:center;gap:2px;padding-bottom:10px">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8a9093">{{ h.version }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:#B5812B">{{ h.warn }}</span>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+          <span style="font-size:11px;line-height:1.5;color:#8a9093;text-wrap:pretty">{{ mdHistoryNote }}</span>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isModelCmp }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:15px;padding:0 16px 26px">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#8a9093">PICK TWO</span>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <sc-for list="{{ cmpChoices }}" as="c" hint-placeholder-count="4">
+              <button onClick="{{ c.set }}" style="flex:1;min-width:78px;min-height:42px;border-radius:5px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10px;background:{{ c.bg }};border:1px solid {{ c.bd }};color:{{ c.fg }}">{{ c.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <sc-for list="{{ cmpHeads }}" as="h" hint-placeholder-count="2">
+            <div style="display:flex;flex-direction:column;gap:6px;padding:12px;background:#fff;border:1px solid #E6E4DE;border-top:2px solid {{ h.edge }};border-radius:0 0 6px 6px">
+              <span style="font-size:12.5px;color:#16191A">{{ h.model }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:17px;color:#16191A">{{ h.score }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.06em;color:{{ h.edge }}">{{ h.status }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <sc-for list="{{ cmpRows }}" as="r" hint-placeholder-count="10">
+            <div style="display:flex;flex-direction:column;gap:7px;padding:11px 12px;background:#fff;border:1px solid #E6E4DE;border-radius:5px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+                <span style="font-size:12.5px;color:#16191A">{{ r.name }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:{{ r.verdictFg }}">{{ r.verdict }}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="display:block;height:6px;width:{{ r.aPct }};background:#237784;border-radius:2px"></span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5d6467">{{ r.a }}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="display:block;height:6px;width:{{ r.bPct }};background:#9aa0a2;border-radius:2px"></span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5d6467">{{ r.b }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <sc-if value="{{ cmpEmpty }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:9px;padding:22px 18px;border:1px dashed #CFCCC2;border-radius:7px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#9aa0a2">NOTHING TO COMPARE</span>
+            <span style="font-size:13px;line-height:1.6;color:#5d6467;text-wrap:pretty">{{ cmpEmptyNote }}</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{ cmpHasRows }}" hint-placeholder-val="{{ true }}">
+          <span style="font-size:11.5px;line-height:1.55;color:#8a9093;text-wrap:pretty">No overall winner is declared. Where the two confidence intervals overlap, the benchmark cannot separate the configurations on that task.</span>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isStudio }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:16px;padding:0 16px 26px">
+        <sc-for list="{{ studioFields }}" as="f" hint-placeholder-count="6">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#8a9093">{{ f.label }}</span>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <sc-for list="{{ f.options }}" as="o" hint-placeholder-count="3">
+                <button onClick="{{ o.set }}" style="padding:9px 11px;min-height:38px;border-radius:5px;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;background:{{ o.bg }};border:1px solid {{ o.bd }};color:{{ o.fg }}">{{ o.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:#F5F3EC;border-radius:5px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#8a5f13;flex:none">GROUNDING</span>
+          <span style="font-size:11.5px;line-height:1.5;color:#5d6467;text-wrap:pretty">Every question must be answerable from the selected source. Demonstrations supply structure and reasoning depth only — never facts.</span>
+        </div>
+
+        <button onClick="{{ runStudio }}" style="width:100%;min-height:50px;background:#237784;color:#fff;border:none;border-radius:6px;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#1A5963">{{ studioCta }}</button>
+
+        <sc-if value="{{ studioOut }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:13px;padding:15px;background:#fff;border:1px solid #E6E4DE;border-radius:6px;animation:pgfade .3s ease both">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#8a9093">DRAFT 1 OF {{ studioCount }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.06em;padding:4px 7px;border-radius:3px;color:#8a5f13;background:rgba(181,129,43,.12)">VALIDATION PENDING</span>
+            </div>
+            <div style="font-family:'Source Serif 4',Georgia,serif;font-size:15px;line-height:1.5;color:#16191A;text-wrap:pretty">{{ draftStem }}</div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <sc-for list="{{ draftOptions }}" as="d" hint-placeholder-count="4">
+                <span style="display:flex;gap:9px;font-family:'Source Serif 4',Georgia,serif;font-size:13px;line-height:1.4;color:{{ d.fg }}"><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:{{ d.markFg }}">{{ d.mark }}</span>{{ d.text }}</span>
+              </sc-for>
+            </div>
+            <div style="height:1px;background:#EDEBE4"></div>
+            <div style="font-size:12.5px;line-height:1.55;color:#5d6467;text-wrap:pretty">{{ draftExplanation }}</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <sc-for list="{{ draftMeta }}" as="m" hint-placeholder-count="5">
+                <div style="display:flex;justify-content:space-between;gap:10px;font-family:'JetBrains Mono',monospace;font-size:9.5px;line-height:1.5">
+                  <span style="color:#9aa0a2">{{ m.k }}</span><span style="color:{{ m.fg }};text-align:right">{{ m.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+              <sc-for list="{{ draftActions }}" as="a" hint-placeholder-count="4">
+                <button onClick="{{ a.act }}" style="min-height:42px;border-radius:5px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.04em;background:{{ a.bg }};border:1px solid {{ a.bd }};color:{{ a.fg }}">{{ a.label }}</button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ studioVerdict }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:7px;padding:11px;background:#FAFAF8;border:1px solid #E6E4DE;border-radius:5px">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#237784">{{ studioVerdict }}</span>
+                <span style="font-size:11.5px;line-height:1.5;color:#6f7679;text-wrap:pretty">{{ studioVerdictNote }}</span>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isDemos }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:12px;padding:0 16px 26px">
+        <div style="padding:12px;background:#F5F3EC;border-radius:5px;font-size:12px;line-height:1.55;color:#5d6467;text-wrap:pretty">Demonstrations are style references. The generator reads their structure, reasoning depth, target and distractor strategy — it does not reuse their content.</div>
+        <sc-for list="{{ demos }}" as="d" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:11px;padding:14px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#237784">{{ d.id }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">{{ d.created }}</span>
+            </div>
+            <span style="font-size:14px;font-weight:600;color:#16191A">{{ d.title }}</span>
+            <span style="font-family:'Source Serif 4',Georgia,serif;font-size:12.5px;line-height:1.5;color:#5d6467;text-wrap:pretty">{{ d.question }}</span>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <sc-for list="{{ d.spec }}" as="sp" hint-placeholder-count="6">
+                <div style="display:flex;justify-content:space-between;gap:12px;font-family:'JetBrains Mono',monospace;font-size:9.5px;line-height:1.5">
+                  <span style="color:#9aa0a2;flex:none">{{ sp.k }}</span><span style="color:#33393b;text-align:right">{{ sp.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:2px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">{{ d.usage }}</span>
+              <button onClick="{{ d.use }}" style="min-height:38px;padding:0 11px;border-radius:4px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;background:{{ d.useBg }};border:1px solid {{ d.useBd }};color:{{ d.useFg }}">{{ d.useLabel }}</button>
+            </div>
+          </div>
+        </sc-for>
+        <button onClick="{{ noop }}" style="width:100%;min-height:48px;background:transparent;border:1px dashed #CFCCC2;border-radius:6px;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:13px;color:#6f7679" style-hover="border-color:#237784;color:#237784">+ Add a demonstration</button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isBank }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:10px;padding:0 16px 26px">
+        <div style="display:flex;gap:6px">
+          <sc-for list="{{ bankFilters }}" as="f" hint-placeholder-count="4">
+            <button onClick="{{ f.set }}" style="flex:1;min-height:38px;border-radius:18px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.04em;background:{{ f.bg }};border:1px solid {{ f.bd }};color:{{ f.fg }}">{{ f.label }}</button>
+          </sc-for>
+        </div>
+        <sc-for list="{{ bank }}" as="b" hint-placeholder-count="6">
+          <div style="display:flex;flex-direction:column;gap:9px;padding:13px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#16191A">{{ b.id }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.06em;padding:4px 7px;border-radius:3px;color:{{ b.vFg }};background:{{ b.vBg }}">{{ b.validation }}</span>
+            </div>
+            <span style="font-family:'Source Serif 4',Georgia,serif;font-size:13px;line-height:1.45;color:#33393b;text-wrap:pretty">{{ b.stem }}</span>
+            <div style="display:flex;flex-wrap:wrap;gap:5px">
+              <sc-for list="{{ b.concepts }}" as="c" hint-placeholder-count="3">
+                <span style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#FAFAF8;border-radius:12px;font-family:'JetBrains Mono',monospace;font-size:9px;color:#5d6467"><span style="width:5px;height:5px;border-radius:50%;background:{{ c.color }}"></span>{{ c.name }}</span>
+              </sc-for>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:10px;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">
+              <span>{{ b.family }} · {{ b.notebook }}</span><span>{{ b.attempts }}</span>
+            </div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;line-height:1.6;color:#9aa0a2">{{ b.provenance }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isMore }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:16px;padding:0 16px 24px">
+        <div style="display:flex;align-items:center;gap:9px;padding:0 12px;min-height:46px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9aa0a2">⌕</span>
+          <input value="{{ query }}" onChange="{{ setQuery }}" placeholder="Search concepts, questions, gaps, sources" style="flex:1;border:none;outline:none;background:transparent;font-family:'Space Grotesk',sans-serif;font-size:13px;color:#16191A" />
+        </div>
+        <sc-if value="{{ hasQuery }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:7px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#8a9093">{{ resultCount }}</span>
+            <sc-for list="{{ results }}" as="res" hint-placeholder-count="5">
+              <button onClick="{{ res.open }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;padding:11px 12px;min-height:44px;background:#fff;border:1px solid #E6E4DE;border-radius:5px;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="border-color:#237784">
+                <span style="display:flex;flex-direction:column;gap:4px;min-width:0">
+                  <span style="font-size:13px;color:#16191A">{{ res.name }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">{{ res.meta }}</span>
+                </span>
+                <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.06em;color:#7c8386">{{ res.kind }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </sc-if>
+        <button onClick="{{ goTrust }}" style="display:flex;flex-direction:column;gap:11px;width:100%;box-sizing:border-box;padding:15px;background:#fff;border:1px solid #E6E4DE;border-top:2px solid {{ trustColor }};border-radius:0 0 7px 7px;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="border-color:#237784">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#8a9093">QUINTEK AI</span>
+          <span style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;width:100%">
+            <span style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1;color:#16191A">{{ trustScore }}</span>
+              <span style="font-size:11.5px;color:#7c8386">Reliability · last evaluated {{ trustDate }}</span>
+            </span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;padding:5px 8px;border-radius:3px;color:#fff;background:{{ trustColor }};flex:none">{{ trustStatus }}</span>
+          </span>
+        </button>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <sc-for list="{{ moreLinks }}" as="l" hint-placeholder-count="7">
+            <button onClick="{{ l.go }}" style="display:flex;flex-direction:column;gap:7px;align-items:flex-start;padding:14px 13px;min-height:74px;background:#fff;border:1px solid #E6E4DE;border-radius:6px;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="border-color:#237784">
+              <span style="font-size:13.5px;font-weight:600;color:#16191A">{{ l.label }}</span>
+              <span style="font-size:11px;line-height:1.4;color:#7c8386">{{ l.note }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isNotebookEmpty }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:16px;padding:24px 20px">
+        <div style="display:flex;flex-direction:column;gap:12px;padding:26px 20px;border:1px dashed #CFCCC2;border-radius:8px;text-align:center;align-items:center">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#9aa0a2">NO SOURCES YET</span>
+          <span style="font-family:'Source Serif 4',Georgia,serif;font-size:19px;line-height:1.35;color:#16191A;text-wrap:pretty">Nothing has been read into this notebook.</span>
+          <span style="font-size:13px;line-height:1.6;color:#5d6467;max-width:250px;text-wrap:pretty">Upload one source — lecture notes, a scanned page, a chapter PDF — and concepts, links and questions follow from it.</span>
+          <button onClick="{{ addSource }}" style="margin-top:4px;min-height:46px;padding:0 18px;background:#237784;color:#fff;border:none;border-radius:5px;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#1A5963">Upload a source</button>
+        </div>
+        <div style="font-size:12px;line-height:1.6;color:#7c8386;text-wrap:pretty">Concepts you add here can still link to the 188 concepts already in your graph — renal physiology reaches cardiology on its own.</div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isConcept }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:18px;padding:0 16px 26px">
+        <div style="display:flex;flex-direction:column;gap:12px;padding:14px;background:#fff;border:1px solid #E6E4DE;border-top:2px solid {{ cptStateColor }};border-radius:0 0 7px 7px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <span style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#8a9093">CURRENT STATE</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:.06em;color:{{ cptStateColor }}">{{ cptState }}</span>
+            </span>
+            <span style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#8a9093">PRIORITY</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:14px;color:#16191A">{{ cptPriority }}</span>
+            </span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;padding:11px;background:#FAFAF8;border-radius:5px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#8a9093">WHY IT RANKS HERE</span>
+            <sc-for list="{{ cptWhy }}" as="w" hint-placeholder-count="4">
+              <span style="display:flex;justify-content:space-between;gap:12px;font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.5;color:#5d6467"><span style="color:#9aa0a2">{{ w.k }}</span><span>{{ w.v }}</span></span>
+            </sc-for>
+            <span style="font-size:11px;line-height:1.5;color:#8a9093;padding-top:3px;text-wrap:pretty">Ranking is computed from your recorded signals, not from a model's opinion.</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;gap:10px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#8a9093">
+            <span>next due {{ cptDue }}</span><span>{{ cptInterval }}</span>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">EXACT KNOWLEDGE GAPS</span>
+          <sc-for list="{{ cptGaps }}" as="cg" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid {{ cg.color }};border-radius:0 5px 5px 0">
+              <span style="font-size:13px;color:#16191A">{{ cg.name }}</span>
+              <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:{{ cg.color }}">{{ cg.state }}</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ cptNoGaps }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:16px;border:1px dashed #CFCCC2;border-radius:6px;font-size:12.5px;line-height:1.55;color:#6f7679;text-wrap:pretty">No open gaps on this concept. Gaps appear when you grade a question red or orange and name what failed.</div>
+          </sc-if>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">ATTEMPT HISTORY</span>
+          <div style="display:flex;flex-direction:column;gap:1px;background:#E6E4DE;border:1px solid #E6E4DE;border-radius:5px;overflow:hidden">
+            <sc-for list="{{ cptAttempts }}" as="at" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:70px 60px 1fr 70px;align-items:center;gap:8px;padding:10px 11px;background:#fff;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5d6467">
+                <span>{{ at.date }}</span><span style="color:#9aa0a2">{{ at.q }}</span>
+                <span style="color:{{ at.fg }}">{{ at.result }}</span>
+                <span style="text-align:right;color:{{ at.fg }}">{{ at.colour }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <span style="font-size:11px;line-height:1.5;color:#8a9093;text-wrap:pretty">Every attempt is kept. Nothing here is overwritten by a later result.</span>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">QUESTIONS BY NOTEBOOK</span>
+          <sc-for list="{{ cptByNotebook }}" as="nbk" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:7px;padding:12px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
+              <span style="display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:{{ nbk.color }}"><span style="width:5px;height:5px;border-radius:50%;background:{{ nbk.color }}"></span>{{ nbk.notebook }}</span>
+              <sc-for list="{{ nbk.questions }}" as="nq" hint-placeholder-count="2">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;background:#FAFAF8;border-radius:4px">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5d6467">{{ nq.id }}</span>
+                  <span style="font-size:11px;color:#7c8386;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ nq.family }}</span>
+                  <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:9px;color:{{ nq.fg }}">{{ nq.last }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px;padding:13px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid {{ cptColor }};border-radius:0 6px 6px 0">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#8a9093">FROM THE SOURCE</span>
+          <span style="font-family:'Source Serif 4',Georgia,serif;font-size:14.5px;line-height:1.6;color:#33393b;text-wrap:pretty">{{ cptPassage }}</span>
+          <button onClick="{{ noop }}" style="align-self:flex-start;min-height:38px;padding:0 10px;background:transparent;border:1px solid #E0DDD4;border-radius:4px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#237784" style-hover="border-color:#237784">{{ cptSource }} →</button>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">QUESTIONS BUILT FROM THIS CONCEPT</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#7c8386">{{ cptQCount }}</span>
+          </div>
+          <sc-for list="{{ cptQuestions }}" as="fq" hint-placeholder-count="6">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;background:#fff;border:1px solid #E6E4DE;border-radius:5px">
+              <span style="font-size:12.5px;color:{{ fq.fg }}">{{ fq.family }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:{{ fq.fg }}">{{ fq.n }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ cptEmpty }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:11px;padding:18px;border:1px dashed #CFCCC2;border-radius:7px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#9aa0a2">NO QUESTIONS YET</span>
+            <span style="font-size:13px;line-height:1.6;color:#5d6467;text-wrap:pretty">This concept was extracted from one passage only. Questions are written against that passage — nothing is invented beyond it.</span>
+            <button onClick="{{ generate }}" style="align-self:flex-start;min-height:44px;padding:0 15px;background:#237784;color:#fff;border:none;border-radius:5px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:#1A5963">{{ generateLabel }}</button>
+          </div>
+        </sc-if>
+
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">LINKED CONCEPTS</span>
+          <sc-for list="{{ cptLinks }}" as="l" hint-placeholder-count="3">
+            <button onClick="{{ l.select }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;padding:11px 12px;min-height:44px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid {{ l.color }};border-radius:0 5px 5px 0;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="border-color:#237784">
+              <span style="font-size:13px;color:#16191A">{{ l.name }}</span>
+              <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.06em;padding:4px 7px;border-radius:3px;color:{{ l.tagFg }};background:{{ l.tagBg }}">{{ l.tag }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:22px;padding:0 16px 26px">
+        <div style="display:flex;flex-direction:column;gap:11px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">DAILY TRIGGER</span>
+          <div style="display:flex;flex-direction:column;gap:8px;padding:13px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
+            <span style="font-size:12px;line-height:1.5;color:#6f7679;text-wrap:pretty">One time each day. Quintek rebuilds your revision queue then, and never changes this time on its own.</span>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <sc-for list="{{ triggerTimes }}" as="t" hint-placeholder-count="6">
+                <button onClick="{{ t.set }}" style="flex:1;min-width:62px;min-height:44px;border-radius:5px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:12px;background:{{ t.bg }};border:1px solid {{ t.bd }};color:{{ t.fg }}">{{ t.label }}</button>
+              </sc-for>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:10px;padding-top:2px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#8a9093">
+              <span>{{ timezone }}</span><span>next {{ nextTrigger }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">CHANNELS</span>
+          <div style="display:flex;flex-direction:column;gap:1px;background:#E6E4DE;border:1px solid #E6E4DE;border-radius:5px;overflow:hidden">
+            <sc-for list="{{ channels }}" as="ch" hint-placeholder-count="2">
+              <button onClick="{{ ch.toggle }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;padding:13px 12px;min-height:48px;background:#fff;border:none;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="background:#FAFAF8">
+                <span style="display:flex;flex-direction:column;gap:4px">
+                  <span style="font-size:13px;color:#16191A">{{ ch.label }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">{{ ch.meta }}</span>
+                </span>
+                <span style="flex:none;width:38px;height:22px;border-radius:11px;background:{{ ch.trackBg }};position:relative;display:block">
+                  <span style="position:absolute;top:3px;left:{{ ch.knobX }};width:16px;height:16px;border-radius:50%;background:#fff"></span>
+                </span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;background:#fff;border:1px solid #E6E4DE;border-radius:5px">
+            <span style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:{{ lastNotifFg }}">{{ lastNotif }}</span>
+              <span style="font-size:11px;color:#8a9093">Last notification status</span>
+            </span>
+            <button onClick="{{ testNotif }}" style="flex:none;min-height:40px;padding:0 13px;background:#FAFAF8;border:1px solid #E0DDD4;border-radius:5px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#237784" style-hover="border-color:#237784">{{ testLabel }}</button>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">NOTEBOOKS & SOURCES</span>
+          <sc-for list="{{ settingsNotebooks }}" as="n" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;background:#fff;border:1px solid #E6E4DE;border-radius:5px">
+              <span style="display:flex;flex-direction:column;gap:4px;min-width:0">
+                <span style="font-size:13px;color:#16191A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ n.title }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">{{ n.meta }}</span>
+              </span>
+              <button onClick="{{ n.open }}" style="flex:none;min-height:38px;padding:0 11px;background:transparent;border:1px solid #E0DDD4;border-radius:4px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#237784" style-hover="border-color:#237784">MANAGE</button>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">ACCOUNT</span>
+          <div style="display:flex;flex-direction:column;gap:1px;background:#E6E4DE;border:1px solid #E6E4DE;border-radius:5px;overflow:hidden">
+            <sc-for list="{{ accountRows }}" as="a" hint-placeholder-count="4">
+              <button onClick="{{ noop }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;padding:13px 12px;min-height:46px;background:#fff;border:none;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="background:#FAFAF8">
+                <span style="font-size:13px;color:{{ a.fg }}">{{ a.label }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8a9093">{{ a.value }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <span style="font-size:11.5px;line-height:1.6;color:#8a9093;text-wrap:pretty">Uploaded sources are encrypted at rest and scoped to your account. They are never used to train or calibrate anything outside your own notebooks.</span>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isNotebook }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:18px;padding:0 16px 24px">
+        <sc-if value="{{ nothingDue }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:11px;padding:12px 13px;background:#F5F3EC;border:1px solid #E6E4DE;border-radius:6px">
+            <span style="width:7px;height:7px;border-radius:50%;background:#237784;flex:none"></span>
+            <span style="font-size:12.5px;line-height:1.5;color:#5d6467;text-wrap:pretty">Nothing due here today. The next 14 questions unlock on 18 Aug — adding a source is the only useful thing to do now.</span>
+          </div>
+        </sc-if>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">SOURCES</span>
+            <button onClick="{{ addSource }}" style="background:none;border:none;padding:6px 0;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#237784">+ UPLOAD</button>
+          </div>
+          <sc-for list="{{ sources }}" as="s" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:8px;padding:12px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#16191A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.name }}</span>
+                <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;color:{{ s.fg }}">{{ s.status }}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="flex:1;height:2px;background:#EDEBE4;border-radius:2px;overflow:hidden;display:block"><span style="display:block;height:2px;width:{{ s.pct }};background:{{ s.fg }}"></span></span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#7c8386">{{ s.detail }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">CONCEPTS EXTRACTED</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#7c8386">{{ conceptCount }}</span>
+          </div>
+          <sc-if value="{{ extracting }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#B5812B;padding:2px">
+              <span style="width:6px;height:6px;border-radius:50%;background:#B5812B;animation:pgpulse 1.1s infinite"></span>reading page {{ extractPage }} of 14 — concepts appear as they are found
+            </div>
+          </sc-if>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <sc-for list="{{ extracted }}" as="c" hint-placeholder-count="8">
+              <button onClick="{{ c.open }}" style="display:flex;align-items:center;gap:7px;padding:9px 11px;min-height:38px;background:#fff;border:1px solid #E6E4DE;border-radius:20px;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12.5px;color:#16191A;animation:pgfade .35s ease both" style-hover="border-color:#237784">
+                <span style="width:6px;height:6px;border-radius:50%;background:{{ c.color }}"></span>{{ c.name }}
+                <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#9aa0a2">{{ c.q }}Q</span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="padding:11px 12px;background:#F5F3EC;border-left:2px solid #237784;border-radius:0 5px 5px 0;font-size:12px;line-height:1.5;color:#5d6467">
+            Every concept above traces to a passage in <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#16191A">{{ traceSource }}</span>. Tap a concept to see the passage and the questions built from it.
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isGraph }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:0;padding:0 0 12px">
+        <div style="display:flex;gap:6px;padding:0 16px 10px;overflow-x:auto">
+          <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+            <button onClick="{{ f.toggle }}" style="flex:none;display:flex;align-items:center;gap:6px;padding:8px 11px;min-height:36px;border-radius:20px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;background:{{ f.bg }};border:1px solid {{ f.bd }};color:{{ f.fg }}">
+              <span style="width:6px;height:6px;border-radius:50%;background:{{ f.dot }}"></span>{{ f.label }}
+            </button>
+          </sc-for>
+        </div>
+        <div style="position:relative;background:#F3F1EA;border-top:1px solid #E6E4DE;border-bottom:1px solid #E6E4DE">
+          <svg viewBox="0 0 390 400" style="width:390px;height:400px;display:block">
+            <sc-for list="{{ edges }}" as="e" hint-placeholder-count="16">
+              <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" stroke="{{ e.stroke }}" stroke-width="{{ e.w }}" stroke-dasharray="{{ e.dash }}" stroke-opacity="{{ e.op }}"></line>
+            </sc-for>
+            <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="14">
+              <g onClick="{{ n.select }}" style="cursor:pointer" opacity="{{ n.op }}">
+                <circle cx="{{ n.x }}" cy="{{ n.y }}" r="{{ n.r }}" fill="{{ n.fill }}" stroke="{{ n.stroke }}" stroke-width="{{ n.sw }}"></circle>
+              </g>
+            </sc-for>
+          </svg>
+          <div style="position:absolute;inset:0;pointer-events:none">
+            <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="14">
+              <div style="position:absolute;left:{{ n.lx }}px;top:{{ n.ty }}px;transform:translateX(-50%);white-space:nowrap;font-family:'Space Grotesk',sans-serif;font-size:9.5px;color:#3d4447;opacity:{{ n.op }}">{{ n.label }}</div>
+            </sc-for>
+          </div>
+          <div style="position:absolute;left:14px;bottom:12px;display:flex;flex-direction:column;gap:5px;font-family:'JetBrains Mono',monospace;font-size:9px;color:#7c8386">
+            <span style="display:flex;align-items:center;gap:7px"><span style="width:18px;height:0;border-top:1.5px solid #A9AFA8"></span>WITHIN SUBJECT</span>
+            <span style="display:flex;align-items:center;gap:7px"><span style="width:18px;height:0;border-top:1.5px dashed #B5812B"></span>CROSS-SUBJECT</span>
+          </div>
+        </div>
+        <div style="padding:14px 16px 0;display:flex;flex-direction:column;gap:11px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+            <span style="font-size:17px;font-weight:600;color:#16191A;letter-spacing:-.01em">{{ selName }}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:{{ selColor }}">{{ selSubject }}</span>
+          </div>
+          <div style="font-size:12.5px;line-height:1.55;color:#5d6467;text-wrap:pretty">{{ selNote }}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#8a9093">{{ selLinkCount }}</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <sc-for list="{{ selLinks }}" as="l" hint-placeholder-count="4">
+              <button onClick="{{ l.select }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;padding:11px 12px;min-height:44px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid {{ l.color }};border-radius:0 5px 5px 0;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="border-color:#237784">
+                <span style="display:flex;flex-direction:column;gap:4px;min-width:0">
+                  <span style="font-size:13px;color:#16191A">{{ l.name }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#8a9093">{{ l.relation }}</span>
+                </span>
+                <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.06em;padding:4px 7px;border-radius:3px;color:{{ l.tagFg }};background:{{ l.tagBg }}">{{ l.tag }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isRevise }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:16px;padding:0 18px 28px">
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div style="display:flex;align-items:center;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;color:#8a9093">
+            <span>{{ qProgress }}</span><span>{{ qFamily }}</span>
+          </div>
+          <div style="display:flex;gap:3px">
+            <sc-for list="{{ qTicks }}" as="t" hint-placeholder-count="8">
+              <span style="flex:1;height:3px;border-radius:2px;background:{{ t.bg }}"></span>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="font-family:'Source Serif 4',Georgia,serif;font-size:18.5px;line-height:1.5;color:#16191A;text-wrap:pretty">{{ qStem }}</div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <sc-for list="{{ qOptions }}" as="o" hint-placeholder-count="4">
+            <button onClick="{{ o.pick }}" style="display:flex;align-items:flex-start;gap:11px;width:100%;box-sizing:border-box;text-align:left;padding:13px;min-height:48px;cursor:pointer;border-radius:6px;font-family:'Source Serif 4',Georgia,serif;font-size:15px;line-height:1.4;background:{{ o.bg }};border:1px solid {{ o.bd }};color:{{ o.fg }}" style-hover="border-color:#237784">
+              <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:11px;padding-top:2px;color:{{ o.markFg }}">{{ o.mark }}</span>{{ o.text }}
+            </button>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ canSubmit }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ submit }}" style="width:100%;min-height:48px;background:#237784;color:#fff;border:none;border-radius:6px;font-family:'Space Grotesk',sans-serif;font-size:14.5px;font-weight:600;cursor:pointer" style-hover="background:#1A5963">Submit answer</button>
+        </sc-if>
+
+        <sc-if value="{{ submitted }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:14px;padding:15px;background:#fff;border:1px solid #E6E4DE;border-radius:6px;animation:pgfade .3s ease both">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;gap:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#8a9093">YOUR ANSWER</div>
+              <div style="font-family:'Source Serif 4',Georgia,serif;font-size:14.5px;line-height:1.45;color:{{ yourFg }}">{{ yourAnswer }}</div>
+              <div style="display:flex;gap:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#8a9093;padding-top:4px">CORRECT ANSWER</div>
+              <div style="font-family:'Source Serif 4',Georgia,serif;font-size:14.5px;line-height:1.45;color:#237784">{{ correctAnswer }}</div>
+            </div>
+            <div style="height:1px;background:#EDEBE4"></div>
+            <div style="font-family:'Source Serif 4',Georgia,serif;font-size:14.5px;line-height:1.55;color:#33393b;text-wrap:pretty">{{ qRationale }}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <sc-for list="{{ qConcepts }}" as="c" hint-placeholder-count="3">
+                <span style="display:flex;align-items:center;gap:6px;padding:6px 9px;background:#F5F3EC;border-radius:14px;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.04em;color:#5d6467"><span style="width:5px;height:5px;border-radius:50%;background:{{ c.color }}"></span>{{ c.name }}</span>
+              </sc-for>
+            </div>
+            <button onClick="{{ openSource }}" style="align-self:flex-start;display:flex;align-items:center;gap:8px;padding:9px 11px;min-height:40px;background:#FAFAF8;border:1px solid #E0DDD4;border-radius:5px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;color:#237784" style-hover="border-color:#237784">{{ qSource }} →</button>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px;padding:15px;background:#F5F3EC;border-radius:6px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#8a9093">HOW WELL DID YOU KNOW THIS?</span>
+            <div style="display:flex;gap:7px">
+              <sc-for list="{{ judgements }}" as="j" hint-placeholder-count="3">
+                <button onClick="{{ j.set }}" style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:5px;padding:11px 10px;min-height:62px;border-radius:5px;cursor:pointer;text-align:left;background:{{ j.bg }};border:1px solid {{ j.bd }}">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:{{ j.fg }}">{{ j.label }}</span>
+                  <span style="font-size:10.5px;line-height:1.35;color:#6f7679">{{ j.note }}</span>
+                </button>
+              </sc-for>
+            </div>
+            <span style="font-size:11px;line-height:1.5;color:#8a9093;text-wrap:pretty">Your judgement, not the system's. Quintek records whether the answer was right separately and never overwrites your colour.</span>
+          </div>
+
+          <sc-if value="{{ needGap }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:10px;padding:15px;background:#fff;border:1px solid {{ gapBd }};border-radius:6px;animation:pgfade .25s ease both">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:{{ gapFg }}">WHICH PART FAILED?</span>
+              <span style="font-size:12px;line-height:1.5;color:#6f7679;text-wrap:pretty">Pick what you actually did not know. This is stored as a knowledge gap against the concept — not "anaemia weak".</span>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <sc-for list="{{ gapOptions }}" as="g" hint-placeholder-count="4">
+                  <button onClick="{{ g.toggle }}" style="padding:9px 11px;min-height:38px;border-radius:18px;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;background:{{ g.bg }};border:1px solid {{ g.bd }};color:{{ g.fg }}">{{ g.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ judged }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.6;color:#8a9093">{{ attemptLine }}</span>
+              <button onClick="{{ nextQ }}" style="min-height:46px;padding:0 20px;background:#237784;color:#fff;border:none;border-radius:5px;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#1A5963">Next</button>
+            </div>
+          </sc-if>
+        </sc-if>
+
+        <sc-if value="{{ sessionDone }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;flex-direction:column;gap:12px;padding:16px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
+              <span style="font-size:17px;font-weight:600;color:#16191A">Session analysis</span>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+                <sc-for list="{{ analysis }}" as="a" hint-placeholder-count="6">
+                  <div style="display:flex;flex-direction:column;gap:5px">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:16px;color:{{ a.color }}">{{ a.n }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.06em;color:#8a9093">{{ a.label }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="height:1px;background:#EDEBE4"></div>
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <sc-for list="{{ movement }}" as="m" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                    <span style="font-size:12.5px;color:#33393b">{{ m.name }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:{{ m.color }}">{{ m.change }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:11px;padding:16px;background:#fff;border:1px solid #E6E4DE;border-top:2px solid #BC4C43;border-radius:0 0 6px 6px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#BC4C43">READ / REVISE — IN THIS ORDER</span>
+              <sc-for list="{{ readList }}" as="rd" hint-placeholder-count="4">
+                <button onClick="{{ rd.open }}" style="display:flex;align-items:center;gap:11px;width:100%;box-sizing:border-box;padding:11px 12px;min-height:46px;background:#FAFAF8;border:1px solid #E6E4DE;border-radius:5px;cursor:pointer;text-align:left;font-family:'Space Grotesk',sans-serif" style-hover="border-color:#237784">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9aa0a2;flex:none">{{ rd.n }}</span>
+                  <span style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
+                    <span style="font-size:13px;color:#16191A">{{ rd.name }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#237784;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ rd.source }}</span>
+                  </span>
+                </button>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;gap:8px">
+              <button onClick="{{ restart }}" style="flex:1;min-height:46px;background:#237784;color:#fff;border:none;border-radius:5px;font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="background:#1A5963">Another session</button>
+              <button onClick="{{ goWeak }}" style="flex:1;min-height:46px;background:#fff;color:#237784;border:1px solid #E0DDD4;border-radius:5px;font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="border-color:#237784">Open weak list</button>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isProgress }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:20px;padding:0 16px 26px">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <sc-for list="{{ masteryStats }}" as="m" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:7px;padding:12px;background:#fff;border:1px solid #E6E4DE;border-top:2px solid {{ m.color }};border-radius:0 0 6px 6px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:21px;color:#16191A">{{ m.n }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;color:{{ m.color }}">{{ m.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">RECALL STRENGTH BY CONCEPT</span>
+          <sc-for list="{{ conceptMastery }}" as="c" hint-placeholder-count="6">
+            <div style="display:flex;flex-direction:column;gap:7px;padding:11px 12px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+                <span style="font-size:13px;color:#16191A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.name }}</span>
+                <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:{{ c.color }}">{{ c.state }}</span>
+              </div>
+              <span style="display:block;height:3px;background:#EDEBE4;border-radius:2px;overflow:hidden"><span style="display:block;height:3px;width:{{ c.pct }};background:{{ c.color }}"></span></span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">{{ c.meta }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">LAST 12 WEEKS</span>
+          <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:3px">
+            <sc-for list="{{ heat }}" as="h" hint-placeholder-count="84">
+              <span style="aspect-ratio:1;border-radius:1px;background:{{ h.bg }}"></span>
+            </sc-for>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a9093">
+            <span>{{ streak }}</span><span>reviews per day</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isOnboard }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:22px;padding:8px 22px 28px;height:100%;box-sizing:border-box">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">STEP {{ stepNo }} OF 3</div>
+        <div style="font-family:'Source Serif 4',Georgia,serif;font-size:27px;line-height:1.25;color:#16191A;letter-spacing:-.01em;text-wrap:pretty">{{ stepTitle }}</div>
+        <div style="font-size:14px;line-height:1.6;color:#5d6467;text-wrap:pretty">{{ stepBody }}</div>
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;border:1px dashed #CFCCC2;border-radius:8px;min-height:220px;padding:20px;text-align:center">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.8;color:#9aa0a2">{{ stepArt }}</span>
+        </div>
+        <button onClick="{{ stepNext }}" style="width:100%;min-height:50px;background:#237784;color:#fff;border:none;border-radius:6px;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#1A5963">{{ stepCta }}</button>
+      </div>
+    </sc-if>
+
+  </div>
+
+  <sc-if value="{{ showTabs }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:none;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #E6E4DE;background:#fff;padding:8px 8px 22px">
+      <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="4">
+        <button onClick="{{ tab.go }}" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:8px 2px;min-height:44px;background:transparent;border:none;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;color:{{ tab.fg }}">
+          <span style="width:16px;height:2px;border-radius:1px;background:{{ tab.bar }}"></span>{{ tab.label }}
+        </button>
+      </sc-for>
+    </div>
+  </sc-if>
+</div>
+
+<div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;color:#565d60;text-align:center;line-height:1.8">
+  TAP A GRAPH NODE TO RE-CENTRE · UPLOAD IN A NOTEBOOK TO WATCH EXTRACTION RUN
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:470,&quot;height&quot;:1000},&quot;showStreak&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;graphLabels&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const SUBJ = {
+  cardiology:   { label: 'CARDIOLOGY',   color: '#237784' },
+  biochemistry: { label: 'BIOCHEMISTRY', color: '#B5812B' },
+  physiology:   { label: 'PHYSIOLOGY',   color: '#4F8FD2' },
+  pharmacology: { label: 'PHARMACOLOGY', color: '#6E6A8F' },
+};
+
+const NOTEBOOKS = [
+  { id: 'cardio', title: 'Cardiology — Block 3', subject: 'cardiology', sources: 12, concepts: 84, questions: 312, due: 23, mastered: 46, review: 26 },
+  { id: 'rapid', title: 'NEET-PG Rapid Revision', subject: 'pharmacology', sources: 5, concepts: 41, questions: 168, due: 7, mastered: 31, review: 34 },
+  { id: 'biochem', title: 'Biochemistry — Metabolism', subject: 'biochemistry', sources: 8, concepts: 63, questions: 240, due: 0, mastered: 58, review: 18 },
+  { id: 'renal', title: 'Renal Physiology', subject: 'physiology', sources: 0, concepts: 0, questions: 0, due: 0, mastered: 0, review: 0 },
+];
+
+const NODES = [
+  { id: 'ida', name: 'Iron deficiency anaemia', subject: 'biochemistry', note: 'Microcytic hypochromic anaemia from depleted iron stores; the commonest anaemia seen in PG vignettes.' },
+  { id: 'ironmet', name: 'Iron metabolism', subject: 'biochemistry', note: 'Absorption, transferrin transport, ferritin storage and hepcidin regulation.' },
+  { id: 'o2', name: 'Oxygen transport', subject: 'physiology', note: 'Haemoglobin saturation, the dissociation curve and tissue delivery.' },
+  { id: 'hf', name: 'Heart failure', subject: 'cardiology', note: 'Impaired ventricular filling or ejection; anaemia is a recognised precipitant.' },
+  { id: 'hfpef', name: 'HFpEF', subject: 'cardiology', note: 'Preserved ejection fraction with elevated filling pressures.' },
+  { id: 'bnp', name: 'BNP / NT-proBNP', subject: 'cardiology', note: 'Wall-stress marker; interpretation shifts with obesity and renal function.' },
+  { id: 'diuretic', name: 'Loop diuretics', subject: 'pharmacology', note: 'NKCC2 inhibition at the thick ascending limb.' },
+  { id: 'aceI', name: 'ACE inhibitors', subject: 'pharmacology', note: 'Afterload reduction and remodelling benefit in HFrEF.' },
+  { id: 'raas', name: 'RAAS', subject: 'physiology', note: 'Volume and pressure regulation; the target of most heart-failure therapy.' },
+  { id: 'hepcidin', name: 'Hepcidin', subject: 'biochemistry', note: 'Acute-phase regulator that blocks ferroportin and traps iron in stores.' },
+  { id: 'anemiacd', name: 'Anaemia of chronic disease', subject: 'biochemistry', note: 'Hepcidin-mediated functional iron deficiency with normal or high ferritin.' },
+  { id: 'ecg', name: 'ECG interpretation', subject: 'cardiology', note: 'Axis, intervals and ischaemic change; a high-yield interpretation family.' },
+  { id: 'af', name: 'Atrial fibrillation', subject: 'cardiology', note: 'Irregularly irregular rhythm; rate versus rhythm control.' },
+  { id: 'k', name: 'Potassium homeostasis', subject: 'physiology', note: 'Renal handling and the arrhythmia risk of derangement.' },
+];
+
+const EDGES = [
+  ['ida', 'ironmet', 'part_of'], ['ida', 'o2', 'causes'], ['ida', 'hf', 'precipitates'],
+  ['ironmet', 'hepcidin', 'regulated_by'], ['hepcidin', 'anemiacd', 'causes'], ['anemiacd', 'ida', 'differential'],
+  ['hf', 'hfpef', 'part_of'], ['hf', 'bnp', 'diagnosed_by'], ['hf', 'diuretic', 'treated_by'],
+  ['hf', 'aceI', 'treated_by'], ['aceI', 'raas', 'acts_on'], ['diuretic', 'k', 'causes'],
+  ['raas', 'k', 'related_to'], ['hf', 'af', 'related_to'], ['af', 'ecg', 'diagnosed_by'],
+  ['k', 'ecg', 'related_to'], ['o2', 'hf', 'related_to'], ['hfpef', 'bnp', 'related_to'],
+];
+
+const QUESTIONS = [
+  { family: 'Clinical vignette',
+    stem: 'A 62-year-old woman with HFpEF reports worsening exertional dyspnoea over six weeks. Hb 8.9 g/dL, MCV 71 fL, ferritin 9 ng/mL, CRP normal. Which single change is most likely responsible for her decompensation?',
+    options: ['Absolute iron deficiency reducing oxygen delivery', 'Progressive systolic dysfunction', 'Hepcidin-mediated iron sequestration', 'Diuretic-induced hypokalaemia'],
+    correct: 0,
+    rationale: 'A low ferritin with normal CRP indicates absolute iron deficiency rather than functional sequestration. Reduced oxygen-carrying capacity raises cardiac output demand, and in a ventricle that cannot augment stroke volume this presents as decompensation. Ejection fraction is preserved by definition in HFpEF, so systolic dysfunction does not explain the picture.',
+    source: 'Cardiology Block 3 · Valvular_and_HF_notes.pdf p.11', concept: 'Iron deficiency anaemia', next: 'Next review in 4 days' },
+  { family: 'Mechanism',
+    stem: 'Hepcidin rises in chronic inflammation. What is the immediate consequence at the enterocyte and macrophage membrane?',
+    options: ['Ferroportin is internalised and degraded', 'Transferrin receptor 1 is upregulated', 'DMT1 transport is accelerated', 'Ferritin synthesis is blocked'],
+    correct: 0,
+    rationale: 'Hepcidin binds ferroportin and drives its internalisation and degradation, so iron cannot leave enterocytes or macrophages. Serum iron falls while stores stay full — the pattern of anaemia of chronic disease, with normal or raised ferritin.',
+    source: 'Biochemistry — Metabolism · Iron_handling.pdf p.3', concept: 'Hepcidin', next: 'Next review in 9 days' },
+  { family: 'Interpretation',
+    stem: 'NT-proBNP is 340 pg/mL in a 58-year-old man with BMI 38 and breathlessness. How should this value be read?',
+    options: ['Excludes heart failure outright', 'Lower than expected for his degree of congestion — obesity suppresses natriuretic peptide levels', 'Diagnostic of acute decompensation', 'Uninterpretable without troponin'],
+    correct: 1,
+    rationale: 'Natriuretic peptide concentrations run lower in obesity, so a mid-range value does not carry its usual negative predictive value. Read it alongside imaging and filling pressures rather than as a standalone rule-out.',
+    source: 'Cardiology Block 3 · Biomarkers.pdf p.6', concept: 'BNP / NT-proBNP', next: 'Next review tomorrow' },
+];
+
+const QMETA = [
+  { concepts: [['Iron deficiency anaemia', 'biochemistry'], ['HFpEF', 'cardiology'], ['Oxygen transport', 'physiology']],
+    gaps: ['Ferritin interpretation', 'Transferrin saturation', 'IDA vs ACD differentiation', 'Output reserve in HFpEF'] },
+  { concepts: [['Hepcidin', 'biochemistry'], ['Iron metabolism', 'biochemistry']],
+    gaps: ['Ferroportin handling', 'Hepcidin triggers', 'Iron absorption', 'Storage vs serum iron'] },
+  { concepts: [['BNP / NT-proBNP', 'cardiology'], ['Heart failure', 'cardiology']],
+    gaps: ['Obesity effect on NP levels', 'NP cut-offs', 'Renal effect on NP', 'Rule-out reasoning'] },
+];
+
+const JUDGEMENTS = [
+  ['RED', '#BC4C43', 'Forgot it'],
+  ['ORANGE', '#B5812B', 'Half sure'],
+  ['GREEN', '#237784', 'Knew it'],
+];
+
+const SOURCES_BASE = [
+  { name: 'Valvular_and_HF_notes.pdf', status: 'EXTRACTED', pct: '100%', detail: '31 concepts · 14 pages', fg: '#237784' },
+  { name: 'Ward_round_scans_aug.pdf', status: 'EXTRACTED', pct: '100%', detail: '18 concepts · 9 pages', fg: '#237784' },
+  { name: 'Biomarkers.pdf', status: 'EXTRACTED', pct: '100%', detail: '12 concepts · 6 pages', fg: '#237784' },
+];
+
+const NEW_CONCEPTS = ['Mitral regurgitation', 'Austin Flint murmur', 'Afterload', 'Wall stress', 'Aortic stenosis', 'Valve area index'];
+const BASE_CONCEPTS = [
+  ['Heart failure', 'cardiology', 22], ['HFpEF', 'cardiology', 14], ['BNP / NT-proBNP', 'cardiology', 9],
+  ['Atrial fibrillation', 'cardiology', 17], ['ECG interpretation', 'cardiology', 26], ['Loop diuretics', 'pharmacology', 11],
+];
+
+const CONCEPT_MASTERY = [
+  ['Iron deficiency anaemia', 'DUE TODAY', '#B5812B', '54%', 'interval 4d · last seen 5d ago · 12 questions'],
+  ['Hepcidin', 'STRUGGLING', '#BC4C43', '28%', 'interval 1d · 3 lapses · 8 questions'],
+  ['Heart failure', 'MASTERED', '#237784', '92%', 'interval 21d · next 12 Sep · 22 questions'],
+  ['ECG interpretation', 'DUE TODAY', '#B5812B', '61%', 'interval 6d · last seen 7d ago · 26 questions'],
+  ['Oxygen transport', 'MASTERED', '#237784', '88%', 'interval 30d · next 21 Sep · 9 questions'],
+  ['Loop diuretics', 'STRUGGLING', '#BC4C43', '35%', 'interval 2d · 2 lapses · 11 questions'],
+];
+
+const GAPS = [
+  ['Ferritin interpretation', 'RED', '#BC4C43', 'Iron metabolism', 'Biochemistry — Metabolism · Iron_handling.pdf p.3', '2 days unresolved',
+    [['Q17', 'Medicine / Anaemia', 'WRONG', '#BC4C43'], ['Q42', 'Biochemistry / Iron metabolism', 'RED', '#BC4C43'], ['Q81', 'Pathology / Anaemia', 'ORANGE', '#B5812B']]],
+  ['Transferrin saturation', 'RED', '#BC4C43', 'Iron metabolism', 'Biochemistry — Metabolism · Iron_handling.pdf p.4', '2 days unresolved',
+    [['Q42', 'Biochemistry / Iron metabolism', 'WRONG', '#BC4C43'], ['Q88', 'Medicine / Anaemia', 'RED', '#BC4C43']]],
+  ['IDA vs ACD differentiation', 'ORANGE', '#B5812B', 'Anaemia of chronic disease', 'Cardiology Block 3 · Valvular_and_HF_notes.pdf p.11', '5 days unresolved',
+    [['Q17', 'Medicine / Anaemia', 'ORANGE', '#B5812B'], ['Q93', 'Pathology / Anaemia', 'CORRECT', '#237784']]],
+  ['Obesity effect on NP levels', 'ORANGE', '#B5812B', 'BNP / NT-proBNP', 'Cardiology Block 3 · Biomarkers.pdf p.6', '1 day unresolved',
+    [['Q55', 'Medicine / Heart failure', 'ORANGE', '#B5812B']]],
+  ['Ferroportin handling', 'GREEN', '#237784', 'Hepcidin', 'Biochemistry — Metabolism · Iron_handling.pdf p.3', 'resolved 11 Aug',
+    [['Q42', 'Biochemistry / Iron metabolism', 'CORRECT', '#237784'], ['Q44', 'Biochemistry / Iron metabolism', 'GREEN', '#237784']]],
+];
+
+const DEMOS = [
+  ['DEMO 014', 'Two-step vignette into a numerical value', '2 Aug 2026',
+    'A 62-year-old presents with fatigue. Hb 8.9, MCV 71, ferritin 9, CRP 4. What single mechanism best explains the picture?',
+    [['type', 'clinical vignette'], ['difficulty', 'PG'], ['reasoning depth', '2-step'],
+     ['stem structure', 'presentation → investigation → value → interpretation'], ['target', 'mechanism'],
+     ['distractor strategy', 'common misconception'], ['answer format', 'single best answer, 4 options']], '14 questions framed'],
+  ['DEMO 009', 'Discrimination between adjacent entities', '28 Jul 2026',
+    'Which finding most reliably separates iron deficiency anaemia from anaemia of chronic disease?',
+    [['type', 'concept discrimination'], ['difficulty', 'PG'], ['reasoning depth', '1-step'],
+     ['stem structure', 'direct comparison prompt'], ['target', 'diagnostic feature'],
+     ['distractor strategy', 'features shared by both entities'], ['answer format', 'single best answer, 5 options']], '6 questions framed'],
+  ['DEMO 021', 'Cross-subject integration', '11 Aug 2026',
+    'A patient on long-term loop diuretics develops palpitations. Which electrolyte mechanism links the two, and what ECG change follows?',
+    [['type', 'integrated cross-subject'], ['difficulty', 'PG'], ['reasoning depth', '3-step'],
+     ['stem structure', 'therapy → electrolyte → conduction → ECG'], ['target', 'mechanism chain'],
+     ['distractor strategy', 'right mechanism, wrong direction'], ['answer format', 'single best answer, 4 options']], '3 questions framed'],
+];
+
+const BANK = [
+  ['Q17', 'A 62-year-old woman with HFpEF reports worsening exertional dyspnoea. Hb 8.9 g/dL, MCV 71 fL, ferritin 9 ng/mL, CRP normal…', 'APPROVED', 'Clinical vignette', 'Medicine / Anaemia',
+    [['Iron deficiency anaemia', 'biochemistry'], ['HFpEF', 'cardiology']], '3 attempts · last RED',
+    'Valvular_and_HF_notes.pdf p.11 · DEMO 014 · gen claude-sonnet-4.6 / prompt v7 · val gpt-5.1 / v2'],
+  ['Q42', 'Hepcidin rises in chronic inflammation. What is the immediate consequence at the enterocyte membrane?', 'APPROVED', 'Mechanism', 'Biochemistry / Iron metabolism',
+    [['Hepcidin', 'biochemistry'], ['Iron metabolism', 'biochemistry']], '4 attempts · last GREEN',
+    'Iron_handling.pdf p.3 · DEMO 014 · gen claude-sonnet-4.6 / prompt v7 · val gpt-5.1 / v2'],
+  ['Q55', 'NT-proBNP is 340 pg/mL in a 58-year-old man with BMI 38 and breathlessness. How should this value be read?', 'FLAGGED', 'Interpretation', 'Medicine / Heart failure',
+    [['BNP / NT-proBNP', 'cardiology']], '1 attempt · last ORANGE',
+    'Biomarkers.pdf p.6 · no demo · gen claude-sonnet-4.6 / prompt v7 · val flagged: cut-off not stated in source'],
+  ['Q88', 'Calculate transferrin saturation from the values given and state whether iron stores are depleted.', 'PENDING', 'Application', 'Biochemistry / Iron metabolism',
+    [['Iron metabolism', 'biochemistry']], 'unseen',
+    'Iron_handling.pdf p.4 · DEMO 009 · gen claude-sonnet-4.6 / prompt v7 · validation queued'],
+];
+
+// One record per concept — attempts, questions and source all keyed off the concept,
+// so no two concepts can render each other's history.
+const CONCEPT_DATA = {
+  'Iron metabolism': { subject: 'biochemistry', source: 'Biochemistry — Metabolism · Iron_handling.pdf p.3',
+    passage: 'Iron is absorbed in the duodenum, carried on transferrin and stored as ferritin; hepcidin governs release from stores by internalising ferroportin.',
+    families: [['Direct recall', 3], ['Clinical vignette', 2], ['Interpretation', 4], ['Mechanism', 5], ['Differential diagnosis', 1], ['Management', 1]],
+    attempts: [['08 Aug', 'Q42', 'incorrect', 'RED'], ['11 Aug', 'Q42', 'correct', 'ORANGE'], ['15 Aug', 'Q88', 'incorrect', 'RED']],
+    byNotebook: [['Biochemistry — Iron metabolism', 'biochemistry', [['Q42', 'Mechanism', 'RED'], ['Q88', 'Application', 'RED'], ['Q44', 'Direct recall', 'GREEN']]],
+      ['Medicine — Anaemia', 'cardiology', [['Q17', 'Clinical vignette', 'RED']]]] },
+  'Hepcidin': { subject: 'biochemistry', source: 'Biochemistry — Metabolism · Iron_handling.pdf p.3',
+    passage: 'Hepcidin rises with inflammation and binds ferroportin, trapping iron inside enterocytes and macrophages.',
+    families: [['Direct recall', 2], ['Mechanism', 4], ['Interpretation', 2]],
+    attempts: [['09 Aug', 'Q42', 'incorrect', 'ORANGE'], ['13 Aug', 'Q44', 'correct', 'GREEN'], ['15 Aug', 'Q42', 'correct', 'GREEN']],
+    byNotebook: [['Biochemistry — Iron metabolism', 'biochemistry', [['Q42', 'Mechanism', 'GREEN'], ['Q44', 'Direct recall', 'GREEN']]]] },
+  'Anaemia of chronic disease': { subject: 'biochemistry', source: 'Cardiology Block 3 · Valvular_and_HF_notes.pdf p.11',
+    passage: 'Functional iron deficiency with normal or raised ferritin; separating it from true depletion turns on ferritin and CRP read together.',
+    families: [['Clinical vignette', 3], ['Differential diagnosis', 4], ['Interpretation', 2]],
+    attempts: [['10 Aug', 'Q81', 'correct', 'ORANGE'], ['14 Aug', 'Q93', 'correct', 'GREEN']],
+    byNotebook: [['Pathology — Anaemia', 'pharmacology', [['Q81', 'Discrimination', 'ORANGE'], ['Q93', 'Vignette', 'GREEN']]],
+      ['Medicine — Anaemia', 'cardiology', [['Q17', 'Clinical vignette', 'ORANGE']]]] },
+  'BNP / NT-proBNP': { subject: 'cardiology', source: 'Cardiology Block 3 · Biomarkers.pdf p.6',
+    passage: 'A wall-stress marker whose interpretation shifts with obesity and renal function; a mid-range value is not a rule-out.',
+    families: [['Interpretation', 5], ['Clinical vignette', 2], ['Management', 2]],
+    attempts: [['12 Aug', 'Q55', 'incorrect', 'ORANGE']],
+    byNotebook: [['Medicine — Heart failure', 'cardiology', [['Q55', 'Interpretation', 'ORANGE']]]] },
+  'Heart failure': { subject: 'cardiology', source: 'Cardiology Block 3 · Valvular_and_HF_notes.pdf p.11',
+    passage: 'Impaired filling or ejection; anaemia is a recognised precipitant and a correctable one.',
+    families: [['Clinical vignette', 8], ['Management', 6], ['Mechanism', 4], ['Interpretation', 4]],
+    attempts: [['02 Aug', 'Q31', 'correct', 'ORANGE'], ['07 Aug', 'Q31', 'correct', 'GREEN'], ['14 Aug', 'Q55', 'correct', 'GREEN']],
+    byNotebook: [['Medicine — Heart failure', 'cardiology', [['Q31', 'Management', 'GREEN'], ['Q55', 'Interpretation', 'GREEN']]]] },
+  'HFpEF': { subject: 'cardiology', source: 'Cardiology Block 3 · Valvular_and_HF_notes.pdf p.9',
+    passage: 'Preserved ejection fraction with raised filling pressures; output cannot be augmented on demand.',
+    families: [['Clinical vignette', 6], ['Mechanism', 3], ['Management', 5]],
+    attempts: [['06 Aug', 'Q19', 'correct', 'GREEN'], ['13 Aug', 'Q17', 'incorrect', 'ORANGE']],
+    byNotebook: [['Medicine — Heart failure', 'cardiology', [['Q19', 'Mechanism', 'GREEN'], ['Q17', 'Clinical vignette', 'ORANGE']]]] },
+  'ECG interpretation': { subject: 'cardiology', source: 'Cardiology Block 3 · Ward_round_scans_aug.pdf p.4',
+    passage: 'Axis, intervals and ischaemic change read in a fixed order before any rhythm call is made.',
+    families: [['Interpretation', 14], ['Clinical vignette', 6], ['Direct recall', 6]],
+    attempts: [['05 Aug', 'Q60', 'correct', 'ORANGE'], ['12 Aug', 'Q62', 'incorrect', 'ORANGE']],
+    byNotebook: [['Medicine — Cardiology', 'cardiology', [['Q60', 'Interpretation', 'ORANGE'], ['Q62', 'Interpretation', 'ORANGE']]]] },
+  'Loop diuretics': { subject: 'pharmacology', source: 'NEET-PG Rapid Revision · Diuretics.pdf p.2',
+    passage: 'NKCC2 inhibition at the thick ascending limb, with the potassium loss that follows.',
+    families: [['Mechanism', 5], ['Management', 4], ['Direct recall', 2]],
+    attempts: [['04 Aug', 'Q71', 'incorrect', 'RED'], ['11 Aug', 'Q71', 'incorrect', 'RED']],
+    byNotebook: [['Pharmacology — Diuretics', 'pharmacology', [['Q71', 'Mechanism', 'RED']]]] },
+};
+
+// Deterministic priority ordering: red gaps first, then orange, then everything else.
+const PRIORITY_ORDER = ['Iron metabolism', 'Loop diuretics', 'Anaemia of chronic disease', 'BNP / NT-proBNP',
+  'ECG interpretation', 'HFpEF', 'Hepcidin', 'Heart failure'];
+
+const SEARCHABLE = [
+  ['Ferritin interpretation', 'KNOWLEDGE GAP', 'RED · 3 questions · Iron metabolism'],
+  ['Iron metabolism', 'CONCEPT', 'Biochemistry · priority 2 · 12 questions'],
+  ['Iron deficiency anaemia', 'CONCEPT', 'Biochemistry · due today · 12 questions'],
+  ['Q42 — hepcidin mechanism', 'QUESTION', 'Mechanism · Biochemistry / Iron metabolism'],
+  ['Iron_handling.pdf', 'SOURCE', 'Biochemistry — Metabolism · 6 pages · 12 concepts'],
+  ['Biochemistry — Metabolism', 'NOTEBOOK', '8 sources · 63 concepts · 240 questions'],
+  ['15 Aug session', 'SESSION', '8 questions · 3 red · 2 orange'],
+];
+
+const STEPS = [
+  ['Revision built from your own material', 'Upload the notes, PDFs and scanned pages you already study from. Nothing is generated from a generic question bank.', 'PDF · DOCX · SCANNED PAGES\nup to 50 MB per source', 'Upload a source'],
+  ['Concepts are extracted and linked', 'Each source is read into named concepts, then connected — inside a subject and across them, so cardiology reaches biochemistry.', '84 concepts\n312 links\n19 crossing subjects', 'See the graph'],
+  ['Questions arrive in six families', 'Direct recall, clinical vignette, interpretation, mechanism, differential and management — so revision does not collapse into one question asked six ways.', 'DIRECT RECALL · VIGNETTE\nINTERPRETATION · MECHANISM\nDIFFERENTIAL · MANAGEMENT', 'Start revising'],
+];
+
+class Component extends DCLogic {
+  state = {
+    route: 'today', notebook: 'cardio', sel: 'ida', filters: {},
+    weakFilter: 'ALL', query: '', cptFrom: 'weak', qCount: 10, strategy: 'WEAKNESS_FIRST',
+    studio: {}, studioOut: false, studioAct: null, bankFilter: 'ALL',
+    evalApi: null, evalState: 'loading', howOpen: false, openTrack: null,
+    trigger: '20:00', channels: { push: true, email: false }, tested: false,
+    category: 'ALL', openTask: null, modelId: null, cmpA: 0, cmpB: 1,
+    extracting: false, extractPage: 0, extraCount: 0,
+    qi: 0, picked: null, done: false, step: 0, pos: null, tick: 0,
+    cpt: null, cadence: 'Daily', generated: false,
+    submitted: false, judgement: null, gaps: [],
+  };
+
+  openConcept = (name, subject, from) => () => this.setState({ route: 'concept', cpt: { name, subject }, cptFrom: from || 'weak', generated: false });
+  setWeakFilter = (f) => () => this.setState({ weakFilter: f });
+  setBankFilter = (f) => () => this.setState({ bankFilter: f });
+  setStudio = (k, v) => () => this.setState((st) => ({ studio: { ...st.studio, [k]: v }, route: k === 'demo' && st.route === 'demos' ? 'studio' : st.route }));
+  runStudio = () => this.setState({ studioOut: true, studioAct: null });
+  toggleHow = () => this.setState((st) => ({ howOpen: !st.howOpen }));
+  toggleTrack = (t) => () => this.setState((st) => ({ openTrack: st.openTrack === t ? null : t }));
+  toggleTask = (t) => () => this.setState((st) => ({ openTask: st.openTask === t ? null : t }));
+  setCategory = (c) => () => this.setState({ category: c });
+  openModel = (id) => () => this.setState({ route: 'model', modelId: id });
+  pickCmp = (i) => () => this.setState((st) => (st.cmpA === i || st.cmpB === i ? {} : { cmpA: st.cmpB, cmpB: i }));
+  studioAction = (a) => () => this.setState({ studioAct: a });
+  setCount = (n) => () => this.setState({ qCount: n });
+  setStrategy = (v) => () => this.setState({ strategy: v });
+  setTrigger = (t) => () => this.setState({ trigger: t, tested: false });
+  toggleChannel = (k) => () => this.setState((st) => ({ channels: { ...st.channels, [k]: !st.channels[k] } }));
+  sendTest = () => this.setState({ tested: true });
+  generate = () => this.setState({ generated: true });
+
+  componentDidMount() {
+    this.initGraph();
+    import(window.__resources && window.__resources.evalApi ? window.__resources.evalApi : './quintek-eval-api.js')
+      .then((api) => this.setState({ evalApi: api, evalState: api.state }))
+      .catch(() => this.setState({ evalState: 'error' }));
+  }
+  componentWillUnmount() { cancelAnimationFrame(this._raf); clearInterval(this._ext); }
+
+  initGraph() {
+    const pos = {};
+    NODES.forEach((n, i) => {
+      const a = (i / NODES.length) * Math.PI * 2;
+      pos[n.id] = { x: 195 + Math.cos(a) * 120, y: 200 + Math.sin(a) * 105, vx: 0, vy: 0 };
+    });
+    this.pos = pos;
+    this.heat = 260;
+    this.loop();
+  }
+
+  loop = () => {
+    if (this.heat <= 0) return;
+    this.heat -= 1;
+    const p = this.pos, ids = NODES.map((n) => n.id);
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = p[ids[i]], b = p[ids[j]];
+        let dx = a.x - b.x, dy = a.y - b.y;
+        let d2 = dx * dx + dy * dy || 0.01;
+        const f = 2600 / d2;
+        const d = Math.sqrt(d2);
+        a.vx += (dx / d) * f; a.vy += (dy / d) * f;
+        b.vx -= (dx / d) * f; b.vy -= (dy / d) * f;
+      }
+    }
+    EDGES.forEach(([s, t]) => {
+      const a = p[s], b = p[t];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
+      const f = (d - 74) * 0.012;
+      a.vx += (dx / d) * f; a.vy += (dy / d) * f;
+      b.vx -= (dx / d) * f; b.vy -= (dy / d) * f;
+    });
+    ids.forEach((id) => {
+      const n = p[id];
+      n.vx += (195 - n.x) * 0.006; n.vy += (200 - n.y) * 0.006;
+      n.vx *= 0.84; n.vy *= 0.84;
+      n.x = Math.max(34, Math.min(356, n.x + n.vx));
+      n.y = Math.max(30, Math.min(368, n.y + n.vy));
+    });
+    this.setState({ tick: this.state.tick + 1 });
+    this._raf = requestAnimationFrame(this.loop);
+  };
+
+  reheat() { const cold = this.heat <= 0; this.heat = 90; if (cold) this.loop(); }
+
+  go = (route) => () => this.setState({ route });
+  openNotebook = (id) => () => this.setState({ route: 'notebook', notebook: id });
+  select = (id) => () => { this.setState({ sel: id }); this.reheat(); };
+  toggleFilter = (k) => () => this.setState((s) => ({ filters: { ...s.filters, [k]: !s.filters[k] } }));
+
+  addSource = () => {
+    if (this.state.extracting) return;
+    this.setState({ extracting: true, extractPage: 1, extraCount: 0, notebook: 'cardio', route: 'notebook' });
+    this._ext = setInterval(() => {
+      this.setState((s) => {
+        const page = s.extractPage + 1;
+        const extra = Math.min(NEW_CONCEPTS.length, Math.floor(page / 2.2));
+        if (page > 14) { clearInterval(this._ext); return { extracting: false, extractPage: 14, extraCount: NEW_CONCEPTS.length }; }
+        return { extractPage: page, extraCount: extra };
+      });
+    }, 620);
+  };
+
+  attempts = [];
+
+  pick = (i) => () => { if (!this.state.submitted) this.setState({ picked: i }); };
+  submit = () => this.setState({ submitted: true });
+  judge = (colour) => () => this.setState({ judgement: colour, gaps: [] });
+  toggleGap = (g) => () => this.setState((st) => ({ gaps: st.gaps.indexOf(g) >= 0 ? st.gaps.filter((x) => x !== g) : st.gaps.concat([g]) }));
+
+  next = () => {
+    const st = this.state, q = QUESTIONS[st.qi];
+    this.attempts.push({ q: st.qi, answer: q.options[st.picked], correct: st.picked === q.correct,
+      colour: st.judgement, gaps: st.gaps.slice(), at: '15 Aug' });
+    this.setState((s) => (s.qi >= QUESTIONS.length - 1
+      ? { done: true, picked: null, submitted: false, judgement: null, gaps: [] }
+      : { qi: s.qi + 1, picked: null, submitted: false, judgement: null, gaps: [] }));
+  };
+  restart = () => { this.attempts = []; this.setState({ qi: 0, picked: null, submitted: false, judgement: null, gaps: [], done: false }); };
+  stepNext = () => this.setState((s) => (s.step >= 2 ? { route: 'home', step: 0 } : { step: s.step + 1 }));
+
+  conceptVals(name, subject) {
+    const d = CONCEPT_DATA[name];
+    const gaps = GAPS.filter((g) => g[3] === name);
+    const worst = gaps.find((g) => g[1] === 'RED') || gaps.find((g) => g[1] === 'ORANGE') || gaps[0];
+    const state = worst ? worst[1] : 'GREEN';
+    const colour = worst ? worst[2] : '#237784';
+    const idx = PRIORITY_ORDER.indexOf(name);
+    const rank = (idx >= 0 ? String(idx + 1).padStart(2, '0') : '—') + ' of 188';
+    const CFG = { RED: '#BC4C43', ORANGE: '#B5812B', GREEN: '#237784' };
+    const totalQ = d ? d.families.reduce((a, f) => a + f[1], 0) : 0;
+    return {
+      cptSource: d ? d.source : 'no source recorded',
+      cptPassage: d ? '“' + d.passage + '”' : 'This concept has no stored passage yet.',
+      cptQCount: d ? totalQ + ' ACROSS ' + d.families.length + ' FAMILIES' : '0 OF 6 FAMILIES',
+      cptQuestions: d ? d.families.map(([family, n]) => ({ family, n: n + ' Q', fg: '#16191A' })) : [],
+      cptEmpty: !d,
+      cptState: state, cptStateColor: colour, cptPriority: rank,
+      cptWhy: (() => {
+        const at = d ? d.attempts : [];
+        const last = at.length ? at[at.length - 1] : null;
+        const wrong = at.filter((a) => a[2] === 'incorrect').length;
+        const days = last ? 15 - parseInt(last[0], 10) : null;
+        return [
+          { k: 'your colour', v: last ? last[3] + ' on the last attempt' : 'not yet graded' },
+          { k: 'wrong recently', v: at.length ? wrong + ' of last ' + at.length : 'no attempts' },
+          { k: 'unresolved gaps', v: String(gaps.filter((g) => g[1] !== 'GREEN').length) },
+          { k: 'last seen', v: days == null ? 'never' : days === 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago' },
+          { k: 'question coverage', v: d ? d.families.length + ' of 6 families' : '0 of 6 families' },
+        ];
+      })(),
+      cptDue: state === 'GREEN' ? '12 Sep' : 'today',
+      cptInterval: state === 'GREEN' ? 'interval 21d' : state === 'ORANGE' ? 'interval 4d' : 'interval 1d',
+      cptGaps: gaps.map((g) => ({ name: g[0], state: g[1], color: g[2] })),
+      cptNoGaps: gaps.length === 0,
+      cptAttempts: d ? d.attempts.map(([date, q, result, col]) => ({ date, q, result, colour: col, fg: CFG[col] })) : [],
+      cptByNotebook: d ? d.byNotebook.map(([notebook, subj, qs]) => ({ notebook, color: SUBJ[subj].color,
+        questions: qs.map(([id, family, last]) => ({ id, family, last, fg: CFG[last] })) })) : [],
+    };
+  }
+
+  evalVals() {
+    const s = this.state, api = s.evalApi, st = s.evalState;
+    const STATES = {
+      loading: ['LOADING', '#8a9093', 'Fetching the latest evaluation', 'One moment — reliability figures come from the evaluation service, not from this screen.'],
+      empty: ['NO RESULTS', '#8a9093', 'No benchmark results available', 'No evaluation has been recorded for the current configuration yet.'],
+      running: ['IN PROGRESS', '#B5812B', 'An evaluation is running', 'Figures appear when the run completes. Partial results are not shown.'],
+      incomplete: ['INCOMPLETE', '#B5812B', 'The last evaluation did not finish', 'Coverage stopped before the required number of cases, so no score is reported.'],
+      failed: ['FAILED', '#BC4C43', 'The last evaluation failed its controls', 'Performance figures are withheld for this run.'],
+      no_candidate: ['NO CANDIDATE', '#BC4C43', 'No evaluated configuration is live', 'Quintek is not currently serving a configuration that passed evaluation.'],
+      stale: ['STALE', '#B5812B', 'This evaluation is out of date', 'The live configuration changed after the last evaluation. Treat these figures with caution.'],
+      error: ['UNAVAILABLE', '#BC4C43', 'AI evaluation is currently unavailable', 'The evaluation service could not be reached. No score is shown rather than a stale or invented one.'],
+    };
+    const bad = STATES[st];
+    const ready = st === 'ok' && !!api;
+    const ov = ready ? api.overview : null;
+    const colourFor = (x) => x === 'PASS' ? '#237784' : x === 'REVIEW' ? '#B5812B' : '#BC4C43';
+    return {
+      isTrust: s.route === 'trust', isChooses: s.route === 'chooses',
+      evalReady: ready, evalUnavailable: !ready,
+      evalStateLabel: bad ? bad[0] : '', evalStateFg: bad ? bad[1] : '#8a9093',
+      evalStateTitle: bad ? bad[2] : '', evalStateBody: bad ? bad[3] : '',
+      trustScore: ready ? ov.overallScore + '%' : '—',
+      trustStatus: ready ? ov.status : bad ? bad[0] : '',
+      trustDate: ready ? ov.evaluatedAt : '—',
+      trustColor: ready ? colourFor(ov.status) : '#8a9093',
+      overallScore: ready ? ov.overallScore + '%' : '—',
+      overallStatus: ready ? ov.status : '',
+      overallColor: ready ? colourFor(ov.status) : '#8a9093',
+      howOpen: s.howOpen, toggleHow: this.toggleHow,
+      howLabel: s.howOpen ? 'Hide measurement detail' : 'How was this measured?',
+      overallMeta: ready ? [
+        { k: 'benchmark', v: ov.benchmarkVersion }, { k: 'evaluated', v: ov.evaluatedAt },
+        { k: 'cases', v: ov.sampleSize.toLocaleString() },
+        { k: '95% CI', v: ov.confidenceInterval[0] + '–' + ov.confidenceInterval[1] },
+        { k: 'configuration', v: ov.currentCandidate.model + ' · ' + ov.currentCandidate.version },
+      ] : [],
+      trackRows: ready ? api.tracks.map((t) => ({ track: t.track, score: t.score + '%', status: t.status, note: t.note,
+        fg: colourFor(t.status), bg: t.status === 'PASS' ? 'rgba(35,119,132,.1)' : t.status === 'REVIEW' ? 'rgba(181,129,43,.12)' : 'rgba(188,76,67,.1)',
+        pct: t.score + '%', n: t.sampleSize.toLocaleString() + ' cases',
+        ci: t.confidenceInterval[0] + '–' + t.confidenceInterval[1],
+        version: ov.benchmarkVersion, open: s.openTrack === t.track, toggle: this.toggleTrack(t.track) })) : [],
+      routingRows: ready ? api.routing.map((x) => ({ task: x.task, candidate: x.candidate, score: x.score + '%', policy: x.policy })) : [],
+      pipeline: [
+        ['01', 'AI MODEL POOL', 'Several providers and prompt configurations are put forward.', true],
+        ['02', 'QUINTEK BENCHMARK', 'Each is run against the same frozen, expert-written test set.', true],
+        ['03', 'PERFORMANCE EVIDENCE', 'Scores are recorded per task, with sample sizes and confidence intervals.', true],
+        ['04', 'TASK-SPECIFIC ROUTING', 'The strongest evaluated configuration is chosen for each task.', true],
+        ['05', 'QUINTEK', 'That is what generates and checks your questions.', false],
+      ].map(([n, label, note, arrow]) => ({ n, label, note, arrow })),
+      goTrust: this.go('trust'), goChooses: this.go('chooses'), goCompare: this.go('modelcmp'),
+      ...this.boardVals(ready, api),
+    };
+  }
+
+  boardVals(ready, api) {
+    const s = this.state;
+    const blank = { isModel: s.route === 'model', isModelCmp: s.route === 'modelcmp',
+      categories: [], leaderboard: [], poweringRows: [], mdTracks: [], mdHistory: [], cmpChoices: [], cmpHeads: [], cmpRows: [] };
+    if (!ready) return blank;
+
+    const CATS = ['ALL', 'Medical QA', 'Concept extraction', 'Relationships', 'Question generation',
+      'Question validation', 'Knowledge-gap detection', 'Robustness', 'Prompt-injection resistance'];
+    const cat = s.category || 'ALL';
+    const det = api.trackDetail || {};
+    const colourFor = (x) => x === 'PASS' ? '#237784' : x === 'REVIEW' ? '#B5812B' : x === 'INCOMPLETE' ? '#9aa0a2' : '#BC4C43';
+
+    const scoreOf = (c) => cat === 'ALL' ? c.overallScore : (c.trackScores || {})[cat];
+    const ovr = (c) => (api.overallByCandidate || {})[c.candidateId] || null;
+    const ciOf = (c) => {
+      if (cat !== 'ALL') { const d = (det[c.candidateId] || {})[cat]; return d ? d.ci : null; }
+      const o = ovr(c); return o ? o.ci : null;
+    };
+    const nOf = (c) => {
+      if (cat !== 'ALL') { const d = (det[c.candidateId] || {})[cat]; return d ? d.n : null; }
+      const o = ovr(c); return o ? o.n : null;
+    };
+
+    const LO = 80, SPAN = 22; // leaderboard axis, 80–102%
+    const x = (v) => Math.max(0, Math.min(100, ((v - LO) / SPAN) * 100));
+
+    const ranked = api.candidates.filter((c) => scoreOf(c) != null)
+      .sort((a, b) => scoreOf(b) - scoreOf(a))
+      .concat(api.candidates.filter((c) => scoreOf(c) == null));
+
+    const md = api.candidates.find((c) => c.candidateId === s.modelId) || api.candidates[0];
+    const mdDet = det[md.candidateId] || {};
+    const mdOv = (api.overallByCandidate || {})[md.candidateId] || null;
+    const mdHist = api.history.map((h) => ({ ...h, score: h.scores[md.candidateId] })).filter((h) => h.score != null);
+
+    const A = api.candidates[s.cmpA ?? 0], B = api.candidates[s.cmpB ?? 1];
+    const dA = det[A.candidateId] || {}, dB = det[B.candidateId] || {};
+    const shared = Object.keys(A.trackScores || {}).filter((k) => (B.trackScores || {})[k] != null);
+
+    return {
+      isModel: s.route === 'model', isModelCmp: s.route === 'modelcmp',
+      categories: CATS.map((label) => ({ label: label === 'ALL' ? 'ALL' : label.toUpperCase(), set: this.setCategory(label),
+        bg: cat === label ? 'rgba(35,119,132,.08)' : '#fff', bd: cat === label ? '#237784' : '#E6E4DE',
+        fg: cat === label ? '#237784' : '#6f7679' })),
+      leaderboard: ranked.map((c, i) => {
+        const sc = scoreOf(c), ci = ciOf(c), n = nOf(c), unsafe = c.criticalErrors > 0;
+        return { rank: sc == null ? '—' : String(i + 1).padStart(2, '0'),
+          model: c.model, provider: c.provider + ' · ' + c.version,
+          score: sc == null ? '—' : sc + '%', scoreFg: sc == null ? '#9aa0a2' : '#16191A',
+          status: c.status, statusBg: colourFor(c.status), edge: colourFor(c.status),
+          ci: ci ? '95% CI ' + ci[0] + '–' + ci[1] : 'no interval recorded',
+          n: n ? 'n = ' + n.toLocaleString() : 'not evaluated',
+          ciLeft: ci ? x(ci[0]) + '%' : '0%', ciWidth: ci ? Math.max(2, x(ci[1]) - x(ci[0])) + '%' : '0%',
+          pointX: sc == null ? '0%' : x(sc) + '%',
+          unsafe, unsafeNote: unsafe ? c.criticalErrors + ' confirmed critical medical errors in ' + c.criticalN + ' safety cases — blocked from every task regardless of score.' : '',
+          open: this.openModel(c.candidateId) };
+      }),
+      poweringRows: api.routing.map((rt) => {
+        const c = api.candidates.find((k) => k.label === rt.candidate);
+        return { task: rt.task, candidate: c ? c.model : rt.candidate, score: rt.score + '%', policy: rt.policy,
+          open: s.openTask === rt.task, toggle: this.toggleTask(rt.task),
+          detail: [{ k: 'selected', v: c ? c.model + ' · ' + c.version : rt.candidate, fg: '#33393b' },
+            { k: 'benchmark score', v: rt.score + '%', fg: '#33393b' },
+            { k: 'selection policy', v: rt.policy, fg: '#33393b' },
+            { k: 'eligibility', v: c ? c.status : '—', fg: c && c.status === 'PASS' ? '#237784' : '#BC4C43' }],
+          why: rt.policy === 'INDEPENDENCE_REQUIRED'
+            ? 'Validation must run on a different configuration from the one that wrote the question, so this task is filled from the eligible pool excluding the generator.'
+            : 'This configuration has the strongest eligible benchmark performance for this task. Overall standing is not the deciding factor.' };
+      }),
+
+      mdProvider: md.provider + ' · ' + md.version,
+      mdScore: md.overallScore == null ? '—' : md.overallScore + '%',
+      mdStatus: md.status, mdEdge: colourFor(md.status),
+      mdCi: mdOv ? '95% CI ' + mdOv.ci[0] + '–' + mdOv.ci[1] + ' · n = ' + mdOv.n.toLocaleString() : 'No completed evaluation — no interval recorded',
+      mdCrit: md.criticalErrors == null ? 'Not evaluated' : md.criticalErrors + ' / ' + md.criticalN.toLocaleString(),
+      mdCritEdge: md.criticalErrors ? '#BC4C43' : md.criticalErrors === 0 ? '#237784' : '#9aa0a2',
+      mdCritBd: md.criticalErrors ? 'rgba(188,76,67,.3)' : '#E6E4DE',
+      mdCritNote: md.criticalErrors ? 'This configuration is blocked from every task. A confirmed critical error is a gate, not a deduction.'
+        : md.criticalErrors === 0 ? 'None found in the evaluated safety cases.' : 'The safety track was not evaluated for this configuration.',
+      mdTracks: Object.keys(md.trackScores || {}).map((name) => {
+        const d = mdDet[name] || {}, sc = md.trackScores[name];
+        return { name, score: sc + '%', pct: sc + '%',
+          fill: sc >= 93 ? '#237784' : sc >= 88 ? '#B5812B' : '#BC4C43',
+          ci: d.ci ? '95% CI ' + d.ci[0] + '–' + d.ci[1] : 'no interval', n: d.n ? 'n = ' + d.n.toLocaleString() : '' };
+      }),
+      mdHistory: mdHist.map((h) => ({ version: h.version.replace('Q-Bench ', ''), score: h.score + '%',
+        h: Math.round((h.score - 80) * 3.4) + 'px', fill: h.comparable ? '#237784' : '#9aa0a2',
+        warn: h.comparable ? '' : 'CHANGED' })),
+      mdHistoryNote: mdHist.some((h) => !h.comparable)
+        ? 'One version marked CHANGED altered the benchmark materially, so its score is not directly comparable with the others.'
+        : 'All versions shown measure the same thing and can be read as a trend.',
+
+      cmpChoices: api.candidates.map((c, i) => ({ label: c.model.split('-')[0] + ' ' + (c.version.match(/v\d+/) || [''])[0],
+        set: this.pickCmp(i), bg: (s.cmpA === i || s.cmpB === i) ? 'rgba(35,119,132,.08)' : '#fff',
+        bd: (s.cmpA === i || s.cmpB === i) ? '#237784' : '#E6E4DE',
+        fg: (s.cmpA === i || s.cmpB === i) ? '#237784' : '#6f7679' })),
+      cmpEmpty: shared.length === 0,
+      cmpEmptyNote: [A, B].filter((c) => !Object.keys(c.trackScores || {}).length)
+        .map((c) => c.model + ' has no completed evaluation').join(' and ') + ' — there is nothing to compare yet.',
+      cmpHasRows: shared.length > 0,
+      cmpHeads: [A, B].map((c, i) => ({ model: c.model, score: c.overallScore == null ? '—' : c.overallScore + '%',
+        status: c.status, edge: i ? '#9aa0a2' : '#237784' })),
+      cmpRows: shared.map((k) => {
+        const a = A.trackScores[k], b = B.trackScores[k];
+        const ca = dA[k] && dA[k].ci, cb = dB[k] && dB[k].ci;
+        const sep = !!(ca && cb && (ca[0] > cb[1] || cb[0] > ca[1]));
+        return { name: k, a: a + '%', b: b + '%',
+          aPct: Math.round(a * 0.6) + '%', bPct: Math.round(b * 0.6) + '%',
+          verdict: !sep ? 'NOT SEPARABLE' : (a > b ? A.model : B.model) + ' ahead',
+          verdictFg: !sep ? '#9aa0a2' : '#237784' };
+      }),
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const r = s.route;
+    const nb = NOTEBOOKS.find((n) => n.id === s.notebook) || NOTEBOOKS[0];
+    const heads = {
+      today: ['Today', 'THURSDAY 15 AUG · TRIGGER 20:00', false],
+      weak: ['Forgotten / weak', '9 OPEN GAPS · YOUR JUDGEMENT', false],
+      more: ['More', 'SEARCH AND EVERYTHING ELSE', false],
+      dashboard: ['Revision', 'QUEUE BUILT 20:00 · 15 AUG', false],
+      trust: ['Quintek AI', 'RELIABILITY OF THE AI HELPING YOU', true, 'more', '← MORE'],
+      chooses: ['How Quintek chooses its AI', 'EVIDENCE, THEN ROUTING', true, 'trust', '← RELIABILITY'],
+      model: ['Configuration profile', 'BENCHMARK EVIDENCE', true, 'chooses', '← BENCHMARK'],
+      modelcmp: ['Compare configurations', 'TASK BY TASK', true, 'chooses', '← BENCHMARK'],
+      studio: ['Question studio', 'GROUNDED GENERATION', true, 'more', '← MORE'],
+      demos: ['Demonstrations', 'FRAMING LIBRARY · 3 DEMOS', true, 'more', '← MORE'],
+      bank: ['Question bank', 'PROVENANCE + VALIDATION STATE', true, 'more', '← MORE'],
+      progress: ['Progress', '188 CONCEPTS TRACKED · DEMO DATA', true, 'more', '← MORE'],
+      home: ['Notebooks', 'THURSDAY 15 AUG · 30 DUE', true, 'more', '← MORE'],
+      notebook: [nb.title, SUBJ[nb.subject].label + ' · ' + nb.sources + ' SOURCES', true, 'home', '← NOTEBOOKS'],
+      graph: ['Concept graph', '14 CONCEPTS · 18 LINKS · 7 CROSSING SUBJECTS', false],
+      revise: ['Revision', 'MIXED QUEUE · SPACED REPETITION', false],
+      onboard: ['', '', false],
+      concept: [(s.cpt && s.cpt.name) || 'Concept', 'CONCEPT · ' + ((s.cpt && SUBJ[s.cpt.subject].label) || ''), true, s.cptFrom || 'weak', '← BACK'],
+      settings: ['Settings', 'NOTIFICATIONS · SOURCES · ACCOUNT', true, 'more', '← MORE'],
+    };
+    const head = heads[r] || heads.today;
+    const active = Object.keys(s.filters).filter((k) => s.filters[k]);
+    const visible = (id) => {
+      if (!active.length) return true;
+      const n = NODES.find((x) => x.id === id);
+      return active.indexOf(n.subject) >= 0;
+    };
+
+    const sel = NODES.find((n) => n.id === s.sel) || NODES[0];
+    const neighbours = EDGES.filter((e) => e[0] === s.sel || e[1] === s.sel)
+      .map(([a, b, rel]) => {
+        const other = NODES.find((n) => n.id === (a === s.sel ? b : a));
+        const cross = other.subject !== sel.subject;
+        return { name: other.name, relation: rel.replace(/_/g, ' '), color: SUBJ[other.subject].color,
+          select: this.select(other.id), tag: cross ? 'CROSS-SUBJECT' : SUBJ[other.subject].label,
+          tagFg: cross ? '#8a5f13' : '#6f7679', tagBg: cross ? 'rgba(181,129,43,.12)' : '#F1EFE8' };
+      });
+    const nbrIds = EDGES.filter((e) => e[0] === s.sel || e[1] === s.sel).map((e) => (e[0] === s.sel ? e[1] : e[0]));
+
+    const p = this.pos || {};
+    const nodes = NODES.map((n) => {
+      const q = p[n.id] || { x: 195, y: 200 };
+      const isSel = n.id === s.sel;
+      const near = isSel || nbrIds.indexOf(n.id) >= 0;
+      const deg = EDGES.filter((e) => e[0] === n.id || e[1] === n.id).length;
+      const rr = 7 + deg * 1.6;
+      const showLbl = this.props.graphLabels ?? true;
+      return { x: q.x, y: q.y, r: rr, lx: q.x, ty: q.y + rr + 3, label: !showLbl ? '' : n.name.length > 18 ? n.name.slice(0, 17) + '…' : n.name,
+        fill: isSel ? SUBJ[n.subject].color : 'rgba(255,255,255,.9)', stroke: SUBJ[n.subject].color,
+        sw: isSel ? 2.5 : 1.6, op: !visible(n.id) ? 0.16 : near ? 1 : 0.5, select: this.select(n.id) };
+    });
+    const edges = EDGES.map(([a, b]) => {
+      const na = NODES.find((n) => n.id === a), nb2 = NODES.find((n) => n.id === b);
+      const cross = na.subject !== nb2.subject;
+      const touch = a === s.sel || b === s.sel;
+      const pa = p[a] || { x: 195, y: 200 }, pb = p[b] || { x: 195, y: 200 };
+      return { x1: pa.x, y1: pa.y, x2: pb.x, y2: pb.y,
+        stroke: cross ? '#B5812B' : '#A9AFA8', w: touch ? 1.8 : 1, dash: cross ? '4 4' : '0',
+        op: (visible(a) && visible(b)) ? (touch ? 0.95 : 0.4) : 0.08 };
+    });
+
+    const q = QUESTIONS[s.qi];
+    const meta = QMETA[s.qi] || { concepts: [], gaps: [] };
+    const submitted = s.submitted;
+    const right = submitted && s.picked === q.correct;
+    const options = q.options.map((text, i) => {
+      const isCorrect = i === q.correct, isPicked = i === s.picked;
+      let bg = '#fff', bd = '#E6E4DE', fg = '#16191A', mark = String.fromCharCode(65 + i), markFg = '#9aa0a2';
+      if (!submitted && isPicked) { bg = '#F5F3EC'; bd = '#237784'; markFg = '#237784'; }
+      else if (submitted && isCorrect) { bg = 'rgba(35,119,132,.07)'; bd = '#237784'; markFg = '#237784'; mark = '✓'; }
+      else if (submitted && isPicked) { bg = 'rgba(181,129,43,.08)'; bd = '#B5812B'; markFg = '#B5812B'; mark = '·'; }
+      else if (submitted) { fg = '#7c8386'; }
+      return { text, bg, bd, fg, mark, markFg, pick: this.pick(i) };
+    });
+    const jColour = s.judgement && JUDGEMENTS.find((j) => j[0] === s.judgement);
+
+    const extracted = BASE_CONCEPTS.map(([name, subject, qn]) => ({ name, color: SUBJ[subject].color, q: qn, open: this.openConcept(name, subject) }))
+      .concat(NEW_CONCEPTS.slice(0, s.extraCount).map((name) => ({ name, color: SUBJ.cardiology.color, q: 0, open: this.openConcept(name, 'cardiology') })));
+
+    const cptName = (s.cpt && s.cpt.name) || 'Heart failure';
+    const cptSubject = (s.cpt && s.cpt.subject) || 'cardiology';
+    const cptKnown = BASE_CONCEPTS.find((c) => c[0] === cptName);
+    const cptFresh = !cptKnown && !s.generated;
+    const cptFamilies = [['Direct recall', 4], ['Clinical vignette', 6], ['Interpretation', 3], ['Mechanism', 5], ['Differential diagnosis', 2], ['Management', 2]];
+    const cptQuestions = cptFresh ? [] : cptFamilies.map(([family, n]) => ({ family, n: n + ' Q', fg: '#16191A' }));
+    const cptLinks = EDGES.filter((e) => {
+      const nn = NODES.find((x) => x.name === cptName);
+      return nn && (e[0] === nn.id || e[1] === nn.id);
+    }).slice(0, 4).map(([a, b]) => {
+      const nn = NODES.find((x) => x.name === cptName);
+      const other = NODES.find((x) => x.id === (a === nn.id ? b : a));
+      const cross = other.subject !== nn.subject;
+      return { name: other.name, color: SUBJ[other.subject].color, select: this.openConcept(other.name, other.subject),
+        tag: cross ? 'CROSS-SUBJECT' : SUBJ[other.subject].label, tagFg: cross ? '#8a5f13' : '#6f7679',
+        tagBg: cross ? 'rgba(181,129,43,.12)' : '#F1EFE8' };
+    });
+
+    const sources = s.extracting || s.extraCount
+      ? [{ name: 'Aortic_stenosis_lecture.pdf', status: s.extracting ? 'READING' : 'EXTRACTED', pct: Math.round((s.extractPage / 14) * 100) + '%',
+          detail: s.extracting ? 'page ' + s.extractPage + '/14' : NEW_CONCEPTS.length + ' concepts · 14 pages', fg: s.extracting ? '#B5812B' : '#237784' }].concat(SOURCES_BASE)
+      : SOURCES_BASE;
+
+    const heat = Array.from({ length: 84 }, (_, i) => {
+      const v = [0, 0, 1, 2, 3, 2, 1, 3, 2, 0, 1, 2][i % 12] * ((i % 7 === 6) ? 0 : 1);
+      return { bg: ['#EDEBE4', 'rgba(35,119,132,.25)', 'rgba(35,119,132,.55)', '#237784'][v] };
+    });
+
+    return {
+      showHeader: r !== 'onboard', showTabs: r !== 'onboard',
+      headerTitle: head[0], headerSub: head[1], headerBack: head[2],
+      backLabel: head[4] || '← BACK', goBack: this.go(head[3] || 'today'),
+      isToday: r === 'today', isWeak: r === 'weak', isMore: r === 'more',
+      isHome: r === 'home', isNotebook: r === 'notebook' && nb.sources > 0, isGraph: r === 'graph',
+      isNotebookEmpty: r === 'notebook' && nb.sources === 0,
+      nothingDue: nb.due === 0 && nb.sources > 0,
+      isConcept: r === 'concept', isSettings: r === 'settings',
+      showGear: r === 'home' || r === 'progress', goSettings: this.go('settings'), noop: () => {},
+      cptColor: SUBJ[cptSubject].color,
+      cptPassage: '“' + cptName + ' — in the passage this concept was taken from, the finding is described alongside its usual accompanying signs and the reasoning that separates it from its closest mimic.”',
+      cptSource: cptKnown ? 'Valvular_and_HF_notes.pdf p.11' : 'Aortic_stenosis_lecture.pdf p.6',
+      cptQCount: cptFresh ? '0 OF 6 FAMILIES' : '22 ACROSS 6 FAMILIES',
+      cptQuestions, cptEmpty: cptFresh, cptLinks,
+      ...this.conceptVals(cptName, cptSubject),
+      generate: this.generate, generateLabel: s.generated ? 'Questions generated' : 'Write questions from this passage',
+
+      triggerTimes: ['06:00', '07:00', '13:00', '18:00', '20:00', '22:00'].map((label) => ({ label, set: this.setTrigger(label),
+        bg: s.trigger === label ? 'rgba(35,119,132,.08)' : '#FAFAF8', bd: s.trigger === label ? '#237784' : '#E6E4DE',
+        fg: s.trigger === label ? '#237784' : '#5d6467' })),
+      timezone: 'Asia/Kolkata (IST)',
+      nextTrigger: 'today ' + s.trigger,
+      channels: [
+        { key: 'push', label: 'Push notification', meta: 'Opens straight into the revision dashboard' },
+        { key: 'email', label: 'Email', meta: 'r.menon@nhs.net · same queue, same time' },
+      ].map((c) => ({ ...c, toggle: this.toggleChannel(c.key),
+        trackBg: s.channels[c.key] ? '#237784' : '#DDD9CF', knobX: s.channels[c.key] ? '19px' : '3px' })),
+      lastNotif: s.tested ? 'TEST SENT · ' + s.trigger : 'DELIVERED · 14 AUG ' + s.trigger,
+      lastNotifFg: '#237784',
+      testNotif: this.sendTest, testLabel: s.tested ? 'SENT' : 'SEND TEST',
+      settingsNotebooks: NOTEBOOKS.map((n) => ({ title: n.title, open: this.openNotebook(n.id),
+        meta: n.sources + ' sources · ' + n.concepts + ' concepts · ' + n.questions + ' questions' })),
+      accountRows: [{ label: 'Signed in as', value: 'r.menon@nhs.net', fg: '#16191A' },
+        { label: 'Exam target', value: 'NEET-PG 2027', fg: '#16191A' },
+        { label: 'Export my data', value: 'JSON', fg: '#16191A' },
+        { label: 'Delete account', value: '', fg: '#BC4C43' }],
+
+      isRevise: r === 'revise' && !s.done, isProgress: r === 'progress', isOnboard: r === 'onboard',
+      goHome: this.go('home'), goRevise: this.go('dashboard'), goOnboard: this.go('onboard'),
+      goDashboard: this.go('dashboard'),
+      tabs: [['today', 'TODAY', ['dashboard']], ['weak', 'WEAK', []], ['revise', 'REVISE', []], ['graph', 'GRAPH', []], ['more', 'MORE', ['home', 'notebook', 'concept', 'settings', 'progress', 'studio', 'bank', 'demos', 'trust', 'chooses', 'model', 'modelcmp']]]
+        .map(([id, label, also]) => {
+          const on = r === id || also.indexOf(r) >= 0;
+          return { label, go: this.go(id), fg: on ? '#237784' : '#9aa0a2', bar: on ? '#237784' : 'transparent' };
+        }),
+
+      isDashboard: r === 'dashboard',
+      queueStats: [
+        { n: 4, label: 'RED CONCEPTS', color: '#BC4C43' },
+        { n: 5, label: 'ORANGE CONCEPTS', color: '#B5812B' },
+        { n: 12, label: 'PREVIOUSLY INCORRECT', color: '#B5812B' },
+        { n: 96, label: 'GREEN · NOT QUEUED', color: '#237784' },
+      ],
+      strategies: [['WEAKNESS_FIRST', 'WEAKNESS'], ['WEAK_PLUS_SECTION', 'WEAK + SECTION'], ['COVERAGE', 'COVERAGE']]
+        .map(([id, label]) => ({ label, set: this.setStrategy(id),
+          bg: s.strategy === id ? 'rgba(35,119,132,.08)' : '#fff',
+          bd: s.strategy === id ? '#237784' : '#E6E4DE',
+          fg: s.strategy === id ? '#237784' : '#6f7679' })),
+      strategyOrder: (s.strategy === 'COVERAGE'
+        ? ['full section coverage', 'unseen questions', 'due concepts', 'previously incorrect', 'red gaps']
+        : s.strategy === 'WEAK_PLUS_SECTION'
+        ? ['red knowledge gaps', 'concepts surrounding those gaps', 'orange gaps', 'previously incorrect questions', 'new questions on the same concepts']
+        : ['red knowledge gaps', 'red concepts', 'orange knowledge gaps', 'orange concepts', 'previously incorrect questions'])
+        .map((label, i) => ({ n: String(i + 1).padStart(2, '0'), label })),
+      recommended: 15,
+      counts: [5, 10, 15, 20, 25, 'CUSTOM'].map((v) => ({ label: String(v), set: this.setCount(v === 'CUSTOM' ? 30 : v),
+        bg: s.qCount === v || (v === 'CUSTOM' && s.qCount === 30) ? 'rgba(35,119,132,.08)' : '#fff',
+        bd: s.qCount === v || (v === 'CUSTOM' && s.qCount === 30) ? '#237784' : '#E6E4DE',
+        fg: s.qCount === v || (v === 'CUSTOM' && s.qCount === 30) ? '#237784' : '#5d6467' })),
+      qCount: s.qCount,
+      countNote: s.qCount === 15 ? 'Matches the recommendation: every red gap gets two questions and the iron-studies section is covered once.'
+        : s.qCount < 15 ? 'Below the recommendation — red gaps will be covered, the surrounding section will not.'
+        : 'Above the recommendation — the extra questions come from unseen items in the same section.',
+      startSession: () => { this.attempts = []; this.setState({ route: 'revise', qi: 0, picked: null, submitted: false, judgement: null, gaps: [], done: false }); },
+      goWeak: this.go('weak'),
+      analysis: [
+        { n: '62%', label: 'ACCURACY', color: '#16191A' }, { n: '5', label: 'CORRECT', color: '#237784' }, { n: '3', label: 'INCORRECT', color: '#B5812B' },
+        { n: '2', label: 'RED', color: '#BC4C43' }, { n: '3', label: 'ORANGE', color: '#B5812B' }, { n: '3', label: 'GREEN', color: '#237784' },
+      ],
+      movement: [
+        { name: 'Ferroportin handling', change: 'ORANGE → GREEN', color: '#237784' },
+        { name: 'Ferritin interpretation', change: 'RED · unresolved 3rd time', color: '#BC4C43' },
+        { name: 'BNP interpretation', change: 'GREEN → ORANGE', color: '#B5812B' },
+      ],
+      readList: [
+        { n: '01', name: 'Ferritin interpretation', source: 'Iron_handling.pdf p.3 — storage vs serum iron', open: this.openConcept('Iron metabolism', 'biochemistry', 'revise') },
+        { n: '02', name: 'Transferrin saturation', source: 'Iron_handling.pdf p.4 — calculating TSAT', open: this.openConcept('Iron metabolism', 'biochemistry', 'revise') },
+        { n: '03', name: 'Iron absorption', source: 'Iron_handling.pdf p.2 — duodenal uptake', open: this.openConcept('Iron metabolism', 'biochemistry', 'revise') },
+        { n: '04', name: 'IDA vs ACD differentiation', source: 'Valvular_and_HF_notes.pdf p.11 — anaemia in HF', open: this.openConcept('Anaemia of chronic disease', 'biochemistry', 'revise') },
+      ],
+      isStudio: r === 'studio', isDemos: r === 'demos', isBank: r === 'bank',
+      ...this.evalVals(),
+      studioFields: [
+        ['SOURCE / NOTEBOOK', 'src', ['Iron_handling.pdf', 'Valvular_and_HF_notes.pdf', 'Biomarkers.pdf']],
+        ['CONCEPTS', 'cpt', ['Iron metabolism', 'Ferritin', 'Hepcidin']],
+        ['CROSS-NOTEBOOK CONCEPTS', 'cross', ['Anaemia (Medicine)', 'Anaemia (Pathology)', 'none']],
+        ['QUESTION TYPE', 'type', ['Vignette', 'Mechanism', 'Discrimination', 'Integrated']],
+        ['DIFFICULTY / REASONING', 'diff', ['PG · 1-step', 'PG · 2-step', 'PG · 3-step']],
+        ['COUNT', 'count', ['3', '5', '10']],
+        ['DEMONSTRATIONS', 'demo', ['DEMO 014', 'DEMO 009', 'DEMO 021']],
+      ].map(([label, key, opts]) => ({ label, options: opts.map((o) => ({ label: o, set: this.setStudio(key, o),
+        bg: (s.studio[key] || opts[0]) === o ? 'rgba(35,119,132,.08)' : '#fff',
+        bd: (s.studio[key] || opts[0]) === o ? '#237784' : '#E6E4DE',
+        fg: (s.studio[key] || opts[0]) === o ? '#237784' : '#5d6467' })) })),
+      runStudio: this.runStudio, studioCta: s.studioOut ? 'Regenerate all' : 'Generate',
+      studioOut: s.studioOut, studioCount: s.studio.count || '3',
+      draftStem: 'A 34-year-old with coeliac disease has Hb 10.1 g/dL, MCV 74 fL, serum iron 5 µmol/L, TIBC 82 µmol/L and ferritin 11 ng/mL. Which value most directly establishes depleted stores rather than impaired release?',
+      draftOptions: [['A', 'Serum iron', '#33393b', '#9aa0a2'], ['B', 'Ferritin', '#237784', '#237784'], ['C', 'TIBC', '#33393b', '#9aa0a2'], ['D', 'MCV', '#33393b', '#9aa0a2']]
+        .map(([mark, text, fg, markFg]) => ({ mark, text, fg, markFg })),
+      draftExplanation: 'Ferritin reflects storage iron directly; serum iron and TIBC move with transport and acute-phase state. The distractor set uses the values a reader is most likely to over-read, per the demonstration\u2019s distractor strategy.',
+      draftMeta: [
+        { k: 'concepts', v: 'Iron metabolism · Ferritin', fg: '#33393b' },
+        { k: 'source', v: 'Iron_handling.pdf p.3–4', fg: '#237784' },
+        { k: 'demonstrations used', v: s.studio.demo || 'DEMO 014', fg: '#33393b' },
+        { k: 'generator', v: 'claude-sonnet-4.6 · prompt v7 · temp 0', fg: '#33393b' },
+        { k: 'validator', v: 'gpt-5.1 · prompt v2 · independent call', fg: '#33393b' },
+      ],
+      draftActions: [['ACCEPT', 'accept'], ['EDIT', 'edit'], ['REGEN', 'regen'], ['REJECT', 'reject']].map(([label, act]) => ({
+        label, act: this.studioAction(act),
+        bg: s.studioAct === act ? 'rgba(35,119,132,.08)' : '#FAFAF8',
+        bd: s.studioAct === act ? '#237784' : '#E6E4DE',
+        fg: act === 'reject' ? '#BC4C43' : s.studioAct === act ? '#237784' : '#5d6467' })),
+      studioVerdict: s.studioAct === 'accept' ? 'ACCEPTED · SENT FOR VALIDATION' : s.studioAct === 'reject' ? 'REJECTED · NOT ADDED TO BANK' : s.studioAct === 'regen' ? 'REGENERATING AGAINST THE SAME SOURCE' : s.studioAct === 'edit' ? 'EDITING · PROVENANCE PRESERVED' : '',
+      studioVerdictNote: s.studioAct === 'accept' ? 'A separate validation call checks factual correctness, source grounding, distractor quality and ambiguity before the question can be served.' : 'Prototype action — no question is written to a bank yet.',
+
+      demos: DEMOS.map(([id, title, created, question, spec, usage]) => ({ id, title, created, question, usage,
+        spec: spec.map(([k, v]) => ({ k, v })),
+        use: this.setStudio('demo', id), useLabel: s.studio.demo === id ? 'IN USE' : 'USE IN STUDIO',
+        useBg: s.studio.demo === id ? 'rgba(35,119,132,.08)' : '#FAFAF8',
+        useBd: s.studio.demo === id ? '#237784' : '#E0DDD4',
+        useFg: '#237784' })),
+
+      bankFilters: ['ALL', 'APPROVED', 'FLAGGED', 'PENDING'].map((label) => ({ label, set: this.setBankFilter(label),
+        bg: s.bankFilter === label ? 'rgba(35,119,132,.08)' : '#fff',
+        bd: s.bankFilter === label ? '#237784' : '#E6E4DE',
+        fg: s.bankFilter === label ? '#237784' : '#6f7679' })),
+      bank: BANK.filter((b) => s.bankFilter === 'ALL' || b[2] === s.bankFilter).map(([id, stem, validation, family, notebook, concepts, attempts, provenance]) => ({
+        id, stem, validation, family, notebook, attempts, provenance,
+        concepts: concepts.map(([name, subject]) => ({ name, color: SUBJ[subject].color })),
+        vFg: validation === 'APPROVED' ? '#237784' : validation === 'FLAGGED' ? '#BC4C43' : '#B5812B',
+        vBg: validation === 'APPROVED' ? 'rgba(35,119,132,.1)' : validation === 'FLAGGED' ? 'rgba(188,76,67,.1)' : 'rgba(181,129,43,.12)' })),
+
+      todayHeadline: '4 red gaps are unresolved — start with ferritin interpretation.',
+      todayWhy: 'Two questions in two different notebooks failed on the same gap, and you graded both red. The queue leads with it, then covers the surrounding iron-studies section.',
+      colourCounts: [{ n: 4, label: 'RED', color: '#BC4C43', go: this.go('weak') },
+        { n: 5, label: 'ORANGE', color: '#B5812B', go: this.go('weak') },
+        { n: 96, label: 'GREEN', color: '#237784', go: this.go('weak') }],
+      topGaps: GAPS.filter((g) => g[1] !== 'GREEN').slice(0, 4).map((g, i) => ({
+        rank: String(i + 1).padStart(2, '0'), name: g[0], color: g[2],
+        meta: g[3] + ' · ' + g[6].length + ' questions · ' + g[5],
+        open: this.openConcept(g[3], g[3] === 'BNP / NT-proBNP' ? 'cardiology' : 'biochemistry', 'today') })),
+
+      weakFilters: ['ALL', 'RED', 'ORANGE', 'GREEN'].map((label) => ({ label, set: this.setWeakFilter(label),
+        bg: s.weakFilter === label ? 'rgba(35,119,132,.08)' : '#fff',
+        bd: s.weakFilter === label ? '#237784' : '#E6E4DE',
+        fg: s.weakFilter === label ? '#237784' : '#6f7679' })),
+      weakGaps: GAPS.filter((g) => s.weakFilter === 'ALL' || g[1] === s.weakFilter).map((g) => ({
+        name: g[0], colour: g[1], color: g[2], concept: g[3], source: g[4], age: g[5],
+        openConcept: this.openConcept(g[3], g[3] === 'BNP / NT-proBNP' ? 'cardiology' : 'biochemistry', 'weak'),
+        questions: g[6].map(([id, where, result, fg]) => ({ id, where, result, fg })) })),
+      weakEmpty: GAPS.filter((g) => s.weakFilter === 'ALL' || g[1] === s.weakFilter).length === 0,
+
+      query: s.query, setQuery: (e) => this.setState({ query: e.target.value }),
+      hasQuery: s.query.length > 0,
+      results: SEARCHABLE.filter((x) => x[0].toLowerCase().indexOf(s.query.toLowerCase()) >= 0 || x[2].toLowerCase().indexOf(s.query.toLowerCase()) >= 0)
+        .map(([name, kind, meta]) => ({ name, kind, meta, open: kind === 'CONCEPT' ? this.openConcept(name, 'biochemistry', 'more') : this.go('weak') })),
+      resultCount: SEARCHABLE.filter((x) => x[0].toLowerCase().indexOf(s.query.toLowerCase()) >= 0 || x[2].toLowerCase().indexOf(s.query.toLowerCase()) >= 0).length + ' RESULTS',
+      moreLinks: [
+        { label: 'Notebooks', note: 'Sources, concepts, extraction', go: this.go('home') },
+        { label: 'Concept graph', note: '14 concepts, 7 crossing subjects', go: this.go('graph') },
+        { label: 'Question studio', note: 'Generate against a source', go: this.go('studio') },
+        { label: 'Question bank', note: 'Every question and its provenance', go: this.go('bank') },
+        { label: 'Demonstrations', note: 'Framing library the AI writes to', go: this.go('demos') },
+        { label: 'Progress', note: 'Mastery, intervals, history', go: this.go('progress') },
+        { label: 'Quintek AI', note: 'Reliability and how it is chosen', go: this.go('trust') },
+        { label: 'Settings', note: 'Trigger time, sources, account', go: this.go('settings') },
+      ],
+
+      notebooks: NOTEBOOKS.map((n) => ({
+        ...n, open: this.openNotebook(n.id), subject: SUBJ[n.subject].label, subjectFg: SUBJ[n.subject].color,
+        dueLabel: n.sources === 0 ? 'NEW' : n.due || '—',
+        dueFg: n.sources === 0 ? '#6f7679' : n.due > 15 ? '#BC4C43' : n.due ? '#B5812B' : '#9aa0a2',
+        dueBg: n.due > 15 ? 'rgba(188,76,67,.08)' : n.due ? 'rgba(181,129,43,.09)' : 'transparent',
+        dueBd: n.due ? 'transparent' : '#E6E4DE',
+        masteredPct: n.mastered + '%', reviewPct: n.review + '%' })),
+
+      sources, extracted, extracting: s.extracting, extractPage: s.extractPage,
+      conceptCount: (84 + s.extraCount) + ' TOTAL',
+      traceSource: s.extraCount ? 'Aortic_stenosis_lecture.pdf' : 'Valvular_and_HF_notes.pdf',
+      addSource: this.addSource,
+
+      filters: Object.keys(SUBJ).map((k) => ({ label: SUBJ[k].label, dot: SUBJ[k].color, toggle: this.toggleFilter(k),
+        bg: s.filters[k] ? 'rgba(35,119,132,.08)' : '#fff', bd: s.filters[k] ? '#237784' : '#E6E4DE', fg: s.filters[k] ? '#237784' : '#6f7679' })),
+      nodes, edges,
+      selName: sel.name, selSubject: SUBJ[sel.subject].label, selColor: SUBJ[sel.subject].color, selNote: sel.note,
+      selLinks: neighbours, selLinkCount: neighbours.length + ' LINKED CONCEPTS · ' + neighbours.filter((n) => n.tag === 'CROSS-SUBJECT').length + ' CROSS-SUBJECT',
+
+      qStem: q.stem, qFamily: q.family.toUpperCase(), qOptions: options, qRationale: q.rationale,
+      qSource: q.source, qNextDue: q.next, qProgress: (s.qi + 1) + ' of 8 this session',
+      qTicks: Array.from({ length: 8 }, (_, i) => ({ bg: i < s.qi ? '#237784' : i === s.qi ? '#B5812B' : '#EDEBE4' })),
+      sessionDone: s.done, nextQ: this.next, restart: this.restart, openSource: () => {},
+      canSubmit: s.picked !== null && !submitted, submit: this.submit, submitted,
+      yourAnswer: s.picked === null ? '' : q.options[s.picked],
+      yourFg: right ? '#237784' : '#B5812B',
+      correctAnswer: q.options[q.correct],
+      qConcepts: meta.concepts.map(([name, subject]) => ({ name, color: SUBJ[subject].color })),
+      judgements: JUDGEMENTS.map(([label, colour, note]) => ({ label, note, set: this.judge(label),
+        fg: s.judgement === label ? '#fff' : colour,
+        bg: s.judgement === label ? colour : '#fff',
+        bd: s.judgement === label ? colour : '#E6E4DE' })),
+      judged: !!s.judgement,
+      needGap: s.judgement === 'RED' || s.judgement === 'ORANGE',
+      gapFg: jColour ? jColour[1] : '#B5812B',
+      gapBd: jColour ? jColour[1] + '55' : '#E6E4DE',
+      gapOptions: meta.gaps.map((label) => ({ label, toggle: this.toggleGap(label),
+        bg: s.gaps.indexOf(label) >= 0 ? 'rgba(181,129,43,.1)' : '#FAFAF8',
+        bd: s.gaps.indexOf(label) >= 0 ? '#B5812B' : '#E6E4DE',
+        fg: s.gaps.indexOf(label) >= 0 ? '#8a5f13' : '#5d6467' })),
+      attemptLine: 'attempt ' + (this.attempts.length + 1) + ' · ' + (right ? 'correct' : 'incorrect') + ' · ' + (s.judgement || '—')
+        + (s.gaps.length ? ' · ' + s.gaps.length + ' gap' + (s.gaps.length > 1 ? 's' : '') : ''),
+
+      masteryStats: [{ n: 96, label: 'MASTERED', color: '#237784' }, { n: 62, label: 'DUE', color: '#B5812B' }, { n: 30, label: 'STRUGGLING', color: '#BC4C43' }],
+      conceptMastery: CONCEPT_MASTERY.map(([name, state, color, pct, meta]) => ({ name, state, color, pct, meta })),
+      heat, streak: (this.props.showStreak ?? true) ? '41-day streak' : '84 sessions logged',
+
+      stepNo: s.step + 1, stepTitle: STEPS[s.step][0], stepBody: STEPS[s.step][1], stepArt: STEPS[s.step][2],
+      stepCta: STEPS[s.step][3], stepNext: this.stepNext,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

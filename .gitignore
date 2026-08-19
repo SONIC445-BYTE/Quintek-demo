@@ -15,3 +15,7 @@ runs/*
 registry.json
 executions.jsonl
 routing.jsonl
+
+# Operator-supplied price list (real commercial figures) -- copy from
+# configs/model_costs.example.json. Never committed.
+configs/model_costs.json

@@ -144,6 +144,38 @@ def _wrap(text: str, width: int) -> list[str]:
     return lines or [""]
 
 
+def _withheld_prose(outcome: RunOutcome, integrity: dict) -> str:
+    """
+    The human-readable half of suppression.
+
+    `scores_withheld_code` stays a stable machine token; this is the sentence a
+    console renders to a person. A reader looking at a scorecard with no numbers
+    needs to know which control failed and why that withholds measurement --
+    "integrity_precondition_failure" on its own tells them neither.
+    """
+    if outcome.outcome == "INVALID_RUN":
+        failed = (integrity or {}).get("failed_checks") or []
+        named = ", ".join(failed) if failed else "an integrity precondition"
+        detail = " ".join(
+            str((integrity or {}).get("details", {}).get(c, "")).strip()
+            for c in failed[:2]
+        ).strip()
+        prose = (
+            f"Integrity precondition(s) failed: {named}. Performance metrics are withheld "
+            "because a run whose controls failed produced no measurement of candidate "
+            "capability. Holdout isolation and judge independence are conditions of "
+            "measurement, not dimensions of quality. Raw outputs are preserved for "
+            "forensic review and are NOT to be scored."
+        )
+        return f"{prose} {detail}".strip() if detail else prose
+    return (
+        "Coverage stopped before the registered minimum sample size, so figures are "
+        "withheld rather than reported partially. A partial track is not a smaller "
+        "result -- it is an absent one. Controls held; this is a coverage outcome, "
+        "not an integrity failure."
+    )
+
+
 def build_report(outcome: RunOutcome, meta: dict, integrity: dict) -> dict:
     """
     Machine-readable report.
@@ -164,15 +196,34 @@ def build_report(outcome: RunOutcome, meta: dict, integrity: dict) -> dict:
         "integrity": integrity,
         "max_attainable_outcome": meta.get("max_attainable_outcome"),
         "reasons": outcome.reasons,
+        # Run conditions. These were computed by Runner._meta() and then dropped
+        # here, which left a consumer unable to say WHY a run could not pass, or
+        # WHEN it happened, without opening manifest.json separately. A report
+        # that states an outcome owes the reader the conditions that produced it.
+        "timestamp": meta.get("timestamp"),
+        "ceiling_reason": meta.get("ceiling_reason"),
+        "calibration_state": meta.get("calibration_state"),
+        "review_mode": meta.get("review_mode"),
+        "reviewer_count": meta.get("reviewer_count"),
+        "kappa_computable": meta.get("kappa_computable"),
     }
     if suppressed:
         report["scores"] = None
-        report["scores_withheld_reason"] = (
+        report["scores_withheld_code"] = (
             "integrity_precondition_failure" if outcome.outcome == "INVALID_RUN"
             else "incomplete_coverage")
+        report["scores_withheld_reason"] = _withheld_prose(outcome, integrity)
+        # A suppressed run measured nothing -- including safety and reliability.
+        # These are explicitly null rather than absent, so a consumer cannot
+        # mistake "not measured" for "measured and clean".
+        report["reliability"] = None
+        report["safety"] = None
+        report["final_note"] = None
     else:
         report["scores"] = {r.track: r.as_dict() for r in outcome.gate_results}
         report["reliability"] = outcome.reliability_results
+        report["safety"] = outcome.safety
+        report["final_note"] = "; ".join(outcome.reasons) if outcome.reasons else None
     return report
 
 

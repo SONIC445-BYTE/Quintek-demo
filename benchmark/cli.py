@@ -82,7 +82,9 @@ def cmd_serve_analytics(args) -> int:
     from .analytics_api import serve
 
     serve(args.runs_root, host=args.host, port=args.port, routing_log_path=args.routing_log,
-          registry_path=args.registry)
+          registry_path=args.registry, gate_registry_path=args.gate_registry,
+          config_path=args.config, root=ROOT,
+          execution_log_path=args.execution_log, costs_path=args.costs)
     return 0
 
 
@@ -109,6 +111,12 @@ def main(argv=None) -> int:
     sa.add_argument("--runs-root", default="runs")
     sa.add_argument("--routing-log", default=None)
     sa.add_argument("--registry", default=str(default_registry) if default_registry.exists() else None)
+    sa.add_argument("--gate-registry", default=str(ROOT / "configs" / "gate_registry_v0_4.json"))
+    sa.add_argument("--config", default=str(ROOT / "configs" / "v0_4.yaml"))
+    sa.add_argument("--execution-log", default="executions.jsonl",
+                    help="orchestrator execution log; supplies real latency figures")
+    sa.add_argument("--costs", default=str(ROOT / "configs" / "model_costs.json"),
+                    help="operator-supplied price list; absent means cost reports as null")
     sa.add_argument("--host", default="127.0.0.1")
     sa.add_argument("--port", type=int, default=8420)
     sa.set_defaults(func=cmd_serve_analytics)

@@ -233,7 +233,14 @@ def test_scenario_6_holdout_breach_withholds_all_scores(registry):
     # The load-bearing assertion: scores is None, so a consumer raises rather
     # than silently reading a number from a run whose controls failed.
     assert report["scores"] is None
-    assert report["scores_withheld_reason"] == "integrity_precondition_failure"
+    # The stable machine token stays a token; the reason is prose for a reader.
+    assert report["scores_withheld_code"] == "integrity_precondition_failure"
+    assert "holdout_isolation_verified" in report["scores_withheld_reason"]
+    assert "NOT to be scored" in report["scores_withheld_reason"]
+    # A suppressed run measured nothing -- these are null, never absent, so
+    # "not measured" can never be misread as "measured and clean".
+    assert report["safety"] is None
+    assert report["reliability"] is None
     with pytest.raises(TypeError):
         _ = report["scores"]["A_medical_qa"]
 

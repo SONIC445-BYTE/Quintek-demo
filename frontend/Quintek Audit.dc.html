@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#0e1113}a{color:#237784}a:hover{color:#2E97A5}</style>
+</helmet>
+<div style="width:1180px;margin:0 auto;box-sizing:border-box;background:#FAFAF8;color:#16191A;font-family:'Space Grotesk',system-ui,sans-serif;padding:56px 64px 80px;display:flex;flex-direction:column;gap:44px">
+
+  <div style="display:flex;flex-direction:column;gap:12px;border-bottom:1px solid #E0DDD4;padding-bottom:26px">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;color:#8a9093">QUINTEK · IMPLEMENTATION AUDIT · 15 AUG 2026</span>
+    <span style="font-family:'Source Serif 4',Georgia,serif;font-size:34px;line-height:1.2;letter-spacing:-.01em">What exists, what is only drawn, and what is missing</span>
+    <span style="font-size:14.5px;line-height:1.6;color:#5d6467;max-width:760px;text-wrap:pretty">Audit of the two prototypes in this project — <span style="font-family:'JetBrains Mono',monospace;font-size:13px">PG Revision.dc.html</span> (learner) and <span style="font-family:'JetBrains Mono',monospace;font-size:13px">Quintek Admin.dc.html</span> / <span style="font-family:'JetBrains Mono',monospace;font-size:13px">Quintek Harness.dc.html</span> (benchmark) — against the product specification. Nothing has been changed yet.</span>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:16px;padding:20px 22px;background:#F5F3EC;border-left:3px solid #B5812B;border-radius:0 6px 6px 0">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a5f13">READ THIS BEFORE THE TABLE</span>
+    <span style="font-size:14px;line-height:1.65;color:#33393b;max-width:820px;text-wrap:pretty">Both prototypes are <strong>design artifacts</strong>: single HTML files with in-file state. There is no database, no queue, no AI provider call, no auth, no scheduler and no notification transport anywhere in this project. Every number, every concept, every question and every run is a literal in the file. So the honest answer to "is the engine implemented" is <strong>no — not one workflow of it</strong>, and that is true of the benchmark UI as much as the learner UI.</span>
+    <span style="font-size:14px;line-height:1.65;color:#33393b;max-width:820px;text-wrap:pretty">What I can build here is the product's interaction design with realistic client-side state — including the parts currently missing (knowledge gaps, R/O/G judgement, concept priority, demonstration library, question studio, revision dashboard). Real ingestion, chunked resumable processing, model calls, validation, persistence and scheduled notifications need a server; I can specify them precisely and design against them, but I can't run them from this file. I've marked that boundary everywhere below rather than blur it.</span>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">CLASSIFICATION KEY</span>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+      <sc-for list="{{ key }}" as="k" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;gap:7px;padding:13px;background:#fff;border:1px solid #E6E4DE;border-top:2px solid {{ k.color }};border-radius:0 0 5px 5px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;color:{{ k.color }}">{{ k.label }}</span>
+          <span style="font-size:12px;line-height:1.5;color:#5d6467">{{ k.note }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:0">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093;padding-bottom:12px">FEATURE AUDIT · LEARNER ENGINE</span>
+    <div style="display:grid;grid-template-columns:230px 90px 1fr 240px;gap:0;padding:10px 12px;background:#F1EFE8;border:1px solid #E6E4DE;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;color:#8a9093">
+      <span>FEATURE</span><span>CLASS</span><span>WHAT IS ACTUALLY THERE</span><span>WHAT REAL WOULD REQUIRE</span>
+    </div>
+    <sc-for list="{{ audit }}" as="a" hint-placeholder-count="16">
+      <div style="display:grid;grid-template-columns:230px 90px 1fr 240px;gap:0;padding:12px;border:1px solid #E6E4DE;border-top:none;background:{{ a.rowBg }}">
+        <span style="font-size:13px;font-weight:500;padding-right:14px">{{ a.name }}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;color:{{ a.color }}">{{ a.cls }}</span>
+        <span style="font-size:12.5px;line-height:1.55;color:#5d6467;padding-right:18px;text-wrap:pretty">{{ a.is }}</span>
+        <span style="font-size:12px;line-height:1.55;color:#7c8386;text-wrap:pretty">{{ a.need }}</span>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">MISSING ENTIRELY · NOT DRAWN ANYWHERE</span>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+      <sc-for list="{{ missing }}" as="m" hint-placeholder-count="10">
+        <div style="display:flex;flex-direction:column;gap:6px;padding:13px 14px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid #BC4C43;border-radius:0 5px 5px 0">
+          <span style="font-size:13.5px;font-weight:600">{{ m.name }}</span>
+          <span style="font-size:12.5px;line-height:1.55;color:#5d6467;text-wrap:pretty">{{ m.note }}</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#8a9093">SPEC {{ m.part }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">DRIFT TO CORRECT · WHAT THE PROTOTYPE CURRENTLY IMPLIES</span>
+    <sc-for list="{{ drift }}" as="d" hint-placeholder-count="4">
+      <div style="display:grid;grid-template-columns:1fr 24px 1fr;gap:14px;align-items:center;padding:14px;background:#fff;border:1px solid #E6E4DE;border-radius:5px">
+        <span style="font-size:13px;line-height:1.55;color:#7c8386;text-wrap:pretty">{{ d.now }}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#237784;text-align:center">→</span>
+        <span style="font-size:13px;line-height:1.55;color:#16191A;text-wrap:pretty">{{ d.should }}</span>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">BENCHMARK SEPARATION · CURRENT STATE</span>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div style="display:flex;flex-direction:column;gap:9px;padding:16px;background:#fff;border:1px solid #E6E4DE;border-radius:5px">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#237784">PRODUCTION · LEARNER</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.9;color:#5d6467">source → notebook → concept graph<br>→ questions → revision</span>
+        <span style="font-size:12.5px;line-height:1.55;color:#7c8386;text-wrap:pretty">Lives in PG Revision.dc.html. Holds no benchmark concept, imports nothing from the harness. Boundary is intact and stays intact.</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:9px;padding:16px;background:#fff;border:1px solid #E6E4DE;border-radius:5px">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#8a5f13">BENCHMARK · INTERNAL</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.9;color:#5d6467">frozen corpus → candidate → evaluation<br>→ gates → scorecard</span>
+        <span style="font-size:12.5px;line-height:1.55;color:#7c8386;text-wrap:pretty">Two files, kept as-is. Its registry, gates, CIs and deployment gate are read from the real repo spec, but the harness itself is not implemented — the UI is not the engine.</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">PROPOSED BUILD ORDER · DESIGN-SIDE</span>
+    <sc-for list="{{ plan }}" as="p" hint-placeholder-count="6">
+      <div style="display:grid;grid-template-columns:34px 1fr 190px;gap:16px;align-items:baseline;padding:13px 14px;background:#fff;border:1px solid #E6E4DE;border-radius:5px">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:15px;color:#237784">{{ p.n }}</span>
+        <span style="display:flex;flex-direction:column;gap:5px">
+          <span style="font-size:14px;font-weight:600">{{ p.title }}</span>
+          <span style="font-size:12.5px;line-height:1.55;color:#5d6467;text-wrap:pretty">{{ p.note }}</span>
+        </span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#8a9093;text-align:right">{{ p.parts }}</span>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:10px;padding:20px 22px;background:#F5F3EC;border-radius:6px">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#8a9093">HONEST LIMIT</span>
+    <span style="font-size:13.5px;line-height:1.65;color:#33393b;max-width:840px;text-wrap:pretty">Parts 6, 13, 20 and 27 — chunked resumable ingestion, a separate validation model, a real daily trigger and real notification delivery — cannot be made real in an HTML design file. I will design their interfaces and state precisely (processing state per chunk, validation verdicts, trigger schedule, last/next notification), and label them as prototype state rather than working infrastructure. Handing the finished design to a developer with the data model attached is the sensible route to the real thing.</span>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:1400}}">
+const CLS = { A: '#237784', B: '#4F8FD2', C: '#B5812B', D: '#BC4C43' };
+
+const AUDIT = [
+  ['Notebooks', 'C', 'Four notebooks as literals with fixed counts. Tapping opens a detail view; no create, rename, delete or persistence.', 'CRUD + owner scoping'],
+  ['Sources list', 'C', 'Three hard-coded filenames with EXTRACTED status. No file input, no upload, no storage key, no MIME handling.', 'Object storage + upload'],
+  ['Source ingestion', 'C', 'The UPLOAD button runs a 620ms timer that increments a page counter and reveals six pre-written concept names. Nothing is read.', 'Chunker, queue, resumable state'],
+  ['Provenance', 'C', 'Source filename and page number are printed as strings on the concept page and after answering. Not a reference to anything.', 'Chunk offsets, timestamps, anchors'],
+  ['Concept extraction', 'C', 'Concept names are a literal array. No model call, no dedup, no resolution against existing concepts.', 'Extraction + resolution pipeline'],
+  ['Global concepts', 'B', 'Concepts are defined once in a single array and referenced by graph, notebook and detail views — so the shape is right — but there is no alias table and no many-to-many join.', 'concept_alias, notebook_concept'],
+  ['Concept graph', 'B', 'Real force simulation over 14 nodes and 18 typed edges, clickable, cross-subject edges distinguished. Relationship types exist but only six of the thirteen specified.', 'Persisted edges, full type set'],
+  ['Question families', 'B', 'Six families named and shown as a badge; three questions written out in full. Family counts on the concept page are fabricated.', 'Generation across families'],
+  ['Question generation', 'D', 'Nothing generates. The Studio does not exist; the concept page has a button that only flips a boolean.', 'Grounded generation engine'],
+  ['Question validation', 'D', 'No concept of a validator anywhere in the learner UI.', 'Separate validation model'],
+  ['Answering', 'B', 'Real interaction: pick an option, answer locks, correct answer and rationale reveal, next advances. Answer is not hidden behind a second tap — correct per spec.', 'Attempt persistence'],
+  ['Attempt history', 'D', 'No attempt is recorded. Re-entering the session resets to question one.', 'Immutable attempt log'],
+  ['R/O/G judgement', 'D', 'The system currently decides correct/incorrect and colours the feedback itself. The user is never asked. This directly contradicts the spec.', 'User-chosen colour, stored'],
+  ['Knowledge gaps', 'D', 'Not present in any form. Weakness is expressed only as a concept-level percentage.', 'Gap extraction + linkage'],
+  ['Concept priority', 'C', 'Progress screen shows six concepts with fixed percentages and states (MASTERED / DUE / STRUGGLING). No ranking function exists.', 'Deterministic scoring code'],
+  ['Revision queue', 'C', 'The session is a fixed array of three questions with an 8-tick progress bar. No selection strategy, no due calculation.', 'Queue builder + strategy'],
+  ['Spaced repetition', 'C', 'Intervals and next-review dates are printed strings. No scheduler, no ease factor, no state update after answering.', 'SM-2 state per question'],
+  ['Session record', 'D', 'Sessions are not created or stored; completion is a boolean in component state.', 'revision_session rows'],
+  ['Session analysis', 'C', 'One sentence of fixed copy on the completion card. No accuracy, no gap rollup, no next targets.', 'Post-session computation'],
+  ['"What to read" output', 'D', 'Not present. The completion card names one concept in prose.', 'Ranked gap list + source links'],
+  ['Reminder cadence', 'C', 'Four cadence buttons that set a string in component state. No time picker, timezone, transport, or schedule.', 'Scheduler + push/email'],
+  ['Progress dashboard', 'C', 'Three counts, six concept bars and an 84-cell heatmap generated from a repeating pattern. The streak is a literal.', 'Aggregation over real attempts'],
+  ['Search', 'D', 'No global search anywhere in the learner app.', 'Cross-entity index'],
+  ['Demonstration library', 'D', 'Absent. The single most distinctive missing feature in the spec.', 'Demo schema + studio wiring'],
+];
+
+const MISSING = [
+  ['Forgotten / Weak section', 'A dedicated surface listing exact gaps — "ferritin interpretation", not "anaemia weak" — each linked to concept, question, attempt, notebook and source.', 'PART 16'],
+  ['User R/O/G control', 'After reveal, the learner grades their own recall. The system may supplement the signal but never overwrite it.', 'PART 15'],
+  ['Concept priority ranking', 'Deterministic ordering from colour, failure frequency, unresolved gaps, recency and coverage — with a visible "why this is ranked here".', 'PART 17'],
+  ['Question demonstration library', 'Structured style references: stem structure, reasoning depth, target, distractor strategy. Style guidance, never content to copy.', 'PART 11'],
+  ['Question Studio', 'Configure source, concepts, type, difficulty, reasoning depth, count, demos, cross-notebook concepts and grounding, then accept / edit / regenerate / reject each output.', 'PART 12'],
+  ['Question bank', 'Every generated question browsable with its provenance, validation state, model and prompt version.', 'PART 12–13'],
+  ['Revision dashboard', 'Opened from the daily trigger: red / orange / green counts, previously incorrect, recommended count, learner picks 5–25 or custom.', 'PART 21'],
+  ['Cross-notebook question view', 'Opening a concept shows every question touching it, grouped by originating notebook.', 'PART 9'],
+  ['Attempt history on a question', 'The 08 Aug RED → 11 Aug ORANGE → 15 Aug GREEN trail, never overwritten.', 'PART 14'],
+  ['Notification settings', 'One chosen trigger time, timezone, channel toggles, test button, last status and next scheduled trigger.', 'PART 27'],
+];
+
+const DRIFT = [
+  ['"AI turns my sources into concepts and questions."', '"I know exactly what I don\u2019t know, why I don\u2019t know it, where it came from, and what to test next."'],
+  ['Mastery as a percentage bar per concept.', 'Named knowledge gaps under a concept, each with evidence and a source reference.'],
+  ['The system decides whether you knew it.', 'You decide. Red, orange or green is your judgement; the system reasons from it.'],
+  ['Revision = questions that are due.', 'Revision = weakest gaps first, then their surrounding section, with new questions on the same concept rather than the same question again.'],
+];
+
+const PLAN = [
+  ['Answer flow, R/O/G and gap capture', 'Hide the verdict until submission, then let the learner grade their own recall and confirm the exact gap. Attempts recorded, never overwritten.', 'PART 14, 15, 16, 30'],
+  ['Forgotten / Weak, and the concept page', 'The weak surface plus a concept page rebuilt around priority, why it ranks there, gaps, questions grouped by notebook and attempt history.', 'PART 16, 17, 29'],
+  ['Revision dashboard and session', 'Counts by colour, learner-chosen question count, visible selection strategy, session analysis and the exact read list at the end.', 'PART 18, 19, 21, 22, 23, 24'],
+  ['Question Studio and demonstrations', 'Structured demos as style references, studio configuration, and provenance plus validation state on every generated item.', 'PART 11, 12, 13'],
+  ['Information architecture and search', 'Today, Notebooks, Concepts, Weak, Studio, Bank, Graph, Revision, Progress, Settings — with global search across all of them.', 'PART 25, 28'],
+  ['Notifications and honest labelling', 'Trigger time, timezone, channels, test and status — and demo data labelled as demo data throughout.', 'PART 20, 26, 27'],
+];
+
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      key: [
+        { label: 'A · REAL', color: CLS.A, note: 'Runs as designed in the prototype, no server needed.' },
+        { label: 'B · PARTIAL', color: CLS.B, note: 'Interaction is real; the data behind it is not.' },
+        { label: 'C · UI ONLY', color: CLS.C, note: 'Drawn and convincing, driven by literals.' },
+        { label: 'D · MISSING', color: CLS.D, note: 'Not present in any form.' },
+      ],
+      audit: AUDIT.map(([name, cls, is, need], i) => ({ name, cls, is, need, color: CLS[cls],
+        rowBg: i % 2 ? '#FCFBF8' : '#fff' })),
+      missing: MISSING.map(([name, note, part]) => ({ name, note, part })),
+      drift: DRIFT.map(([now, should]) => ({ now, should })),
+      plan: PLAN.map(([title, note, parts], i) => ({ n: String(i + 1).padStart(2, '0'), title, note, parts })),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

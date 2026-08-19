@@ -1,0 +1,36 @@
+{
+  "_README": [
+    "Operator-supplied price list, keyed by '<provider>/<model_id>' exactly as it appears",
+    "in a candidate manifest. Copy this file to configs/model_costs.json and fill in the",
+    "figures from your own provider contract or billing page.",
+    "",
+    "It ships with null values on purpose. A price is a commercial fact about YOUR",
+    "agreement with a provider -- it cannot be derived from a benchmark run, it changes",
+    "without notice, and it differs between accounts, regions and commitment tiers.",
+    "A plausible-looking number invented here would be indistinguishable, in the admin",
+    "console, from a real one you had verified. So the pipeline reports cost as null",
+    "until a human supplies it, and the UI already renders that null state.",
+    "",
+    "Any entry left null reports as null end-to-end. Delete keys you do not price."
+  ],
+  "nvidia/meta/llama-3.3-70b-instruct": {
+    "usd_per_1k_input_tokens": null,
+    "usd_per_1k_output_tokens": null
+  },
+  "nvidia/openai/gpt-oss-120b": {
+    "usd_per_1k_input_tokens": null,
+    "usd_per_1k_output_tokens": null
+  },
+  "nvidia/google/gemma-3-12b-it": {
+    "usd_per_1k_input_tokens": null,
+    "usd_per_1k_output_tokens": null
+  },
+  "nvidia/nvidia/llama-3.1-nemotron-70b-instruct": {
+    "usd_per_1k_input_tokens": null,
+    "usd_per_1k_output_tokens": null
+  },
+  "nvidia/writer/palmyra-med-70b": {
+    "usd_per_1k_input_tokens": null,
+    "usd_per_1k_output_tokens": null
+  }
+}

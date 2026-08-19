@@ -26,12 +26,29 @@ def _registry():
     return json.loads(REGISTRY.read_text())
 
 
+# Directories that are not benchmark specification prose, and so are not what
+# this check governs:
+#
+#   runs/      generated output. A rendered scorecard states the min_n it
+#              evaluated against -- that is the scorecard doing its job, and
+#              `SCORECARD_SPEC.md` is exempt below for the same reason.
+#              Scanning it would fail the suite the moment a real run is
+#              written to disk.
+#   frontend/  vendored UI source and its own product documentation. Its
+#              numbers describe the interface (e.g. a 0-500 question-count
+#              limit that merely coincides with GATE-A-ACC's min_n), not
+#              benchmark thresholds, and this repo does not own that prose.
+_NON_SPEC_DIRS = {"runs", "frontend", ".git", "node_modules", "__pycache__"}
+
+
 def _docs():
-    """All prose/config files except this test file and the registry itself."""
+    """Authored benchmark spec prose -- not generated output, not vendored UI."""
     for p in sorted(ROOT.rglob("*")):
         if not p.is_file():
             continue
         if p.suffix not in {".md", ".yaml", ".yml"}:
+            continue
+        if _NON_SPEC_DIRS & set(p.relative_to(ROOT).parts):
             continue
         yield p
 

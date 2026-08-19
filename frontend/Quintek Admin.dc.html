@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#050506;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+a{color:#2dd4bf;text-decoration:none}a:hover{color:#5eead4}
+*::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-thumb{background:#26262b;border-radius:4px}
+*::-webkit-scrollbar-track{background:transparent}
+@keyframes qkfade{from{opacity:0}to{opacity:1}}
+</style>
+</helmet>
+<div style="display:flex;width:1440px;height:900px;box-sizing:border-box;background:#0a0a0a;color:#e8e8ec;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;border:1px solid #1c1c20">
+
+  <div style="width:212px;flex:none;display:flex;flex-direction:column;gap:24px;padding:20px 14px;background:#08080a;border-right:1px solid #1a1a1e">
+    <div style="display:flex;flex-direction:column;gap:5px;padding:0 8px">
+      <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:13px;letter-spacing:.22em;color:#e8e8ec">QUINTEK</span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.12em;color:#4e4e57">PG REVISION BENCHMARK v0.4</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6">
+        <button onClick="{{ n.go }}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;box-sizing:border-box;padding:9px 10px;min-height:38px;border:none;border-radius:4px;cursor:pointer;text-align:left;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:13px;background:{{ n.bg }};color:{{ n.fg }}" style-hover="background:#141418">
+          {{ n.label }}<span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;color:{{ n.badgeFg }}">{{ n.badge }}</span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:8px;padding:11px;border:1px solid rgba(245,158,11,.3);background:rgba(245,158,11,.06);border-radius:4px">
+      <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.12em;color:#f59e0b">REGISTRY UNCALIBRATED</span>
+      <span style="font-size:11px;line-height:1.5;color:#8a8a94;text-wrap:pretty">Thresholds are engineering starting points. No run can issue an official PASS.</span>
+    </div>
+  </div>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="flex:none;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 26px;border-bottom:1px solid #1a1a1e">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:19px;font-weight:600;letter-spacing:-.01em;color:#f2f2f4">{{ title }}</span>
+        <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;letter-spacing:.1em;color:#5a5a63">{{ subtitle }}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;color:#5a5a63">
+        <span>registry a91c3f04e7</span><span style="color:#26262b">│</span><span>frozen: no</span>
+      </div>
+    </div>
+
+    <sc-if value="{{ hasLoadError }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:none;display:flex;align-items:center;gap:12px;margin:14px 26px 0;padding:12px 14px;border:1px solid rgba(244,63,94,.32);background:rgba(244,63,94,.05);border-radius:4px">
+        <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.12em;color:#f43f5e;flex:none">LOAD FAILED</span>
+        <span style="font-size:12.5px;line-height:1.5;color:#9a9aa4;text-wrap:pretty">{{ loadErrorText }}</span>
+      </div>
+    </sc-if>
+
+    <div style="flex:1;overflow-y:auto;padding:22px 26px 40px">
+
+      <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:10px;padding:60px 0;max-width:640px">
+          <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;letter-spacing:.14em;color:#5a5a63">LOADING BENCHMARK REPORTS</span>
+          <span style="font-size:13px;line-height:1.6;color:#7d7d87;text-wrap:pretty">No figures are shown until the report is in hand. A partially loaded scorecard is not a scorecard.</span>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRuns }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;gap:7px">
+            <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+              <button onClick="{{ f.set }}" style="padding:8px 12px;min-height:34px;border-radius:3px;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;letter-spacing:.08em;background:{{ f.bg }};border:1px solid {{ f.bd }};color:{{ f.fg }}">{{ f.label }}</button>
+            </sc-for>
+          </div>
+          <div style="display:grid;grid-template-columns:150px 1fr 250px 190px 150px;gap:0;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.12em;color:#4e4e57;padding:0 12px 9px;border-bottom:1px solid #1a1a1e">
+            <span>RUN_ID</span><span>CANDIDATE MANIFEST</span><span>OUTCOME</span><span>CEILING</span><span>TIMESTAMP</span>
+          </div>
+          <sc-for list="{{ runs }}" as="r" hint-placeholder-count="6">
+            <button onClick="{{ r.open }}" style="display:grid;grid-template-columns:150px 1fr 250px 190px 150px;align-items:center;gap:0;width:100%;box-sizing:border-box;text-align:left;cursor:pointer;background:transparent;border:none;border-bottom:1px solid #141418;padding:13px 12px;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif" style-hover="background:#0e0e10">
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:12px;color:#e8e8ec">{{ r.id }}</span>
+              <span style="display:flex;flex-direction:column;gap:4px;min-width:0;padding-right:16px">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11.5px;color:#c9c9d1">{{ r.candShort }}</span>
+                <span style="font-size:11px;color:#5a5a63;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.candDesc }}</span>
+              </span>
+              <span style="display:flex;align-items:center;gap:8px">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.08em;padding:5px 8px;border-radius:3px;color:{{ r.fg }};background:{{ r.bg }};border:1px {{ r.style }} {{ r.bd }}">{{ r.outcome }}</span>
+              </span>
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;color:{{ r.ceilFg }};padding-right:14px">{{ r.ceiling }}</span>
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;color:#6b6b75">{{ r.ts }}</span>
+            </button>
+          </sc-for>
+          <div style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;line-height:1.8;color:#3f3f47;padding-top:6px">NO AGGREGATE SCORE IS COMPUTED ACROSS TRACKS. EVERY GATE IS REPORTED SEPARATELY.</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:20px;max-width:1080px">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#1a1a1e;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden">
+            <sc-for list="{{ manifest }}" as="m" hint-placeholder-count="4">
+              <div style="display:flex;flex-direction:column;gap:7px;padding:13px;background:#0c0c0e">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.12em;color:#4e4e57">{{ m.label }}</span>
+                <span style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11.5px;color:#dcdce2">{{ m.value }}<span style="font-size:9px;color:#3f3f47;cursor:pointer">COPY</span></span>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ integrityFailed }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:22px;padding:52px 44px;border:1px solid rgba(244,63,94,.35);background:rgba(244,63,94,.05);border-radius:4px;align-items:center;text-align:center;animation:qkfade .3s ease both">
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:34px;letter-spacing:.18em;color:#f43f5e">INVALID RUN</span>
+              <span style="width:60px;height:1px;background:rgba(244,63,94,.4)"></span>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#5a5a63">FAILED INTEGRITY PRECONDITION</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:15px;color:#e8e8ec">{{ failedCheck }}</span>
+              </div>
+              <span style="font-size:14px;line-height:1.65;color:#9a9aa4;max-width:560px;text-wrap:pretty">{{ withheldReason }}</span>
+              <button onClick="{{ goIntegrity }}" style="min-height:42px;padding:0 18px;background:transparent;border:1px solid rgba(244,63,94,.4);border-radius:3px;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;letter-spacing:.1em;color:#f43f5e" style-hover="background:rgba(244,63,94,.1)">OPEN INTEGRITY DETAIL →</button>
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;line-height:1.8;color:#3f3f47">scores = null · rankable = false · outcome = {{ finalCode }}</span>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ showNumbers }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:20px">
+              <div style="display:flex;align-items:flex-start;gap:14px;padding:14px 16px;border:1px solid {{ ceilBd }};background:{{ ceilBg }};border-radius:4px">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.12em;color:{{ ceilFg }};flex:none;padding-top:2px">CEILING</span>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:13px;letter-spacing:.06em;color:{{ ceilFg }}">MAX ATTAINABLE: {{ ceiling }}</span>
+                  <span style="font-size:12.5px;line-height:1.55;color:#9a9aa4;max-width:720px;text-wrap:pretty">{{ ceilingWhy }} This ceiling was computed before execution — no gate result below can raise it.</span>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:0;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden">
+                <div style="display:grid;grid-template-columns:210px 170px 150px 96px 150px 130px 110px;gap:0;padding:11px 14px;background:#0c0c0e;border-bottom:1px solid #1a1a1e;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.1em;color:#4e4e57">
+                  <span>TRACK</span><span>GATE ID</span><span>METRIC</span><span style="text-align:right">EST</span><span style="text-align:right">95% CI</span><span style="text-align:right">n / min_n</span><span style="text-align:right">STATUS</span>
+                </div>
+                <sc-for list="{{ rows }}" as="row" hint-placeholder-count="13">
+                  <div style="display:grid;grid-template-columns:210px 170px 150px 96px 150px 130px 110px;gap:0;align-items:center;padding:10px 14px;border-bottom:1px solid #131316;background:{{ row.rowBg }}">
+                    <span style="font-size:12.5px;color:#dcdce2">{{ row.track }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;color:#6b6b75">{{ row.gateId }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;color:#8a8a94">{{ row.metric }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:12px;text-align:right;color:{{ row.numFg }}">{{ row.est }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;text-align:right;color:{{ row.ciFg }}">{{ row.ci }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;text-align:right;color:{{ row.nFg }}">{{ row.n }}</span>
+                    <span style="text-align:right"><span style="display:inline-block;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.08em;padding:4px 7px;border-radius:3px;color:{{ row.fg }};background:{{ row.bg }};border:1px {{ row.style }} {{ row.bd }}">{{ row.status }}</span></span>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:12px;padding:18px;border:1px solid rgba(244,63,94,.22);border-left:3px solid #f43f5e;background:#0c0c0e;border-radius:0 4px 4px 0">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#f43f5e">SAFETY OVERRIDE · GATE-SAFETY-CME · OVERRIDES ALL OTHER GATES</span>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+                  <sc-for list="{{ safety }}" as="sf" hint-placeholder-count="3">
+                    <div style="display:flex;flex-direction:column;gap:6px">
+                      <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;color:#5a5a63">{{ sf.label }}</span>
+                      <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:15px;color:{{ sf.fg }}">{{ sf.value }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#4e4e57">RELIABILITY</span>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#1a1a1e;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden">
+                  <sc-for list="{{ reliability }}" as="m" hint-placeholder-count="4">
+                    <div style="display:flex;flex-direction:column;gap:8px;padding:13px;background:#0c0c0e">
+                      <span style="font-size:11.5px;color:#8a8a94">{{ m.label }}</span>
+                      <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:15px;color:{{ m.fg }}">{{ m.value }}</span>
+                      <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;color:#4e4e57">{{ m.gateId }} · {{ m.threshold }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px;border:1px solid {{ finalBd }};background:{{ finalBg }};border-radius:4px">
+                <div style="display:flex;flex-direction:column;gap:7px">
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#5a5a63">FINAL OUTCOME</span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:17px;letter-spacing:.08em;color:{{ finalFg }}">{{ finalOutcome }}</span>
+                </div>
+                <span style="font-size:12.5px;line-height:1.55;color:#8a8a94;max-width:520px;text-align:right;text-wrap:pretty">{{ finalNote }}</span>
+              </div>
+              <div style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;line-height:1.8;color:#3f3f47">SCOPE: ENGINEERING QUALIFICATION OF THIS CANDIDATE CONFIGURATION ON THIS FROZEN CORPUS.<br>NOT A CLAIM OF CLINICAL SAFETY, CLINICAL VALIDITY OR REGULATORY FITNESS.</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isIncomplete }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:18px;padding:44px;border:1px dashed #33333a;background:#0c0c0e;border-radius:4px;align-items:center;text-align:center">
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:28px;letter-spacing:.16em;color:#8a8a94">INCOMPLETE</span>
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11.5px;color:#6b6b75">{{ withheldReason }}</span>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isIntegrity }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:20px;max-width:1080px">
+          <div style="display:flex;flex-direction:column;gap:14px;padding:20px;border:1px solid rgba(244,63,94,.3);background:rgba(244,63,94,.04);border-radius:4px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;letter-spacing:.14em;color:#f43f5e">FAILED PRECONDITION · {{ igCheck }}</span>
+            <span style="font-size:14px;line-height:1.65;color:#c9c9d1;max-width:760px;text-wrap:pretty">{{ igDetail }}</span>
+            <div style="display:flex;flex-direction:column;gap:7px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#8a8a94">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#1a1a1e;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden">
+            <sc-for list="{{ checks }}" as="c" hint-placeholder-count="13">
+              <div style="display:flex;align-items:center;gap:10px;padding:13px;background:#0c0c0e">
+                <span style="width:7px;height:7px;border-radius:50%;flex:none;background:{{ c.dot }}"></span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:{{ c.fg }}">{{ c.name }}</span>
+                <span style="margin-left:auto;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.08em;color:{{ c.dot }}">{{ c.state }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;line-height:1.8;color:#3f3f47">INTEGRITY IS BINARY. THERE IS NO INTEGRITY SCORE, PERCENTAGE OR GRADE — A NUMERIC ONE WOULD INVITE AVERAGING IT AGAINST PERFORMANCE.</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCompare }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:20px;max-width:1080px">
+          <div style="display:flex;flex-direction:column;gap:13px;padding:40px;border:1px dashed #2a2a30;border-radius:4px;align-items:flex-start">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;letter-spacing:.14em;color:#5a5a63">RANKABLE RUNS · 0 OF 6</span>
+            <span style="font-size:15px;line-height:1.6;color:#c9c9d1;max-width:640px;text-wrap:pretty">No run is currently rankable. Comparison requires <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:13px">rankable: true</span>, which no run can hold while the gate registry is uncalibrated.</span>
+            <span style="font-size:13px;line-height:1.6;color:#6b6b75;max-width:640px;text-wrap:pretty">This table stays empty by design. Blending a non-rankable run into a ranked view is the failure this screen exists to prevent.</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#4e4e57">LISTED SEPARATELY · OUTCOME STATE ONLY, NO FIGURES</span>
+            <div style="display:flex;flex-direction:column;gap:0;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden">
+              <sc-for list="{{ runs }}" as="r" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:140px 1fr 260px;gap:0;align-items:center;padding:12px 14px;background:#0c0c0e;border-bottom:1px solid #131316">
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11.5px;color:#c9c9d1">{{ r.id }}</span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#6b6b75">{{ r.candShort }}</span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.08em;color:{{ r.fg }}">{{ r.outcome }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isLeaderboard }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:16px;max-width:1180px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:16px">
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <sc-for list="{{ sorts }}" as="so" hint-placeholder-count="7">
+                <button onClick="{{ so.set }}" style="padding:7px 11px;min-height:32px;border-radius:3px;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.06em;background:{{ so.bg }};border:1px solid {{ so.bd }};color:{{ so.fg }}">{{ so.label }}</button>
+              </sc-for>
+            </div>
+            <button onClick="{{ exportReport }}" style="flex:none;min-height:34px;padding:0 13px;background:transparent;border:1px solid #26262b;border-radius:3px;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.08em;color:#2dd4bf" style-hover="border-color:rgba(45,212,191,.4)">EXPORT · {{ exportFmt }}</button>
+          </div>
+
+          <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:1px solid rgba(244,63,94,.25);background:rgba(244,63,94,.04);border-radius:4px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.12em;color:#f43f5e;flex:none;padding-top:2px">SAFETY PRECEDENCE</span>
+            <span style="font-size:12.5px;line-height:1.55;color:#9a9aa4;max-width:820px;text-wrap:pretty">Sort order never implies production eligibility. A candidate that failed a mandatory safety gate stays marked FAIL and blocked wherever it lands in the ordering.</span>
+          </div>
+
+          <div style="display:flex;flex-direction:column;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:150px 1fr 130px 130px 140px 150px 130px;padding:11px 14px;background:#0c0c0e;border-bottom:1px solid #1a1a1e;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.1em;color:#4e4e57">
+              <span>CANDIDATE</span><span>PROVIDER · MODEL · VERSION</span><span style="text-align:right">OVERALL</span><span style="text-align:right">CRITICAL</span><span style="text-align:right">SAFETY</span><span style="text-align:right">ELIGIBILITY</span><span style="text-align:right">EVALUATED</span>
+            </div>
+            <sc-for list="{{ board }}" as="c" hint-placeholder-count="4">
+              <button onClick="{{ c.open }}" style="display:grid;grid-template-columns:150px 1fr 130px 130px 140px 150px 130px;align-items:center;width:100%;box-sizing:border-box;text-align:left;padding:13px 14px;border:none;border-bottom:1px solid #131316;border-left:2px solid {{ c.edge }};cursor:pointer;background:{{ c.rowBg }};font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif" style-hover="background:#111114">
+                <span style="font-size:13px;color:#e8e8ec">{{ c.label }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;color:#8a8a94">{{ c.desc }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:13px;text-align:right;color:{{ c.scoreFg }}">{{ c.overall }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;text-align:right;color:{{ c.critFg }}">{{ c.critical }}</span>
+                <span style="text-align:right"><span style="display:inline-block;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.06em;padding:4px 7px;border-radius:3px;color:{{ c.fg }};background:{{ c.bg }};border:1px {{ c.style }} {{ c.bd }}">{{ c.status }}</span></span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;text-align:right;color:{{ c.eligFg }}">{{ c.eligibility }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;text-align:right;color:#6b6b75">{{ c.lastEvaluated }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;line-height:1.8;color:#3f3f47">SORTED BY {{ sortLabel }} · FIGURES READ FROM THE EVALUATION SERVICE · NOTHING ON THIS PAGE IS COMPUTED CLIENT-SIDE</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCandidate }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:20px;max-width:1180px">
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:#1a1a1e;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden">
+            <sc-for list="{{ candHeader }}" as="h" hint-placeholder-count="5">
+              <div style="display:flex;flex-direction:column;gap:7px;padding:13px;background:#0c0c0e">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.1em;color:#4e4e57">{{ h.k }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:13px;color:{{ h.fg }}">{{ h.v }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px;padding:18px;border:1px solid {{ critBd }};border-left:3px solid {{ critEdge }};background:{{ critBg }};border-radius:0 4px 4px 0">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:{{ critEdge }}">CRITICAL MEDICAL ERRORS · NEVER SUBORDINATE TO THE OVERALL SCORE</span>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:18px">
+              <sc-for list="{{ critical }}" as="cr" hint-placeholder-count="4">
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;color:#5a5a63">{{ cr.k }}</span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:17px;color:{{ cr.fg }}">{{ cr.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <span style="font-size:12.5px;line-height:1.55;color:#8a8a94;max-width:760px;text-wrap:pretty">{{ criticalNote }}</span>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between">
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#4e4e57">TRACK SCORES · CLICK A TRACK FOR ITS CASE BREAKDOWN</span>
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;color:#4e4e57">BAR LENGTH = SCORE · BAR OPACITY = SAMPLE SIZE</span>
+            </div>
+            <sc-for list="{{ candTracks }}" as="t" hint-placeholder-count="10">
+              <button onClick="{{ t.open }}" style="display:grid;grid-template-columns:230px 1fr 90px 130px 110px;align-items:center;gap:14px;width:100%;box-sizing:border-box;text-align:left;padding:10px 14px;background:#0c0c0e;border:1px solid #1a1a1e;border-radius:3px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif" style-hover="border-color:#33333a">
+                <span style="font-size:12.5px;color:#dcdce2">{{ t.name }}</span>
+                <span style="display:block;height:8px;background:#141418;border-radius:2px;overflow:hidden"><span style="display:block;height:8px;width:{{ t.pct }};background:{{ t.fill }};opacity:{{ t.op }}"></span></span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:12px;text-align:right;color:#e8e8ec">{{ t.score }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;text-align:right;color:#6b6b75">{{ t.ci }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;text-align:right;color:{{ t.nFg }}">{{ t.n }}</span>
+              </button>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:11px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#4e4e57">BENCHMARK HISTORY · OVERALL SCORE BY VERSION</span>
+            <div style="display:flex;align-items:flex-end;gap:0;padding:18px 18px 0;background:#0c0c0e;border:1px solid #1a1a1e;border-radius:4px;height:190px">
+              <sc-for list="{{ historyBars }}" as="h" hint-placeholder-count="3">
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:9px;height:100%;justify-content:flex-end">
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#e8e8ec">{{ h.score }}</span>
+                  <span style="width:46px;background:{{ h.fill }};border-radius:2px 2px 0 0;height:{{ h.h }}"></span>
+                  <span style="display:flex;flex-direction:column;align-items:center;gap:3px;padding-bottom:12px">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;color:#8a8a94">{{ h.version }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;color:{{ h.warnFg }}">{{ h.warn }}</span>
+                  </span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden">
+              <div style="display:grid;grid-template-columns:1fr 130px 150px 1fr;padding:9px 14px;background:#0c0c0e;border-bottom:1px solid #1a1a1e;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.1em;color:#4e4e57">
+                <span>VERSION</span><span style="text-align:right">OVERALL</span><span style="text-align:right">CRITICAL RATE</span><span style="text-align:right">COMPARABILITY</span>
+              </div>
+              <sc-for list="{{ historyRows }}" as="h" hint-placeholder-count="3">
+                <div style="display:grid;grid-template-columns:1fr 130px 150px 1fr;padding:9px 14px;border-bottom:1px solid #131316;background:#0a0a0c;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;color:#8a8a94">
+                  <span style="color:#dcdce2">{{ h.version }} · {{ h.date }}</span>
+                  <span style="text-align:right;color:#e8e8ec">{{ h.score }}</span>
+                  <span style="text-align:right">{{ h.crit }}</span>
+                  <span style="text-align:right;color:{{ h.warnFg }}">{{ h.comparable }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isTrack }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:18px;max-width:1080px">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#1a1a1e;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden">
+            <sc-for list="{{ trackHeader }}" as="h" hint-placeholder-count="4">
+              <div style="display:flex;flex-direction:column;gap:7px;padding:14px;background:#0c0c0e">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.1em;color:#4e4e57">{{ h.k }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:16px;color:{{ h.fg }}">{{ h.v }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#4e4e57">CASE OUTCOMES</span>
+            <sc-for list="{{ trackOutcomes }}" as="o" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:200px 1fr 90px 90px;align-items:center;gap:14px;padding:9px 14px;background:#0c0c0e;border:1px solid #1a1a1e;border-radius:3px">
+                <span style="font-size:12.5px;color:{{ o.fg }}">{{ o.label }}</span>
+                <span style="display:block;height:7px;background:#141418;border-radius:2px;overflow:hidden"><span style="display:block;height:7px;width:{{ o.pct }};background:{{ o.fg }}"></span></span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11.5px;text-align:right;color:#e8e8ec">{{ o.n }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;text-align:right;color:#6b6b75">{{ o.pct }}</span>
+              </div>
+            </sc-for>
+            <div style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;line-height:1.8;color:#3f3f47;padding-top:4px">COUNTS AND INTERVALS ARE STORED PER TRACK BY THE EVALUATION SERVICE. THE INTERFACE DERIVES NEITHER.
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isFailures }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:16px;max-width:1180px">
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            <sc-for list="{{ failFilters }}" as="ff" hint-placeholder-count="3">
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.1em;color:#4e4e57">{{ ff.label }}</span>
+                <div style="display:flex;gap:5px">
+                  <sc-for list="{{ ff.options }}" as="o" hint-placeholder-count="4">
+                    <button onClick="{{ o.set }}" style="padding:7px 10px;min-height:32px;border-radius:3px;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;background:{{ o.bg }};border:1px solid {{ o.bd }};color:{{ o.fg }}">{{ o.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#4e4e57">FAILURE CATEGORIES · {{ failCount }}</span>
+            <sc-for list="{{ failRows }}" as="f" hint-placeholder-count="8">
+              <div style="display:grid;grid-template-columns:250px 1fr 190px 110px 80px 80px;align-items:center;gap:14px;padding:10px 14px;background:#0c0c0e;border:1px solid #1a1a1e;border-left:2px solid {{ f.sevColor }};border-radius:0 3px 3px 0">
+                <span style="font-size:12.5px;color:#dcdce2">{{ f.category }}</span>
+                <span style="display:block;height:7px;background:#141418;border-radius:2px;overflow:hidden"><span style="display:block;height:7px;width:{{ f.bar }};background:{{ f.sevColor }}"></span></span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;color:#6b6b75">{{ f.track }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;color:#8a8a94">{{ f.candidate }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;text-align:right;color:#e8e8ec">{{ f.count }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;text-align:right;color:{{ f.sevColor }}">{{ f.pct }}</span>
+              </div>
+            </sc-for>
+            <sc-if value="{{ failEmpty }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:30px;border:1px dashed #2a2a30;border-radius:4px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#5a5a63;text-align:center">NO FAILURES MATCH THESE FILTERS</div>
+            </sc-if>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#4e4e57">INDIVIDUAL CASES</span>
+            <sc-for list="{{ caseRows }}" as="cs" hint-placeholder-count="4">
+              <div style="display:flex;flex-direction:column;gap:8px;padding:13px 14px;background:#0c0c0e;border:1px solid #1a1a1e;border-radius:3px">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+                  <span style="display:flex;align-items:center;gap:12px">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11.5px;color:#dcdce2">{{ cs.id }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;color:#6b6b75">{{ cs.track }} · {{ cs.candidate }}</span>
+                  </span>
+                  <span style="display:flex;align-items:center;gap:10px">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.06em;padding:3px 7px;border-radius:3px;color:{{ cs.sevColor }};background:{{ cs.sevBg }}">{{ cs.severity }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;color:#5a5a63">{{ cs.review }}</span>
+                  </span>
+                </div>
+                <span style="font-size:12.5px;line-height:1.55;color:#8a8a94;text-wrap:pretty">{{ cs.detail }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCompareCand }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:18px;max-width:1180px">
+          <div style="display:flex;gap:26px;flex-wrap:wrap">
+            <sc-for list="{{ comparePickers }}" as="cp" hint-placeholder-count="2">
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.1em;color:#4e4e57">{{ cp.label }}</span>
+                <div style="display:flex;gap:5px">
+                  <sc-for list="{{ cp.options }}" as="o" hint-placeholder-count="4">
+                    <button onClick="{{ o.set }}" style="padding:8px 11px;min-height:34px;border-radius:3px;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;background:{{ o.bg }};border:1px solid {{ o.bd }};color:{{ o.fg }}">{{ o.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">
+            <sc-for list="{{ compareCards }}" as="cc" hint-placeholder-count="2">
+              <div style="display:flex;flex-direction:column;gap:11px;padding:16px;background:#0c0c0e;border:1px solid #1a1a1e;border-top:2px solid {{ cc.edge }};border-radius:0 0 4px 4px">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.1em;color:#4e4e57">{{ cc.label }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:24px;color:#e8e8ec">{{ cc.overall }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;color:#8a8a94">{{ cc.desc }}</span>
+                <div style="display:flex;flex-direction:column;gap:5px;padding-top:4px">
+                  <sc-for list="{{ cc.meta }}" as="m" hint-placeholder-count="5">
+                    <span style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;color:#6b6b75"><span style="color:#4e4e57">{{ m.k }}</span><span style="color:{{ m.fg }}">{{ m.v }}</span></span>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#4e4e57">TRACK-BY-TRACK · GROUPED BARS</span>
+            <sc-for list="{{ compareTracks }}" as="ct" hint-placeholder-count="10">
+              <div style="display:grid;grid-template-columns:220px 1fr 150px;align-items:center;gap:16px;padding:10px 14px;background:#0c0c0e;border:1px solid #1a1a1e;border-radius:3px">
+                <span style="font-size:12.5px;color:#dcdce2">{{ ct.name }}</span>
+                <span style="display:flex;flex-direction:column;gap:4px">
+                  <span style="display:flex;align-items:center;gap:10px"><span style="display:block;height:7px;width:{{ ct.aPct }};background:#2dd4bf;border-radius:2px"></span><span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;color:#8a8a94">{{ ct.a }}</span></span>
+                  <span style="display:flex;align-items:center;gap:10px"><span style="display:block;height:7px;width:{{ ct.bPct }};background:#7d7d87;border-radius:2px"></span><span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;color:#8a8a94">{{ ct.b }}</span></span>
+                </span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;text-align:right;color:{{ ct.deltaFg }}">{{ ct.delta }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <sc-for list="{{ compareStrengths }}" as="cs" hint-placeholder-count="2">
+              <div style="display:flex;flex-direction:column;gap:9px;padding:15px;background:#0c0c0e;border:1px solid #1a1a1e;border-radius:4px">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.1em;color:#2dd4bf">{{ cs.title }}</span>
+                <sc-for list="{{ cs.items }}" as="it" hint-placeholder-count="3">
+                  <span style="display:flex;justify-content:space-between;gap:12px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;color:#8a8a94"><span>{{ it.name }}</span><span style="color:#dcdce2">{{ it.delta }}</span></span>
+                </sc-for>
+                <sc-if value="{{ cs.none }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;color:#5a5a63">NO TRACK EXCEEDS THE OTHER BY A MARGIN LARGER THAN ITS CONFIDENCE INTERVAL</span>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;line-height:1.8;color:#3f3f47">DIFFERENCES SMALLER THAN THE OVERLAPPING CONFIDENCE INTERVALS ARE REPORTED AS INDETERMINATE. NO OVERALL WINNER IS DECLARED.</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRunHistory }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:14px;max-width:1180px">
+          <div style="display:grid;grid-template-columns:170px 150px 130px 120px 120px 130px 130px 1fr;padding:11px 14px;background:#0c0c0e;border:1px solid #1a1a1e;border-radius:4px 4px 0 0;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.1em;color:#4e4e57">
+            <span>RUN ID</span><span>DATE</span><span>VERSION</span><span style="text-align:right">CANDIDATES</span><span style="text-align:right">CASES</span><span style="text-align:right">CALLS</span><span style="text-align:right">COST</span><span style="text-align:right">STATUS · DURATION</span>
+          </div>
+          <sc-for list="{{ runRows }}" as="rr" hint-placeholder-count="4">
+            <button onClick="{{ rr.open }}" style="display:grid;grid-template-columns:170px 150px 130px 120px 120px 130px 130px 1fr;align-items:center;width:100%;box-sizing:border-box;text-align:left;padding:12px 14px;margin-top:-14px;background:#0a0a0c;border:1px solid #1a1a1e;border-top:none;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;color:#8a8a94" style-hover="background:#111114">
+              <span style="color:#dcdce2">{{ rr.runId }}</span><span>{{ rr.date }}</span><span>{{ rr.version }}</span>
+              <span style="text-align:right">{{ rr.candidates }}</span><span style="text-align:right">{{ rr.cases }}</span>
+              <span style="text-align:right">{{ rr.calls }}</span><span style="text-align:right">{{ rr.cost }}</span>
+              <span style="text-align:right;color:{{ rr.fg }}">{{ rr.status }} · {{ rr.duration }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRouting }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:16px;max-width:1080px">
+          <span style="font-size:13px;line-height:1.6;color:#9a9aa4;max-width:800px;text-wrap:pretty">Each production task routes to one evaluated candidate. The evidence column is the benchmark result the routing decision rests on — changing a score changes the routing, not the other way round.</span>
+          <div style="display:flex;flex-direction:column;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:1fr 190px 140px 150px 210px;padding:11px 14px;background:#0c0c0e;border-bottom:1px solid #1a1a1e;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.1em;color:#4e4e57">
+              <span>TASK</span><span>SELECTED CANDIDATE</span><span style="text-align:right">EVIDENCE</span><span style="text-align:right">SAFETY GATE</span><span style="text-align:right">POLICY</span>
+            </div>
+            <sc-for list="{{ routingRows }}" as="rt" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:1fr 190px 140px 150px 210px;align-items:center;padding:13px 14px;border-bottom:1px solid #131316;background:#0a0a0c">
+                <span style="font-size:13px;color:#dcdce2">{{ rt.task }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#2dd4bf">{{ rt.candidate }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11.5px;text-align:right;color:#e8e8ec">{{ rt.score }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;text-align:right;color:#2dd4bf">{{ rt.gate }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;text-align:right;color:#8a8a94">{{ rt.policy }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:9px;padding:15px;background:#0c0c0e;border:1px solid #1a1a1e;border-radius:4px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.12em;color:#4e4e57">BLOCKED FROM ALL ROUTING</span>
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#f43f5e">Candidate C · llama-4-405b · med v2 — 3 confirmed critical medical errors in 500 safety cases</span>
+            <span style="font-size:12px;line-height:1.55;color:#8a8a94;max-width:760px;text-wrap:pretty">Its aggregate score of 91.2% is not a routing input while a mandatory safety gate is failed.</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRegistry }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:16px;max-width:1080px">
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:15px 16px;border:1px solid rgba(245,158,11,.32);background:rgba(245,158,11,.06);border-radius:4px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.12em;color:#f59e0b;flex:none;padding-top:2px">UNCALIBRATED</span>
+            <span style="font-size:12.5px;line-height:1.6;color:#9a9aa4;max-width:800px;text-wrap:pretty">Every threshold below is an engineering starting point that has never been validated against real candidate behaviour. They must be calibrated on DEV and frozen before VALIDATION or HOLDOUT is touched. Read-only — no threshold may be edited from this app.</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:200px 190px 110px 120px 110px 1fr;gap:0;padding:11px 14px;background:#0c0c0e;border-bottom:1px solid #1a1a1e;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.1em;color:#4e4e57">
+              <span>GATE ID</span><span>METRIC</span><span>DIRECTION</span><span style="text-align:right">THRESHOLD</span><span style="text-align:right">MIN_N</span><span style="padding-left:16px">UNIT</span>
+            </div>
+            <sc-for list="{{ registry }}" as="g" hint-placeholder-count="14">
+              <div style="display:grid;grid-template-columns:200px 190px 110px 120px 110px 1fr;gap:0;align-items:center;padding:9px 14px;border-bottom:1px solid #131316;background:#0a0a0c">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#dcdce2">{{ g.id }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;color:#8a8a94">{{ g.metric }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;color:#5a5a63">{{ g.direction }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11.5px;text-align:right;color:#f59e0b">{{ g.threshold }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;text-align:right;color:#c9c9d1">{{ g.minN }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;color:#5a5a63;padding-left:16px">{{ g.unit }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isDeploy }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:22px;max-width:1080px">
+          <div style="display:flex;flex-direction:column;gap:14px;padding:18px;border:1px solid #1a1a1e;background:#0c0c0e;border-radius:4px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#4e4e57">CURRENTLY SERVING PRODUCTION</span>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:18px">
+              <sc-for list="{{ live }}" as="l" hint-placeholder-count="4">
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.1em;color:#4e4e57">{{ l.label }}</span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:12px;color:{{ l.fg }}">{{ l.value }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#4e4e57">PROMOTE A CANDIDATE</span>
+            <div style="display:flex;flex-direction:column;gap:0;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden">
+              <sc-for list="{{ promotable }}" as="p" hint-placeholder-count="4">
+                <button onClick="{{ p.select }}" style="display:grid;grid-template-columns:150px 1fr 260px 180px;align-items:center;width:100%;box-sizing:border-box;text-align:left;gap:0;padding:13px 14px;border:none;border-bottom:1px solid #131316;cursor:pointer;background:{{ p.rowBg }};font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif" style-hover="background:#111114">
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11.5px;color:#c9c9d1">{{ p.run }}</span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#6b6b75">{{ p.cand }}</span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.08em;color:{{ p.fg }}">{{ p.outcome }}</span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;color:{{ p.eligFg }};text-align:right">{{ p.eligible }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:14px;padding:18px;border:1px solid {{ gateBd }};background:{{ gateBg }};border-radius:4px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:{{ gateFg }}">DEPLOY GATE</span>
+            <span style="font-size:13px;line-height:1.6;color:#9a9aa4;max-width:760px;text-wrap:pretty">{{ gateMessage }}</span>
+            <div style="display:flex;align-items:center;gap:14px">
+              <button onClick="{{ promote }}" disabled="{{ gateDisabled }}" style="min-height:42px;padding:0 20px;border-radius:3px;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:13.5px;font-weight:600;cursor:{{ gateCursor }};background:{{ gateBtnBg }};border:1px solid {{ gateBtnBd }};color:{{ gateBtnFg }}">Promote to production</button>
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;color:#5a5a63">{{ gateHint }}</span>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.14em;color:#4e4e57">DEPLOYMENT AUDIT TRAIL</span>
+            <sc-for list="{{ audit }}" as="a" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:170px 1fr 200px 160px;gap:0;align-items:center;padding:11px 14px;background:#0c0c0e;border:1px solid #1a1a1e;border-radius:3px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;color:#8a8a94">
+                <span style="color:#c9c9d1">{{ a.date }}</span><span>{{ a.cand }}</span><span>{{ a.run }}</span><span style="text-align:right;color:{{ a.fg }}">{{ a.state }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;reviewerCount&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:1,&quot;min&quot;:0,&quot;max&quot;:4,&quot;tsType&quot;:&quot;number&quot;},&quot;toolEnabledCandidate&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const TONE = {
+  pass:  { fg: '#2dd4bf', bg: 'rgba(45,212,191,.08)',  bd: 'rgba(45,212,191,.30)', style: 'solid' },
+  cond:  { fg: '#f59e0b', bg: 'rgba(245,158,11,.08)',  bd: 'rgba(245,158,11,.32)', style: 'solid' },
+  fail:  { fg: '#f43f5e', bg: 'rgba(244,63,94,.08)',   bd: 'rgba(244,63,94,.32)',  style: 'solid' },
+  uneval:{ fg: '#8a8a94', bg: 'transparent',           bd: '#3a3a42',              style: 'dashed' },
+  muted: { fg: '#8a8a94', bg: 'rgba(138,138,148,.07)', bd: '#26262b',              style: 'solid' },
+  na:    { fg: '#5a5a63', bg: 'transparent',           bd: '#26262b',              style: 'dashed' },
+};
+
+const BASE_ROWS = [
+  ['A Medical QA', 'GATE-A-ACC', 'accuracy', '.942', '[.918, .960]', '500 / 500', 'PASS', 'pass'],
+  ['B Concept extraction', 'GATE-B-F1', 'F1', '.917', '[.891, .938]', '300 / 300', 'PASS', 'pass'],
+  ['C Concept resolution', 'GATE-C-F1', 'macro F1', '.961', '[.944, .974]', '600 / 600', 'PASS', 'pass'],
+  ['C False merge', 'GATE-C-MERGE', 'false merge rate', '.012', '[.006, .024]', '358 / 350', 'PASS', 'pass'],
+  ['D Relationships', 'GATE-D-F1', 'edge F1', '.908', '[.882, .929]', '500 / 500', 'PASS', 'pass'],
+  ['E Generation', 'GATE-E-RUBRIC', 'mean rubric /4', '3.51', '[3.38, 3.63]', '300 / 300', 'PASS', 'pass'],
+  ['F Validation', 'GATE-F-FALSEAPPROVE', 'false approval', '.009', '[.004, .021]', '500 / 500', 'PASS', 'pass'],
+  ['G Cross-subject', 'GATE-G-LINK', 'incorrect link', '.031', '[.015, .062]', '250 / 250', 'PASS', 'pass'],
+  ['H Near-duplicate', 'GATE-H-DUP', 'near-dup rate', '.054', '[.038, .076]', '600 / 600', 'PASS', 'pass'],
+  ['H Family coverage', 'GATE-H-FAMILY', 'coverage rate', '—', '—', '64 / 100', 'UNEVALUABLE', 'uneval'],
+  ['I Robustness', 'GATE-I-RETENTION', 'answer retention', '.913', '[.897, .927]', '1500 / 1500', 'PASS', 'pass'],
+  ['J Injection', 'GATE-J-ATTACK', 'attack success', '.007', '[.002, .024]', '300 / 300', 'PASS', 'pass'],
+  ['J Tool violations', 'GATE-J-TOOL', 'unauth. tool calls', '0', 'ub .0060', '300 / 300', 'NOT_APPLICABLE', 'na'],
+];
+
+function rows(over) {
+  return BASE_ROWS.map((r) => {
+    let [track, gateId, metric, est, ci, n, status, tone] = r;
+    const o = (over || {})[track];
+    if (o) { est = o[0]; ci = o[1]; n = o[2]; status = o[3]; tone = o[4]; }
+    const t = TONE[tone];
+    return { track, gateId, metric, est, ci, n, status, fg: t.fg, bg: t.bg, bd: t.bd, style: t.style,
+      rowBg: tone === 'fail' ? 'rgba(244,63,94,.04)' : '#0a0a0c',
+      numFg: tone === 'fail' ? '#f43f5e' : tone === 'uneval' || tone === 'na' ? '#5a5a63' : '#e8e8ec',
+      ciFg: tone === 'uneval' ? '#3f3f47' : '#8a8a94',
+      nFg: tone === 'uneval' ? '#f59e0b' : '#8a8a94' };
+  });
+}
+
+/* Adapters: report.json (see quintek-report-api.js) -> the shapes these views render.
+ * No threshold, status, CI or outcome is derived here; every one arrives already decided. */
+const OUTCOME_TONE = { PASS: 'pass', CONDITIONAL: 'cond', FAIL: 'fail', INVALID_RUN: 'fail',
+  UNEVALUABLE: 'uneval', INCOMPLETE: 'muted', NOT_VALID_FOR_PRODUCTION_PASS: 'muted', NO_PASS_CAPABILITY_GAP: 'muted' };
+
+const fmt = (v, kind) => {
+  if (v == null) return '\u2014';
+  if (kind === 'count') return String(v);
+  if (kind === 'rubric') return v.toFixed(2);
+  if (kind === 'bound') return v.toFixed(4).replace(/^0/, '');
+  return v < 1 ? v.toFixed(3).replace(/^0/, '') : v.toFixed(3);
+};
+
+function adaptRows(report) {
+  if (!report.scores) return [];
+  return Object.keys(report.scores).map((k) => {
+    const r = report.scores[k];
+    const toneKey = r.status === 'PASS' ? 'pass' : r.status === 'FAIL' ? 'fail'
+      : r.status === 'CONDITIONAL' ? 'cond' : r.status === 'NOT_APPLICABLE' ? 'na' : 'uneval';
+    const t = TONE[toneKey];
+    const kind = r.direction === 'equal' ? 'count' : r.metric.indexOf('rubric') >= 0 ? 'rubric' : 'rate';
+    const est = fmt(r.estimate, kind);
+    const ci = r.ci_lower == null
+      ? (r.ci_upper == null ? '\u2014' : 'ub ' + fmt(r.ci_upper, kind === 'count' ? 'bound' : kind))
+      : '[' + fmt(r.ci_lower, kind) + ', ' + fmt(r.ci_upper, kind) + ']';
+    return { track: r.track, gateId: r.gate_id, metric: r.metric, est, ci,
+      n: r.n + ' / ' + r.required_n, status: r.status,
+      fg: t.fg, bg: t.bg, bd: t.bd, style: t.style,
+      rowBg: r.status === 'FAIL' ? 'rgba(244,63,94,.04)' : '#0a0a0c',
+      numFg: r.status === 'FAIL' ? '#f43f5e' : (r.estimate == null || r.status === 'NOT_APPLICABLE') ? '#5a5a63' : '#e8e8ec',
+      ciFg: r.ci_lower == null ? '#3f3f47' : '#8a8a94',
+      nFg: r.n < r.required_n ? '#f59e0b' : '#8a8a94' };
+  });
+}
+
+function adaptRun(report) {
+  const m = report.candidate_manifest || {};
+  const suppressed = report.scores === null;
+  return {
+    id: report.run_id,
+    ts: (report.timestamp || '').replace('T', ' ').replace(':00Z', ''),
+    outcome: report.outcome,
+    tone: OUTCOME_TONE[report.outcome] || 'muted',
+    mode: report.outcome === 'INVALID_RUN' ? 'invalid' : suppressed ? 'incomplete' : 'table',
+    cand: report.candidate_id,
+    candDesc: [m.model_id, m.model_version + ' prompt ' + m.system_prompt_hash,
+      'temp ' + ((m.decoding_config || {}).temperature), 'commit ' + m.code_commit].join(' \u00b7 '),
+    ceiling: report.max_attainable_outcome,
+    ceilFg: report.max_attainable_outcome === 'PASS' ? '#5a5a63' : '#f59e0b',
+    ceilingWhy: report.ceiling_reason,
+    withheldReason: report.scores_withheld_reason,
+    failedCheck: (report.integrity && report.integrity.failed_checks[0]) || null,
+    integrity: report.integrity,
+    rows: adaptRows(report),
+    reliability: report.reliability,
+    safety: report.safety,
+    final: suppressed ? null : [report.outcome, OUTCOME_TONE[report.outcome] || 'muted', report.final_note],
+  };
+}
+
+let RUNS = [];
+let CHECKS = [];
+let REGISTRY = [];
+
+const SEV = { HIGH: '#f43f5e', MEDIUM: '#f59e0b', LOW: '#7d7d87' };
+
+class Component extends DCLogic {
+  state = { route: 'runs', runId: '4b81d05f', filter: 'ALL', promoteRun: null,
+    api: null, sort: 'overall', candId: null, track: null,
+    failCand: 'ALL', failTrack: 'ALL', failSev: 'ALL', cmpA: 0, cmpB: 1, exportFmt: 'PDF' };
+
+  componentDidMount() {
+    import('./quintek-eval-api.js')
+      .then((api) => this.setState({ api, candId: api.candidates[0].candidateId }))
+      .catch((e) => this.setState({ loadError: 'evaluation data: ' + (e && e.message ? e.message : String(e)) }));
+    import('./quintek-report-api.js').then((r) => {
+      RUNS = r.FIXTURES.map(adaptRun);
+      const failing = RUNS.filter((x) => x.integrity && !x.integrity.satisfied)[0];
+      const ig = (failing && failing.integrity) || { failed_checks: [], passed_checks: [], details: {} };
+      CHECKS = ig.failed_checks.map((n) => [n, 0, ig.details[n] || '']).concat(ig.passed_checks.map((n) => [n, 1, '']));
+      REGISTRY = r.GATE_REGISTRY.gates.map((g) => [g.gate_id, g.metric, g.direction,
+        g.direction === 'equal' ? g.threshold + ' \u00b7 ub 0.010' : g.threshold.toFixed(3),
+        String(g.required_n), g.n_unit]);
+      this.setState({ report: r, runId: RUNS[1] ? RUNS[1].id : RUNS[0].id });
+    }).catch((e) => this.setState({ loadError: 'benchmark report: ' + (e && e.message ? e.message : String(e)) }));
+  }
+
+  go = (r) => () => this.setState({ route: r });
+  setSort = (k) => () => this.setState({ sort: k });
+  openCand = (id) => () => this.setState({ route: 'candidate', candId: id });
+  openTrack = (t) => () => this.setState({ route: 'track', track: t });
+  setFail = (k, v) => () => this.setState({ [k]: v });
+  setCmp = (k, i) => () => this.setState({ [k]: i });
+  cycleExport = () => this.setState((s) => ({ exportFmt: s.exportFmt === 'PDF' ? 'CSV' : s.exportFmt === 'CSV' ? 'JSON' : 'PDF' }));
+
+  analyticsVals() {
+    const s = this.state, api = s.api;
+    if (!api) return { isLeaderboard: s.route === 'leaderboard', isCandidate: s.route === 'candidate',
+      isTrack: s.route === 'track', isFailures: s.route === 'failures', isCompareCand: s.route === 'cmp',
+      isRunHistory: s.route === 'runhistory', isRouting: s.route === 'routing',
+      board: [], candTracks: [], failRows: [], caseRows: [], runRows: [], routingRows: [], compareTracks: [] };
+
+    const tone = (st) => st === 'PASS' ? TONE.pass : st === 'FAIL' ? TONE.fail : st === 'REVIEW' ? TONE.cond : TONE.uneval;
+    const SORTS = { overall: 'OVERALL', medical: 'MEDICAL QA', qgen: 'QUESTION GEN', gap: 'GAP DETECTION',
+      robust: 'ROBUSTNESS', cost: 'COST', latency: 'LATENCY' };
+    const sortKey = { medical: 'Medical QA', qgen: 'Question generation', gap: 'Knowledge-gap detection', robust: 'Robustness' }[s.sort];
+    const sorted = api.candidates.slice().sort((a, b) => {
+      if (s.sort === 'cost') return (a.costPer1k ?? 99) - (b.costPer1k ?? 99);
+      if (s.sort === 'latency') return (a.latencyMs ?? 1e9) - (b.latencyMs ?? 1e9);
+      if (sortKey) return (b.trackScores[sortKey] ?? -1) - (a.trackScores[sortKey] ?? -1);
+      return (b.overallScore ?? -1) - (a.overallScore ?? -1);
+    });
+
+    const cand = api.candidates.find((c) => c.candidateId === s.candId) || api.candidates[0];
+    const trackNames = Object.keys(cand.trackScores);
+    const maxN = 1500;
+    const nFor = (name) => ({ 'Medical QA': 500, 'Concept extraction': 300, 'Concept resolution': 600, 'Relationships': 500,
+      'Cross-notebook': 250, 'Question generation': 300, 'Question validation': 500, 'Knowledge-gap detection': 250,
+      'Robustness': 1500, 'Prompt-injection resistance': 300 }[name] || 300);
+
+    const hist = api.history.map((h) => ({ ...h, score: h.scores[cand.candidateId] }));
+    const A = api.candidates[s.cmpA], B = api.candidates[s.cmpB];
+    const cmpTracks = Object.keys(A.trackScores).filter((k) => B.trackScores[k] != null);
+    const dA = (api.trackDetail || {})[A.candidateId] || {}, dB = (api.trackDetail || {})[B.candidateId] || {};
+    const deltas = cmpTracks.map((k) => {
+      const ca = dA[k] && dA[k].ci, cb = dB[k] && dB[k].ci;
+      const sep = !!(ca && cb && (ca[0] > cb[1] || cb[0] > ca[1]));
+      return { name: k, a: A.trackScores[k], b: B.trackScores[k], d: A.trackScores[k] - B.trackScores[k], sep };
+    });
+
+    const failFiltered = api.failures.filter((f) =>
+      (s.failCand === 'ALL' || f.candidate === s.failCand) &&
+      (s.failTrack === 'ALL' || f.track === s.failTrack) &&
+      (s.failSev === 'ALL' || f.severity === s.failSev));
+    const maxCount = Math.max.apply(null, api.failures.map((f) => f.count));
+
+    const detail = (api.trackDetail || {})[cand.candidateId] || {};
+    const trackName = s.track && detail[s.track] ? s.track : Object.keys(detail)[0];
+    const td = detail[trackName];
+    const outcomes = td ? [['Correct', td.outcomes.correct, '#2dd4bf'], ['Incorrect', td.outcomes.incorrect, '#f59e0b'],
+      ['Invalid', td.outcomes.invalid, '#7d7d87'], ['Unsafe', td.outcomes.unsafe, '#f43f5e'],
+      ['Failed validation', td.outcomes.failedValidation, '#f59e0b'],
+      ['Sent to human review', td.outcomes.humanReview, '#7d7d87']] : [];
+    const outTotal = td ? td.outcomes.total : 1;
+
+    return {
+      isLeaderboard: s.route === 'leaderboard', isCandidate: s.route === 'candidate', isTrack: s.route === 'track',
+      isFailures: s.route === 'failures', isCompareCand: s.route === 'cmp', isRunHistory: s.route === 'runhistory',
+      isRouting: s.route === 'routing',
+
+      sorts: Object.keys(SORTS).map((k) => ({ label: SORTS[k], set: this.setSort(k),
+        bg: s.sort === k ? 'rgba(45,212,191,.08)' : 'transparent',
+        bd: s.sort === k ? 'rgba(45,212,191,.3)' : '#26262b',
+        fg: s.sort === k ? '#2dd4bf' : '#7d7d87' })),
+      sortLabel: SORTS[s.sort],
+      exportFmt: s.exportFmt, exportReport: this.cycleExport,
+      board: sorted.map((c) => {
+        const t = tone(c.status);
+        return { label: c.label, desc: c.provider + ' · ' + c.model + ' · ' + c.version,
+          overall: c.overallScore == null ? '—' : c.overallScore + '%',
+          scoreFg: c.overallScore == null ? '#5a5a63' : '#e8e8ec',
+          critical: c.criticalErrors == null ? 'n/a' : c.criticalErrors + ' / ' + c.criticalN,
+          critFg: c.criticalErrors ? '#f43f5e' : c.criticalErrors === 0 ? '#2dd4bf' : '#5a5a63',
+          status: c.status, ...t, eligibility: c.eligibility,
+          eligFg: c.eligibility === 'ELIGIBLE' ? '#2dd4bf' : c.status === 'FAIL' ? '#f43f5e' : '#5a5a63',
+          lastEvaluated: c.lastEvaluated, edge: t.fg,
+          rowBg: c.status === 'FAIL' ? 'rgba(244,63,94,.04)' : '#0a0a0c', open: this.openCand(c.candidateId) };
+      }),
+
+      candHeader: [
+        { k: 'CANDIDATE', v: cand.label, fg: '#e8e8ec' },
+        { k: 'MANIFEST', v: cand.candidateId, fg: '#dcdce2' },
+        { k: 'OVERALL', v: cand.overallScore == null ? '—' : cand.overallScore + '%', fg: '#e8e8ec' },
+        { k: 'LATENCY · COST', v: cand.latencyMs == null ? 'n/a' : cand.latencyMs + 'ms · $' + cand.costPer1k.toFixed(2) + '/1k', fg: '#8a8a94' },
+        { k: 'STATUS', v: cand.status, fg: tone(cand.status).fg },
+      ],
+      critical: [
+        { k: 'CONFIRMED CRITICAL ERRORS', v: cand.criticalErrors == null ? 'n/a' : String(cand.criticalErrors), fg: cand.criticalErrors ? '#f43f5e' : '#2dd4bf' },
+        { k: 'RATE', v: cand.criticalRate == null ? 'n/a' : cand.criticalRate.toFixed(2) + '%', fg: cand.criticalErrors ? '#f43f5e' : '#2dd4bf' },
+        { k: 'CASES EVALUATED', v: cand.criticalN ? cand.criticalN.toLocaleString() : 'n/a', fg: '#8a8a94' },
+        { k: 'REVIEW STATUS', v: cand.criticalErrors ? 'CONFIRMED BY REVIEWER' : cand.criticalErrors === 0 ? 'NONE FOUND' : 'NOT EVALUATED', fg: '#8a8a94' },
+      ],
+      critEdge: cand.criticalErrors ? '#f43f5e' : '#2dd4bf',
+      critBd: cand.criticalErrors ? 'rgba(244,63,94,.25)' : '#1a1a1e',
+      critBg: cand.criticalErrors ? 'rgba(244,63,94,.05)' : '#0c0c0e',
+      criticalNote: cand.criticalErrors
+        ? 'This candidate is blocked from every production task regardless of its aggregate score. A confirmed critical medical error is a mandatory gate failure, not a deduction.'
+        : cand.criticalErrors === 0 ? 'No confirmed critical medical errors in the evaluated safety cases. The exact one-sided upper bound still applies at this sample size.'
+        : 'The safety track was not evaluated for this candidate, so no critical-error claim can be made in either direction.',
+      candTracks: trackNames.map((name) => {
+        const score = cand.trackScores[name], n = (detail[name] && detail[name].n) ?? nFor(name);
+        return { name, score: score + '%', pct: score + '%', open: this.openTrack(name),
+          fill: score >= 93 ? '#2dd4bf' : score >= 88 ? '#f59e0b' : '#f43f5e',
+          op: String(0.35 + 0.65 * Math.min(1, n / maxN)),
+          ci: (detail[name] && detail[name].ci) ? detail[name].ci[0] + '–' + detail[name].ci[1] : 'n/a',
+          n: 'n=' + n, nFg: n < 300 ? '#f59e0b' : '#6b6b75' };
+      }),
+      historyBars: hist.map((h) => ({ version: h.version.replace('Q-Bench ', ''), score: h.score + '%',
+        h: Math.round((h.score - 80) * 4.4) + 'px', fill: h.comparable ? '#2dd4bf' : '#7d7d87',
+        warn: h.comparable ? '' : 'NOT COMPARABLE', warnFg: '#f59e0b' })),
+      historyRows: hist.map((h) => ({ version: h.version, date: h.date, score: h.score + '%',
+        crit: h.criticalRate[cand.candidateId] == null ? '—' : h.criticalRate[cand.candidateId].toFixed(1) + '%',
+        comparable: h.comparable ? 'COMPARABLE' : 'BENCHMARK CHANGED MATERIALLY',
+        warnFg: h.comparable ? '#5a5a63' : '#f59e0b' })),
+
+      trackHeader: [
+        { k: 'TRACK', v: trackName || '—', fg: '#e8e8ec' },
+        { k: 'SCORE', v: td ? td.score + '%' : '—', fg: '#e8e8ec' },
+        { k: 'CASES', v: td ? 'n = ' + td.n.toLocaleString() : 'n/a', fg: '#8a8a94' },
+        { k: '95% CI', v: td ? td.ci[0] + '–' + td.ci[1] : 'n/a', fg: '#8a8a94' },
+      ],
+      trackOutcomes: outcomes.map(([label, n, fg]) => ({ label, n, fg, pct: ((n / outTotal) * 100).toFixed(1) + '%' })),
+
+      failFilters: [
+        { label: 'CANDIDATE', options: ['ALL', 'Candidate A', 'Candidate B', 'Candidate C'].map((v) => ({ label: v, set: this.setFail('failCand', v),
+          bg: s.failCand === v ? 'rgba(45,212,191,.08)' : 'transparent', bd: s.failCand === v ? 'rgba(45,212,191,.3)' : '#26262b', fg: s.failCand === v ? '#2dd4bf' : '#7d7d87' })) },
+        { label: 'TRACK', options: ['ALL', 'Question generation', 'Knowledge-gap detection', 'Robustness'].map((v) => ({ label: v === 'ALL' ? 'ALL' : v.split(' ')[0].toUpperCase(), set: this.setFail('failTrack', v),
+          bg: s.failTrack === v ? 'rgba(45,212,191,.08)' : 'transparent', bd: s.failTrack === v ? 'rgba(45,212,191,.3)' : '#26262b', fg: s.failTrack === v ? '#2dd4bf' : '#7d7d87' })) },
+        { label: 'SEVERITY', options: ['ALL', 'HIGH', 'MEDIUM', 'LOW'].map((v) => ({ label: v, set: this.setFail('failSev', v),
+          bg: s.failSev === v ? 'rgba(45,212,191,.08)' : 'transparent', bd: s.failSev === v ? 'rgba(45,212,191,.3)' : '#26262b', fg: s.failSev === v ? '#2dd4bf' : '#7d7d87' })) },
+      ],
+      failCount: failFiltered.length + ' OF ' + api.failures.length,
+      failEmpty: failFiltered.length === 0,
+      failRows: failFiltered.map((f) => ({ category: f.category, track: f.track, candidate: f.candidate,
+        count: f.count, pct: f.pct + '%', sevColor: SEV[f.severity], bar: Math.round((f.count / maxCount) * 100) + '%' })),
+      caseRows: api.cases.filter((c) => (s.failCand === 'ALL' || c.candidate === s.failCand) && (s.failTrack === 'ALL' || c.track === s.failTrack) && (s.failSev === 'ALL' || c.severity === s.failSev))
+        .map((c) => ({ ...c, sevColor: SEV[c.severity], sevBg: c.severity === 'HIGH' ? 'rgba(244,63,94,.1)' : 'rgba(245,158,11,.1)' })),
+
+      comparePickers: [
+        { label: 'CANDIDATE A', options: api.candidates.map((c, i) => ({ label: c.label, set: this.setCmp('cmpA', i),
+          bg: s.cmpA === i ? 'rgba(45,212,191,.08)' : 'transparent', bd: s.cmpA === i ? 'rgba(45,212,191,.3)' : '#26262b', fg: s.cmpA === i ? '#2dd4bf' : '#7d7d87' })) },
+        { label: 'CANDIDATE B', options: api.candidates.map((c, i) => ({ label: c.label, set: this.setCmp('cmpB', i),
+          bg: s.cmpB === i ? 'rgba(45,212,191,.08)' : 'transparent', bd: s.cmpB === i ? 'rgba(45,212,191,.3)' : '#26262b', fg: s.cmpB === i ? '#2dd4bf' : '#7d7d87' })) },
+      ],
+      compareCards: [A, B].map((c, i) => ({ label: (i ? 'B · ' : 'A · ') + c.label, edge: i ? '#7d7d87' : '#2dd4bf',
+        overall: c.overallScore == null ? '—' : c.overallScore + '%', desc: c.provider + ' · ' + c.model + ' · ' + c.version,
+        meta: [{ k: 'safety', v: c.status, fg: tone(c.status).fg },
+          { k: 'critical', v: c.criticalErrors == null ? 'n/a' : c.criticalErrors + ' / ' + c.criticalN, fg: c.criticalErrors ? '#f43f5e' : '#2dd4bf' },
+          { k: 'latency', v: c.latencyMs == null ? 'n/a' : c.latencyMs + 'ms', fg: '#8a8a94' },
+          { k: 'cost', v: c.costPer1k == null ? 'n/a' : '$' + c.costPer1k.toFixed(2), fg: '#8a8a94' },
+          { k: 'eligibility', v: c.eligibility, fg: c.eligibility === 'ELIGIBLE' ? '#2dd4bf' : '#f43f5e' }] })),
+      compareTracks: deltas.map((d) => ({ name: d.name, a: d.a + '%', b: d.b + '%',
+        aPct: Math.round(d.a * 0.82) + '%', bPct: Math.round(d.b * 0.82) + '%',
+        delta: !d.sep ? 'CI OVERLAP' : (d.d > 0 ? 'A +' : 'B +') + Math.abs(d.d).toFixed(1),
+        deltaFg: !d.sep ? '#5a5a63' : '#dcdce2' })),
+      compareStrengths: [
+        { title: 'WHERE ' + A.label.toUpperCase() + ' IS STRONGER', items: deltas.filter((d) => d.sep && d.d > 0).map((d) => ({ name: d.name, delta: '+' + d.d.toFixed(1) })), none: deltas.filter((d) => d.sep && d.d > 0).length === 0 },
+        { title: 'WHERE ' + B.label.toUpperCase() + ' IS STRONGER', items: deltas.filter((d) => d.sep && d.d < 0).map((d) => ({ name: d.name, delta: '+' + Math.abs(d.d).toFixed(1) })), none: deltas.filter((d) => d.sep && d.d < 0).length === 0 },
+      ],
+
+      runRows: api.runs.map((r) => ({ runId: r.runId, date: r.date, version: r.version, candidates: r.candidates,
+        cases: r.cases.toLocaleString(), calls: r.calls.toLocaleString(), cost: '$' + r.cost.toFixed(2),
+        status: r.status, duration: r.duration, fg: r.status === 'COMPLETE' ? '#2dd4bf' : '#f59e0b',
+        open: this.go('leaderboard') })),
+      routingRows: api.routing.map((x) => ({ task: x.task, candidate: x.candidate, score: x.score + '%',
+        gate: 'PASSED', policy: x.policy })),
+    };
+  }
+  open = (id) => () => this.setState({ route: 'detail', runId: id });
+  setFilter = (f) => () => this.setState({ filter: f });
+  selectPromote = (id) => () => this.setState({ promoteRun: id });
+
+  renderVals() {
+    const s = this.state;
+    const loaded = RUNS.length > 0;
+    const run = RUNS.find((r) => r.id === s.runId) || RUNS[0]
+      || { id: '', outcome: '', mode: null, cand: '', candDesc: '', ceiling: '', ceilFg: '#5a5a63',
+           ceilingWhy: null, withheldReason: '', failedCheck: null, integrity: null,
+           rows: [], reliability: null, safety: null, final: null };
+    const titles = {
+      runs: ['Runs', loaded ? RUNS.length + ' RECORDED · DATASET d41f9a2c7e05b318' : 'LOADING'],
+      detail: [loaded ? 'Run ' + run.id : 'Run', loaded ? 'SCORECARD · ' + run.outcome : 'LOADING'],
+      integrity: ['Integrity detail', loaded ? 'PRECONDITION REVIEW' : 'LOADING'],
+      compare: ['Candidate comparison', 'RANKABLE RUNS ONLY'],
+      registry: ['Gate registry', 'v0.4 · READ-ONLY · a91c3f04e7'],
+      deploy: ['Production deployment', 'CANDIDATE → AUTHORIZING RUN'],
+      leaderboard: ['Benchmark leaderboard', 'ALL EVALUATED CANDIDATES · Q-BENCH v0.3'],
+      candidate: ['Candidate report', 'TRACKS · CRITICAL ERRORS · HISTORY'],
+      track: ['Track drill-down', (s.track || 'MEDICAL QA').toUpperCase()],
+      failures: ['Failure analysis', 'CATEGORY → CASE'],
+      cmp: ['Candidate comparison', 'SIDE BY SIDE · NO WINNER DECLARED'],
+      runhistory: ['Benchmark runs', '4 RECORDED'],
+      routing: ['Model routing', 'BENCHMARK EVIDENCE → PRODUCTION TASK'],
+    };
+    const t = titles[s.route] || titles.runs;
+
+    const filtered = RUNS.filter((r) => s.filter === 'ALL'
+      || (s.filter === 'WITHHELD' && (r.mode === 'invalid' || r.mode === 'incomplete'))
+      || (s.filter === 'FAILING' && (r.outcome === 'FAIL' || r.outcome === 'INVALID_RUN'))
+      || (s.filter === 'DIAGNOSTIC' && r.mode === 'table'));
+
+    const final = run.final || [];
+    const ft = TONE[final[1] || 'muted'];
+    const sel = RUNS.find((r) => r.id === s.promoteRun);
+    const eligible = sel && (sel.outcome === 'PASS' || sel.outcome === 'CONDITIONAL');
+
+    return {
+      ...this.analyticsVals(),
+      nav: [['runs', 'Runs', '6'], ['detail', 'Scorecard', ''], ['integrity', 'Integrity', '5'],
+        ['leaderboard', 'Leaderboard', '4'], ['candidate', 'Candidate report', ''], ['cmp', 'Compare', ''],
+        ['failures', 'Failure analysis', '8'], ['routing', 'Model routing', ''], ['runhistory', 'Benchmark runs', '4'],
+        ['compare', 'Gate comparison', '0'], ['registry', 'Gate registry', '14'], ['deploy', 'Deployment', '']]
+        .map(([id, label, badge]) => ({ label, badge, go: this.go(id),
+          bg: s.route === id ? '#141418' : 'transparent',
+          fg: s.route === id ? '#e8e8ec' : '#7d7d87',
+          badgeFg: id === 'integrity' ? '#f43f5e' : '#4e4e57' })),
+      title: t[0], subtitle: t[1],
+      hasLoadError: !!s.loadError,
+      loadErrorText: s.loadError ? 'Could not load ' + s.loadError + '. No figures are shown for data that did not load.' : '',
+      isRuns: loaded && s.route === 'runs',
+      isDetail: loaded && s.route === 'detail',
+      isIntegrity: loaded && s.route === 'integrity',
+      isCompare: loaded && s.route === 'compare',
+      isRegistry: loaded && s.route === 'registry',
+      isDeploy: loaded && s.route === 'deploy',
+      isLoading: !loaded && ['runs', 'detail', 'integrity', 'compare', 'registry', 'deploy'].indexOf(s.route) >= 0,
+
+      filters: ['ALL', 'FAILING', 'WITHHELD', 'DIAGNOSTIC'].map((label) => ({ label, set: this.setFilter(label),
+        bg: s.filter === label ? 'rgba(45,212,191,.08)' : 'transparent',
+        bd: s.filter === label ? 'rgba(45,212,191,.3)' : '#26262b',
+        fg: s.filter === label ? '#2dd4bf' : '#7d7d87' })),
+      runs: filtered.map((r) => ({ ...r, ...TONE[r.tone], open: this.open(r.id), candShort: r.cand })),
+
+      manifest: [
+        { label: 'RUN_ID', value: run.id },
+        { label: 'CANDIDATE MANIFEST', value: run.cand.slice(0, 14) + '…' },
+        { label: 'DATASET HASH', value: 'd41f9a2c7e05…' },
+        { label: 'GATE REGISTRY', value: 'v0.4 · a91c3f04e7' },
+      ],
+      integrityFailed: run.mode === 'invalid',
+      isIncomplete: run.mode === 'incomplete',
+      showNumbers: run.mode === 'table',
+      failedCheck: run.failedCheck, goIntegrity: this.go('integrity'),
+      ceiling: run.ceiling,
+      ceilingWhy: (this.props.reviewerCount ?? 1) < 2
+        ? 'Reviewer count is ' + (this.props.reviewerCount ?? 1) + ' of the 2 required, and the gate registry is uncalibrated.'
+        : (run.ceilingWhy || 'The gate registry is uncalibrated, so no run may issue an official PASS.'),
+      ceilFg: '#f59e0b', ceilBg: 'rgba(245,158,11,.05)', ceilBd: 'rgba(245,158,11,.28)',
+      rows: (run.rows || []).map((r) => (r.gateId !== 'GATE-J-TOOL' || !(this.props.toolEnabledCandidate ?? false)) ? r
+        : { ...r, status: 'PASS', ...TONE.pass, numFg: '#e8e8ec' }),
+      safety: run.safety ? [
+        { label: 'CONFIRMED CME (HIGH/CRITICAL HOLDOUT)', value: run.safety.confirmed_events + ' / ' + run.safety.n, fg: run.safety.status === 'PASS' ? '#2dd4bf' : '#f43f5e' },
+        { label: 'EXACT ONE-SIDED 95% UPPER BOUND', value: run.safety.exact_upper_bound_95.toFixed(4), fg: run.safety.status === 'PASS' ? '#2dd4bf' : '#f43f5e' },
+        { label: 'REGISTERED LIMIT', value: run.safety.registered_limit.toFixed(4), fg: '#8a8a94' },
+      ] : [],
+      reliability: run.reliability ? (() => {
+        const rl = run.reliability;
+        const ci = rl['GATE-REL-KAPPA-CRITICAL_ci'];
+        return [
+          { label: 'Cohen\u2019s kappa, critical labels', gateId: 'GATE-REL-KAPPA-CRITICAL',
+            value: rl['GATE-REL-KAPPA-CRITICAL'].toFixed(2) + (ci ? ' [' + ci[0].toFixed(2) + ', ' + ci[1].toFixed(2) + ']' : ''),
+            threshold: '\u2265 0.80', fg: '#2dd4bf' },
+          { label: 'Re-run answer disagreement', gateId: 'GATE-REL-VARIANCE-ANSWER',
+            value: rl['GATE-REL-VARIANCE-ANSWER'].toFixed(3), threshold: '\u2264 0.020', fg: '#2dd4bf' },
+          { label: 'Validator decision disagreement', gateId: 'GATE-REL-VARIANCE-VALIDATOR',
+            value: rl['GATE-REL-VARIANCE-VALIDATOR'].toFixed(3), threshold: '\u2264 0.030', fg: '#2dd4bf' },
+          { label: 'Generation score MAD', gateId: 'GATE-REL-VARIANCE-GENERATION',
+            value: rl['GATE-REL-VARIANCE-GENERATION'].toFixed(2) + ' / 4', threshold: '\u2264 0.20', fg: '#2dd4bf' },
+        ];
+      })() : [],
+      withheldReason: run.withheldReason,
+      finalCode: run.outcome,
+      ...(() => {
+        const bad = RUNS.filter((x) => x.integrity && !x.integrity.satisfied)[0];
+        const chk = bad ? bad.failedCheck : null;
+        return { igCheck: chk || 'none', igDetail: chk ? bad.integrity.details[chk] : 'No precondition has failed on any recorded run.' };
+      })(),
+      finalOutcome: final[0], finalNote: final[2], finalFg: ft.fg, finalBg: ft.bg, finalBd: ft.bd,
+
+      checks: CHECKS.map(([name, ok]) => ({ name, dot: ok ? '#2dd4bf' : '#f43f5e', fg: ok ? '#9a9aa4' : '#f43f5e', state: ok ? 'SATISFIED' : 'FAILED' })),
+      registry: REGISTRY.map(([id, metric, direction, threshold, minN, unit]) => ({ id, metric, direction, threshold, minN, unit })),
+
+      live: [
+        { label: 'CANDIDATE MANIFEST', value: 'cm:31c07d4ea115…', fg: '#dcdce2' },
+        { label: 'AUTHORIZED BY RUN', value: '— none —', fg: '#f43f5e' },
+        { label: 'ACTIVATED', value: '2026-07-28 14:02', fg: '#dcdce2' },
+        { label: 'STATE', value: 'PROVISIONAL', fg: '#f59e0b' },
+      ],
+      promotable: RUNS.filter((r) => r.mode === 'table').map((r) => ({
+        run: r.id, cand: r.cand, outcome: r.outcome, fg: TONE[r.tone].fg, select: this.selectPromote(r.id),
+        rowBg: s.promoteRun === r.id ? '#111114' : '#0c0c0e',
+        eligible: (r.outcome === 'PASS' || r.outcome === 'CONDITIONAL') ? 'ELIGIBLE · SIGN-OFF REQUIRED' : 'NOT ELIGIBLE',
+        eligFg: (r.outcome === 'PASS' || r.outcome === 'CONDITIONAL') ? '#f59e0b' : '#5a5a63' })),
+      gateFg: eligible ? '#f59e0b' : '#f43f5e',
+      gateBd: eligible ? 'rgba(245,158,11,.3)' : 'rgba(244,63,94,.28)',
+      gateBg: eligible ? 'rgba(245,158,11,.05)' : 'rgba(244,63,94,.04)',
+      gateMessage: !sel ? 'Select a run above. Promotion requires the run\u2019s outcome to be PASS, or CONDITIONAL with a named human sign-off and written rationale stored on the deployment row.'
+        : eligible ? 'Run ' + sel.id + ' is CONDITIONAL. Promotion is permitted only with a named sign-off and rationale, both recorded on the deployment record and shown in the audit trail below.'
+        : 'Run ' + sel.id + ' has outcome ' + sel.outcome + '. Promotion is refused: a candidate cannot be promoted on a run that produced no qualifying result.',
+      gateDisabled: !eligible,
+      gateCursor: eligible ? 'pointer' : 'not-allowed',
+      gateBtnBg: eligible ? 'rgba(245,158,11,.12)' : 'transparent',
+      gateBtnBd: eligible ? 'rgba(245,158,11,.4)' : '#26262b',
+      gateBtnFg: eligible ? '#f59e0b' : '#45454e',
+      gateHint: eligible ? 'sign-off name and rationale required at the next step' : 'POST /admin/deployments would return 4xx with this reason',
+      promote: () => {},
+      audit: [
+        { date: '2026-07-28 14:02', cand: 'cm:31c07d4ea115…', run: 'none — provisional', state: 'ACTIVE', fg: '#f59e0b' },
+        { date: '2026-06-11 09:30', cand: 'cm:5f934c8b02ae…', run: 'none — provisional', state: 'DEACTIVATED', fg: '#5a5a63' },
+        { date: '2026-05-02 17:44', cand: 'cm:a70b2e6f4d38…', run: 'none — provisional', state: 'DEACTIVATED', fg: '#5a5a63' },
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>

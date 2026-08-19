@@ -52,6 +52,12 @@ class GateResult:
     direction: str = ""
     mandatory: bool = True
     reason: str = ""
+    # The top of this metric's scale. 1.0 for every proportion; 4.0 for the
+    # generation rubric, whose estimate is a mean rating and NOT a rate. Any
+    # consumer combining gates into one figure must divide by this first --
+    # averaging a 3.6 rubric mean with a 0.97 accuracy yields a nonsense
+    # "score" above 1.0. Read from the registry, never assumed.
+    scale_max: float = 1.0
 
     def as_dict(self) -> dict:
         return {
@@ -69,6 +75,7 @@ class GateResult:
             "direction": self.direction,
             "mandatory": self.mandatory,
             "reason": self.reason,
+            "scale_max": self.scale_max,
         }
 
 
@@ -174,6 +181,7 @@ def evaluate_gate(gate_key: str, spec: dict, m: Measurement, tolerance: float) -
         threshold=spec["threshold"],
         direction=spec["direction"],
         mandatory=spec.get("mandatory", True),
+        scale_max=float(spec.get("scale_max", 1.0)),
     )
 
     if not m.applicable:
@@ -238,6 +246,41 @@ class RunOutcome:
     reliability_results: dict = field(default_factory=dict)
     reasons: list[str] = field(default_factory=list)
     rankable: bool = False
+    # The safety gate reported as its own block rather than only as one row
+    # among the track gates. It overrides every other gate, so a consumer must
+    # be able to read it without first locating it inside `gate_results` and
+    # knowing which track key happens to carry `overrides_all_other_gates`.
+    # None whenever the run is suppressed -- a suppressed run measured nothing,
+    # including safety, and an absent block must not read as "zero events".
+    safety: dict | None = None
+
+
+def _safety_block(registry: "GateRegistry", measurements: dict,
+                  results: list[GateResult]) -> dict | None:
+    """
+    The safety gate's own summary: confirmed events, exact one-sided upper
+    bound, and the registered limit that bound is judged against.
+
+    `confirmed_events` comes from the Measurement rather than being recovered
+    from `estimate * n`, because a rounded rate cannot reliably reproduce a
+    small integer count and the whole point of this gate is that the count is
+    exact.
+    """
+    for r in results:
+        spec = registry.tracks.get(r.track, {})
+        if not spec.get("overrides_all_other_gates"):
+            continue
+        m = measurements.get(r.track)
+        return {
+            "gate_id": r.gate_id,
+            "confirmed_events": None if m is None else m.successes,
+            "n": r.n,
+            "exact_upper_bound_95": r.ci_upper,
+            "registered_limit": spec.get("max_tolerated_upper_bound"),
+            "status": r.status,
+            "overrides_all_other_gates": True,
+        }
+    return None
 
 
 def evaluate_run(
@@ -283,6 +326,7 @@ def evaluate_run(
 
     reasons: list[str] = []
     rel = reliability or {}
+    safety = _safety_block(registry, measurements, results)
 
     # The review/calibration ceiling is a cap on POSITIVE outcomes only. It must
     # not mask a safety failure or an unevaluable track: those are more
@@ -302,7 +346,7 @@ def evaluate_run(
     # 3. Safety override -- reported regardless of ceiling.
     for r in results:
         if registry.tracks[r.track].get("overrides_all_other_gates") and r.status == FAIL:
-            return RunOutcome(outcome="FAIL", gate_results=results, reliability_results=rel,
+            return RunOutcome(outcome="FAIL", gate_results=results, reliability_results=rel, safety=safety,
                               reasons=[f"safety override: {r.gate_id} -- {r.reason}"],
                               rankable=True)
 
@@ -325,17 +369,17 @@ def evaluate_run(
     mandatory = [r for r in results if r.mandatory]
     if any(r.status == UNEVALUABLE for r in mandatory):
         bad = [r.gate_id for r in mandatory if r.status == UNEVALUABLE]
-        return RunOutcome(outcome="UNEVALUABLE", gate_results=results, reliability_results=rel,
+        return RunOutcome(outcome="UNEVALUABLE", gate_results=results, reliability_results=rel, safety=safety,
                           reasons=[f"mandatory gates unevaluable: {bad}"] + reasons,
                           rankable=False)
 
     if any(r.status == FAIL for r in mandatory):
         bad = [r.gate_id for r in mandatory if r.status == FAIL]
-        return RunOutcome(outcome="FAIL", gate_results=results, reliability_results=rel,
+        return RunOutcome(outcome="FAIL", gate_results=results, reliability_results=rel, safety=safety,
                           reasons=[f"failed mandatory gates: {bad}"] + reasons, rankable=True)
 
     if reasons:
-        return RunOutcome(outcome="FAIL", gate_results=results, reliability_results=rel,
+        return RunOutcome(outcome="FAIL", gate_results=results, reliability_results=rel, safety=safety,
                           reasons=reasons, rankable=True)
 
     # Every measured gate cleared. The ceiling now applies: a run that could
@@ -344,20 +388,20 @@ def evaluate_run(
         extra = ([f"reliability gates not measurable in this configuration: "
                   f"{unmeasured_reliability}"] if unmeasured_reliability else [])
         return RunOutcome(outcome="NOT_VALID_FOR_PRODUCTION_PASS", gate_results=results,
-                          reliability_results=rel, reasons=ceiling_reasons + extra,
+                          reliability_results=rel, safety=safety, reasons=ceiling_reasons + extra,
                           rankable=False)
 
     # No ceiling, but reliability was never measured: that is missing evidence,
     # not a passing result.
     if unmeasured_reliability:
-        return RunOutcome(outcome="UNEVALUABLE", gate_results=results, reliability_results=rel,
+        return RunOutcome(outcome="UNEVALUABLE", gate_results=results, reliability_results=rel, safety=safety,
                           reasons=[f"reliability gates not measured: {unmeasured_reliability}"],
                           rankable=False)
 
     if any(r.status == CONDITIONAL for r in mandatory):
         soft = [r.gate_id for r in mandatory if r.status == CONDITIONAL]
-        return RunOutcome(outcome="CONDITIONAL", gate_results=results, reliability_results=rel,
+        return RunOutcome(outcome="CONDITIONAL", gate_results=results, reliability_results=rel, safety=safety,
                           reasons=[f"within tolerance, remediation required: {soft}"],
                           rankable=True)
 
-    return RunOutcome(outcome="PASS", gate_results=results, reliability_results=rel, rankable=True)
+    return RunOutcome(outcome="PASS", gate_results=results, reliability_results=rel, safety=safety, rankable=True)

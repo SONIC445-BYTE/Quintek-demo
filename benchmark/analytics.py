@@ -108,6 +108,9 @@ class TrackResult:
     ci_upper: float | None
     mandatory: bool
     direction: str = "lower"
+    # Top of this metric's scale (see gates.GateResult.scale_max). Anything
+    # that averages or percentages a score MUST divide by this first.
+    scale_max: float = 1.0
     n_unit: str = ""
     correct: int | None = None
     incorrect: int | None = None
@@ -127,7 +130,7 @@ class TrackResult:
             score=gr.get("estimate"), n=gr.get("n", 0), required_n=gr.get("required_n", 0),
             ci_lower=gr.get("ci_lower"), ci_upper=gr.get("ci_upper"),
             mandatory=gr.get("mandatory", True), direction=gr.get("direction", "lower"),
-            n_unit=gr.get("n_unit", ""),
+            scale_max=float(gr.get("scale_max") or 1.0), n_unit=gr.get("n_unit", ""),
         )
 
     def as_dict(self) -> dict:
@@ -136,7 +139,7 @@ class TrackResult:
             status=self.status, student_status=self.student_status,
             score=self.score, n=self.n, required_n=self.required_n,
             ci_lower=self.ci_lower, ci_upper=self.ci_upper, mandatory=self.mandatory,
-            direction=self.direction,
+            direction=self.direction, scale_max=self.scale_max,
             n_unit=self.n_unit, correct=self.correct, incorrect=self.incorrect,
             invalid=self.invalid, failed=self.failed,
             critical_error_count=self.critical_error_count,
@@ -393,7 +396,9 @@ class RunArchive:
             gate_registry_hash=report.get("gate_registry_hash", ""),
             outcome=report.get("outcome", "UNEVALUABLE"),
             rankable=bool(report.get("rankable", False)),
-            timestamp=manifest.get("timestamp", ""),
+            # report.json now carries its own timestamp; manifest.json remains
+            # the fallback for runs written before that field existed.
+            timestamp=report.get("timestamp") or manifest.get("timestamp", ""),
             integrity_satisfied=bool((report.get("integrity") or {}).get("satisfied", False)),
             max_attainable_outcome=report.get("max_attainable_outcome")
                 or manifest.get("max_attainable_outcome"),
@@ -404,6 +409,25 @@ class RunArchive:
             for gr in report["scores"].values():
                 tracks.append(TrackResult.from_gate_result(gr))
         return CandidateBenchmarkResult(run=run, tracks=tracks)
+
+    def raw_report_for(self, run_id: str) -> dict | None:
+        """
+        The unparsed report.json for one run.
+
+        `load_run` projects a report into dataclasses shaped for scoring and
+        ranking, which deliberately drops blocks nothing in that path consumes
+        -- the safety summary among them. A caller that needs a field the
+        projection omits reads it here rather than widening the dataclasses to
+        carry everything any consumer might one day want.
+        """
+        for d in self._run_dirs():
+            try:
+                report = json.loads((d / "report.json").read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+            if (report.get("run_id") or d.name) == run_id:
+                return report
+        return None
 
     def all_runs(self) -> list[CandidateBenchmarkResult]:
         out = []
@@ -470,7 +494,8 @@ def normalized_track_score(track: TrackResult) -> float | None:
     """
     if track.score is None:
         return None
-    return track.score if track.direction == "lower" else 1.0 - track.score
+    scaled = track.score / (track.scale_max or 1.0)
+    return scaled if track.direction == "lower" else 1.0 - scaled
 
 
 def task_leaderboard(archive: "RunArchive", gate_ids: list[str]) -> list[dict]:
@@ -518,8 +543,15 @@ def _ranking_score(result: CandidateBenchmarkResult) -> float | None:
     failure mode docs/SCORECARD_SPEC.md prohibits on the real scorecard, and
     it would have been just as wrong here even though this is only a sort
     key -- test_ranking_never_implies_eligibility exists to catch it.
+
+    Scale matters as much as direction. `E_generation` is a mean rubric
+    rating on a 0-4 scale, not a rate: averaging its raw 3.6 with a 0.97
+    accuracy produced an "overall score" of 1.35 -- above 1.0, and therefore
+    obviously wrong the moment anyone rendered it as a percentage. Each
+    estimate is divided by its registered `scale_max` first, so every term in
+    this mean is a 0-1 fraction of its own scale.
     """
-    scored = [t.score for t in result.tracks
+    scored = [t.score / (t.scale_max or 1.0) for t in result.tracks
              if t.score is not None and t.direction == "lower"]
     return sum(scored) / len(scored) if scored else None
 
@@ -704,12 +736,33 @@ def _overall_ci(result: CandidateBenchmarkResult) -> list[float] | None:
     """Widest observed band across higher-is-better tracks only -- same
     direction filter and rationale as `_ranking_score`. This is a rough
     display rollup, not a real statistical interval; it exists because the
-    frontend contract's AIOverview asks for one `confidenceInterval` field."""
+    frontend contract's AIOverview asks for one `confidenceInterval` field.
+
+    Bounds are divided by each gate's `scale_max` for the same reason the
+    estimates are: the rubric gate's raw band is on a 0-4 axis, and mixing it
+    in unscaled produced a displayed interval whose upper bound was 360 on a
+    0-100 chart."""
     lower_direction = [t for t in result.tracks if t.direction == "lower"]
-    los = [t.ci_lower for t in lower_direction if t.ci_lower is not None]
-    his = [t.ci_upper for t in lower_direction if t.ci_upper is not None]
+    los = [t.ci_lower / (t.scale_max or 1.0)
+          for t in lower_direction if t.ci_lower is not None]
+    his = [t.ci_upper / (t.scale_max or 1.0)
+          for t in lower_direction if t.ci_upper is not None]
     if not los or not his:
-        return None
+        # Nothing higher-is-better to roll up. If every track here is an
+        # error rate, invert its band onto the same axis the score already
+        # uses (bounds swap: [1-upper, 1-lower]) rather than reporting no
+        # interval beside a perfectly good number -- the mirror of the
+        # all-error-rate case handled in `student_track_results`.
+        inv_lo, inv_hi = [], []
+        for t in result.tracks:
+            if t.direction == "lower" or t.ci_lower is None or t.ci_upper is None:
+                continue
+            scale = t.scale_max or 1.0
+            inv_lo.append(1.0 - t.ci_upper / scale)
+            inv_hi.append(1.0 - t.ci_lower / scale)
+        if not inv_lo or not inv_hi:
+            return None
+        return [min(inv_lo), max(inv_hi)]
     return [min(los), max(his)]
 
 
@@ -735,8 +788,20 @@ def student_track_results(result: CandidateBenchmarkResult) -> list[dict]:
         # with GATE-C-MERGE (an error rate, lower better) -- averaging their
         # raw estimates together would be the identical bug fixed there.
         # The group's STATUS still reflects both (worst-status-wins above);
-        # only the numeric score excludes the error-rate gates.
-        scored = [m.score for m in members if m.score is not None and m.direction == "lower"]
+        # only the numeric score excludes the error-rate gates. Dividing by
+        # `scale_max` keeps a 0-4 rubric mean off the same axis as a
+        # proportion (see `_ranking_score`).
+        scored = [m.score / (m.scale_max or 1.0) for m in members
+                 if m.score is not None and m.direction == "lower"]
+        # ...unless the group is made ENTIRELY of error-rate gates. "Question
+        # validation" is only GATE-F-FALSEAPPROVE, so the filter above left it
+        # with nothing and the track rendered blank on the one screen whose
+        # purpose is disclosure. There is no mixing hazard when every member
+        # shares a direction, so invert them onto the "higher is better" axis
+        # and report the number rather than showing an empty cell.
+        if not scored:
+            scored = [s for s in (normalized_track_score(m) for m in members)
+                     if s is not None]
         out.append({
             "track": label,
             "score": (sum(scored) / len(scored)) if scored else None,

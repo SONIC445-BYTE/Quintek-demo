@@ -129,8 +129,9 @@ def test_cli_serve_analytics_defaults_to_the_seeded_registry():
 
     captured = {}
 
-    def fake_serve(runs_root, *, host, port, routing_log_path, registry_path):
+    def fake_serve(runs_root, *, host, port, routing_log_path, registry_path, **kwargs):
         captured["registry_path"] = registry_path
+        captured.update(kwargs)
 
     with patch("benchmark.analytics_api.serve", fake_serve):
         cli_module.main(["serve-analytics"])

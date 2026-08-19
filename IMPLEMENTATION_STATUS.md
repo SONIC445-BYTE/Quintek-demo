@@ -209,6 +209,68 @@ never written to the repo). This pass seeds a real one:
   `registry.json` entry in `.gitignore` (different filename, `model_registry.json`, so this one stays
   committed while ad hoc local registries created during development stay ignored).
 
+## Seventh pass: wiring the real UI to the backend, and the four defects that exposed
+
+The engineering dashboard and student app were supplied as built design files (now vendored in
+`frontend/`). Wiring them surfaced a mismatch that neither side could see alone, plus three real
+backend bugs.
+
+**The mismatch.** The admin console consumed nine `/api/*` run-centric endpoints
+(`/api/runs`, `/api/gates`, `/api/datasets`, `/api/preflight`). The backend served fourteen
+*candidate*-centric ones (`/api/leaderboard`, `/ai/candidates`, ...). Zero paths overlapped — every
+one of the nine returned 404. Both halves were correct and neither was reachable from the other.
+Underneath, the contract already matched exactly: `gates.py:GateResult.as_dict()` emits the same
+fourteen fields `quintek-report-api.js` expects, and the suppression invariant held on both sides.
+`benchmark/runs_api.py` adds the nine missing routes; `benchmark/eval_api.py` adds the
+candidate-centric published-evaluation view (`/ai/eval`).
+
+**Defect 1 — `build_report` dropped five fields `Runner._meta()` had already computed.**
+`timestamp`, `ceiling_reason`, `review_mode`, `reviewer_count` and `kappa_computable` were
+calculated and then discarded, so the console rendered blank dates and could not say *why* a run
+could not pass. A report that states an outcome owes the reader the conditions that produced it.
+
+**Defect 2 — the safety block was never emitted at all.** `GATE-SAFETY-CME` appeared only as one
+row among the track gates. The gate that overrides every other gate had no first-class
+representation, so the console's safety panel rendered empty for every run — silently, because the
+UI guards on `run.safety ?`. `RunOutcome.safety` now carries confirmed events, the exact one-sided
+upper bound and the registered limit, and is `null` (never zero) on a suppressed run.
+
+**Defect 3 — a metric on a 0-4 scale was averaged with proportions.** `GATE-E-RUBRIC` is a mean
+rubric rating out of 4. `_ranking_score` averaged its raw 3.6 with ~0.97 accuracies and returned
+**1.35** — a score above the top of its own scale, which rendered as *134.6%*, with a confidence
+interval whose upper bound was *360* on a 0-100 axis. The registry had declared `scale_max: 4.0`
+all along; nothing read it. This is the same defect class as the direction-mixing bug fixed in the
+fourth pass — that fix stopped `lower` and `upper` gates being blended, but nobody noticed one gate
+was not a proportion at all. `scale_max` now flows from registry → `GateResult` → `report.json` →
+`TrackResult`, and every aggregation divides by it.
+
+Found by rendering the number, not by reading the code — the same way the fourth pass's bug was
+found. An aggregate that is never displayed is never checked.
+
+**Defect 4 — a track composed entirely of error-rate gates scored blank.** The direction filter
+that correctly protects mixed groups left "Question validation" (only `GATE-F-FALSEAPPROVE`) with
+nothing to average, so the one screen whose purpose is disclosure showed an empty cell beside a
+perfectly good measurement. Mixed groups still drop error-rate gates — inverting a *passing* error
+rate into a mixed average inflates it, which `test_grouped_score_excludes_error_rate_gates...`
+correctly forbids. Only the all-error-rate case falls back to inversion, where no mixing hazard
+exists.
+
+**Honest nulls, kept honest.** Three fields the UI renders are not things this repository measures:
+`costPer1k` (a commercial fact — needs `configs/model_costs.json`, shipped unpriced),
+`latencyMs` (real orchestrator executions, `null` if a candidate has never run), and the
+`invalid`/`unsafe`/`failedValidation`/`humanReview` breakdown (the gate engine records a pass count
+and an `n`, not a failure taxonomy). All report `null`, never `0`. Zero asserts "we looked and found
+none"; null says "not measured".
+
+`POST /api/runs` returns **501**, not `{"status": "queued"}`. Starting a run needs a provider,
+credentials and a corpus; answering "queued" for work that will never execute is the same class of
+dishonesty as reporting an unmeasured score. It accepts a `run_launcher` when one exists.
+
+Verified end-to-end by importing the actual `quintek-report-api.js` and `quintek-eval-api.js`
+modules in Node against a live server and running the UI's own `assertSuppression()` over real
+`report.json` output — not by asserting against a fixture of what the backend was assumed to emit.
+217 tests passing.
+
 ## Not built
 
 | Component | Why |
