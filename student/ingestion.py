@@ -288,8 +288,34 @@ class IngestionEngine:
                 "UPDATE sources SET status='processing', page_count=? WHERE id=?",
                 (len({p.locator.get('page', p.ordinal) for p in pages}), source_id))
             self._process_chunks(source_id)
-            self.db.execute("UPDATE sources SET status='extracted', error=NULL WHERE id=?",
-                            (source_id,))
+            # Extraction succeeding does not mean the source is usable. If every
+            # chunk failed concept extraction, marking the source 'extracted'
+            # with error=NULL reports success for a source nothing downstream
+            # can use -- generation then finds no concepts and the learner is
+            # told there is nothing to make questions from, with the real cause
+            # two tables away. Report the state the source is actually in.
+            counts = {r["status"]: r["n"] for r in self.db.query(
+                "SELECT status, COUNT(*) AS n FROM source_chunks WHERE source_id = ?"
+                " GROUP BY status", (source_id,))}
+            failed, processed = counts.get("failed", 0), counts.get("processed", 0)
+            if failed and not processed:
+                reason = self.db.query_one(
+                    "SELECT error FROM source_chunks WHERE source_id = ? AND status = 'failed'"
+                    " AND error IS NOT NULL ORDER BY ordinal LIMIT 1", (source_id,))
+                self.db.execute(
+                    "UPDATE sources SET status='failed', error=? WHERE id=?",
+                    (f"all {failed} chunk(s) failed concept extraction; first error: "
+                     f"{reason['error'] if reason else 'unrecorded'}", source_id))
+            elif failed:
+                # Partial success is still success -- one bad page must not cost
+                # a 300-page book -- but it is not silent success.
+                self.db.execute(
+                    "UPDATE sources SET status='extracted', error=? WHERE id=?",
+                    (f"{failed} of {failed + processed} chunk(s) failed concept extraction; "
+                     "the rest were processed", source_id))
+            else:
+                self.db.execute("UPDATE sources SET status='extracted', error=NULL WHERE id=?",
+                                (source_id,))
         except ExtractionUnavailable as exc:
             self.db.execute("UPDATE sources SET status='failed', error=? WHERE id=?",
                             (str(exc), source_id))

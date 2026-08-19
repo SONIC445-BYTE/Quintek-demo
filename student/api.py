@@ -427,6 +427,15 @@ class StudentAPI:
         by_status = {r["status"]: r["n"] for r in chunks}
         total = sum(by_status.values())
         done = by_status.get("processed", 0)
+        # Chunk failures were counted but never explained, so a source could
+        # report "2 failed, 0 processed" with error=null and the only way to
+        # learn why was to query the database. The reasons are already stored;
+        # this surfaces them.
+        chunk_errors = [
+            {"ordinal": r["ordinal"], "error": r["error"]}
+            for r in self.db.query(
+                "SELECT ordinal, error FROM source_chunks WHERE source_id = ?"
+                " AND status = 'failed' AND error IS NOT NULL ORDER BY ordinal LIMIT 5", (sid,))]
         concepts = self.db.query_one(
             "SELECT COUNT(DISTINCT concept_id) AS n FROM source_concepts WHERE source_id = ?",
             (sid,))
@@ -434,6 +443,8 @@ class StudentAPI:
             "source_id": sid, "status": row["status"], "error": row["error"],
             "chunks_total": total, "chunks_processed": done,
             "chunks_by_status": by_status,
+            "chunks_failed": by_status.get("failed", 0),
+            "chunk_errors": chunk_errors,
             "concepts_found": concepts["n"] if concepts else 0,
             # Percent is reported only once the chunk count is known; before
             # that it is null rather than 0, which would read as "no progress"

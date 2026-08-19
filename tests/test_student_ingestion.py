@@ -231,3 +231,119 @@ def test_reingesting_replaces_chunks_rather_than_duplicating_them(db, tmp_path):
         assert first == second
     finally:
         engine.stop()
+
+
+# ---------------------------------------------------------------------------
+# Failure reporting
+#
+# Found by running the full lifecycle against a deliberately broken extractor:
+# every chunk failed, and the source still reported status='extracted',
+# error=null, 0% processed. Diagnosing it needed a direct query against
+# source_chunks. The reasons were being stored and then thrown away.
+# ---------------------------------------------------------------------------
+
+class _AlwaysFailsExtractor:
+    def extract_for_chunk(self, **kwargs):
+        raise RuntimeError("the model refused")
+
+
+class _FailsOnceExtractor:
+    """Fails the first chunk, then succeeds -- the partial-success case."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def extract_for_chunk(self, **kwargs):
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("the model refused")
+        return {}
+
+
+def _seed_source(db, text):
+    from student.db import new_id, now_iso
+
+    uid = db.create_user("ing@example.test", "a-long-enough-password")
+    nb, sid, stamp = new_id("nb"), new_id("src"), now_iso()
+    db.execute("INSERT INTO notebooks (id, owner_id, title, created_at) VALUES (?,?,?,?)",
+               (nb, uid, "Renal", stamp))
+    db.execute("INSERT INTO sources (id, notebook_id, kind, status, uploaded_at)"
+               " VALUES (?,?,?,?,?)", (sid, nb, "text", "uploaded", stamp))
+    return uid, nb, sid
+
+
+LONG_TEXT = ("Nephrotic syndrome is defined by heavy proteinuria exceeding 3.5 grams per day, "
+             "hypoalbuminaemia, oedema and hyperlipidaemia. Minimal change disease is the "
+             "commonest cause in children and responds to corticosteroids. " * 14)
+
+
+def test_a_source_whose_every_chunk_failed_is_not_reported_as_extracted(tmp_path):
+    from student.db import Database
+    from student.ingestion import IngestionEngine
+
+    db = Database(tmp_path / "s.db")
+    _, _, sid = _seed_source(db, LONG_TEXT)
+    engine = IngestionEngine(db, concept_extractor=_AlwaysFailsExtractor())
+    engine.enqueue_source(sid, raw_text=LONG_TEXT)
+    engine.wait_idle(timeout=30)
+
+    row = db.query_one("SELECT status, error FROM sources WHERE id = ?", (sid,))
+    assert row["status"] == "failed"
+    # And the reason names the underlying error, not just a count.
+    assert "chunk(s) failed" in row["error"]
+    assert "the model refused" in row["error"]
+
+
+def test_a_partly_failed_source_still_succeeds_but_says_so(tmp_path):
+    from student.db import Database
+    from student.ingestion import IngestionEngine
+
+    db = Database(tmp_path / "s.db")
+    _, _, sid = _seed_source(db, LONG_TEXT)
+    engine = IngestionEngine(db, concept_extractor=_FailsOnceExtractor())
+    engine.enqueue_source(sid, raw_text=LONG_TEXT)
+    engine.wait_idle(timeout=30)
+
+    row = db.query_one("SELECT status, error FROM sources WHERE id = ?", (sid,))
+    # One bad page must not cost the book...
+    assert row["status"] == "extracted"
+    # ...but it must not be silent either.
+    assert "failed concept extraction" in row["error"]
+
+
+def test_a_fully_successful_source_carries_no_error(tmp_path):
+    from student.db import Database
+    from student.ingestion import IngestionEngine
+
+    db = Database(tmp_path / "s.db")
+    _, _, sid = _seed_source(db, LONG_TEXT)
+
+    class _Works:
+        def extract_for_chunk(self, **kwargs):
+            return {}
+
+    engine = IngestionEngine(db, concept_extractor=_Works())
+    engine.enqueue_source(sid, raw_text=LONG_TEXT)
+    engine.wait_idle(timeout=30)
+
+    row = db.query_one("SELECT status, error FROM sources WHERE id = ?", (sid,))
+    assert row["status"] == "extracted"
+    assert row["error"] is None
+
+
+def test_progress_explains_chunk_failures_rather_than_only_counting_them(tmp_path):
+    from student.api import StudentAPI
+    from student.db import Database
+    from student.ingestion import IngestionEngine
+
+    db = Database(tmp_path / "s.db")
+    uid, _, sid = _seed_source(db, LONG_TEXT)
+    engine = IngestionEngine(db, concept_extractor=_AlwaysFailsExtractor())
+    engine.enqueue_source(sid, raw_text=LONG_TEXT)
+    engine.wait_idle(timeout=30)
+
+    progress = StudentAPI(db, engine=engine).source_progress(uid, sid)
+    assert progress["chunks_failed"] > 0
+    assert progress["chunk_errors"], "a failed chunk must carry its reason"
+    assert "the model refused" in progress["chunk_errors"][0]["error"]
+    assert progress["error"], "the source-level error must not be null when every chunk failed"
