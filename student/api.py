@@ -27,12 +27,32 @@ class ApiError(Exception):
 
 
 class StudentAPI:
-    def __init__(self, db: Database, *, engine: Any = None):
+    def __init__(self, db: Database, *, engine: Any = None, ai: Any = None,
+                 generator: Any = None, validator: Any = None, notifier: Any = None):
         self.db = db
-        # The AI engine (ingestion/generation). Injected so the API can be
-        # tested without a provider, and so a deployment can run the API
+        # The ingestion engine and the AI services are injected so the API can
+        # be tested without a provider, and so a deployment can run the API
         # without an AI worker attached.
         self.engine = engine
+        self.ai = ai
+        self.generator = generator
+        self.validator = validator
+        self._notifier = notifier
+
+        from .concepts import ConceptStore
+        from .knowledge import KnowledgeStore
+        from .revision import PriorityEngine, RevisionEngine
+        self.concepts = ConceptStore(db)
+        self.knowledge = KnowledgeStore(db)
+        self.priority = PriorityEngine(db)
+        self.revision = RevisionEngine(db)
+
+    @property
+    def notifier(self):
+        if self._notifier is None:
+            from .notifications import NotificationService
+            self._notifier = NotificationService(self.db)
+        return self._notifier
 
     # ---------- request plumbing ----------
 
@@ -83,6 +103,109 @@ class StudentAPI:
         if len(seg) == 3 and seg[0] == "sources" and seg[2] == "progress":
             if method == "GET":
                 return 200, self.source_progress(uid, seg[1])
+
+        # --- questions ---
+        if len(seg) == 3 and seg[0] == "notebooks" and seg[2] == "questions":
+            if method == "POST":
+                return 201, self.generate_questions(uid, seg[1], body)
+            if method == "GET":
+                return 200, {"questions": self.question_bank(uid, notebook_id=seg[1],
+                                                             status=params.get("status"))}
+
+        if seg == ["questions"] and method == "GET":
+            return 200, {"questions": self.question_bank(
+                uid, concept_id=params.get("concept"), status=params.get("status"))}
+
+        if len(seg) == 2 and seg[0] == "questions" and method == "GET":
+            return 200, self.get_question(uid, seg[1])
+
+        if seg == ["demos"]:
+            if method == "GET":
+                return 200, {"demos": self.list_demos(uid)}
+            if method == "POST":
+                return 201, self.create_demo(uid, body)
+
+        # --- concepts and the graph ---
+        if seg == ["concepts"] and method == "GET":
+            return 200, {"concepts": self.priority.ranked(uid)}
+
+        if len(seg) == 2 and seg[0] == "concepts" and method == "GET":
+            return 200, self.concept_detail(uid, seg[1])
+
+        if len(seg) == 3 and seg[0] == "concepts" and seg[2] == "graph" and method == "GET":
+            return 200, self.concepts.graph_for_user(uid)
+
+        if seg == ["graph"] and method == "GET":
+            return 200, self.concepts.graph_for_user(uid, depth_notebook=params.get("notebook"))
+
+        # --- gaps ---
+        if seg == ["gaps"] and method == "GET":
+            return 200, {"gaps": self.knowledge.gaps(
+                uid, colour=params.get("colour"),
+                include_resolved=params.get("include_resolved") in ("1", "true"))}
+
+        if len(seg) == 2 and seg[0] == "gaps" and method == "GET":
+            return 200, {"gap_id": seg[1],
+                         "evidence": self.knowledge.gap_evidence(uid, seg[1])}
+
+        if len(seg) == 3 and seg[0] == "gaps" and seg[2] == "questions" and method == "GET":
+            return 200, {"questions": self.gap_questions(uid, seg[1])}
+
+        if len(seg) == 3 and seg[0] == "gaps" and seg[2] == "resolve" and method == "POST":
+            self.knowledge.resolve_gap(uid, seg[1])
+            return 200, {"ok": True}
+
+        # --- revision ---
+        if seg == ["revision", "dashboard"] and method == "GET":
+            return 200, self.revision.dashboard(uid)
+
+        if seg == ["revision", "sessions"] and method == "POST":
+            return 201, self.start_session(uid, body)
+
+        if seg == ["revision", "next"] and method == "GET":
+            session = params.get("session")
+            if not session:
+                raise ApiError(400, "a session id is required")
+            question = self.revision.next_question(uid, session)
+            return 200, {"question": question, "finished": question is None}
+
+        if len(seg) == 3 and seg[0] == "revision" and seg[1] == "sessions" \
+                and seg[2] == "complete":
+            raise ApiError(400, "complete requires a session id: /revision/sessions/<id>/complete")
+
+        if len(seg) == 4 and seg[:2] == ["revision", "sessions"] and seg[3] == "complete" \
+                and method == "POST":
+            try:
+                return 200, self.revision.complete_session(uid, seg[2])
+            except ValueError as exc:
+                raise ApiError(404, str(exc))
+
+        if seg == ["attempts"] and method == "POST":
+            return 201, self.record_attempt(uid, body)
+
+        # --- progress ---
+        if seg == ["progress"] and method == "GET":
+            return 200, self.progress(uid)
+
+        # --- notifications ---
+        if seg == ["settings", "notifications"]:
+            if method == "GET":
+                return 200, self.notifier.get_prefs(uid)
+            if method == "PUT":
+                from .notifications import NotificationError
+                try:
+                    return 200, self.notifier.set_prefs(
+                        uid, trigger_time=body.get("trigger_time"), tz=body.get("timezone"),
+                        push=body.get("push_enabled"), email=body.get("email_enabled"),
+                        note=body.get("note_text"))
+                except NotificationError as exc:
+                    raise ApiError(400, str(exc))
+
+        if seg == ["settings", "notifications", "test"] and method == "POST":
+            return 200, self.notifier.fire(uid)
+
+        if seg == ["settings", "notifications", "history"] and method == "GET":
+            return 200, {"history": self.notifier.history(uid)}
 
         raise ApiError(404, f"no such endpoint: {method} /{'/'.join(seg)}")
 
@@ -228,4 +351,247 @@ class StudentAPI:
             # that it is null rather than 0, which would read as "no progress"
             # instead of "not yet measurable".
             "percent": round(done / total * 100, 1) if total else None,
+        }
+
+    # ---------- questions ----------
+
+    def generate_questions(self, uid: str, notebook_id: str, body: dict) -> dict:
+        self._owned_notebook(uid, notebook_id)
+        if self.generator is None:
+            raise ApiError(503, "no question generator is configured on this server")
+
+        count = int(body.get("count") or 5)
+        if not 1 <= count <= 500:
+            raise ApiError(400, "count must be between 1 and 500")
+
+        from .generation import GenerationFailed
+        try:
+            ids = self.generator.generate(
+                notebook_id=notebook_id, count=count,
+                concept_ids=body.get("concept_ids") or [],
+                source_id=body.get("source_id"),
+                demo_ids=body.get("demo_ids") or [],
+                family=body.get("family", ""), difficulty=body.get("difficulty", ""),
+                reasoning_depth=body.get("reasoning_depth", ""),
+                constraints=body.get("constraints", ""))
+        except GenerationFailed as exc:
+            raise ApiError(422, str(exc))
+        except Exception as exc:
+            raise ApiError(502, f"generation failed: {exc}")
+
+        validation = None
+        if self.validator is not None and body.get("validate", True):
+            from .validation import ValidationSkipped
+            try:
+                validation = self.validator.validate_pending(notebook_id=notebook_id,
+                                                             limit=len(ids))
+            except ValidationSkipped as exc:
+                validation = {"skipped": len(ids), "reason": str(exc)}
+            except Exception as exc:
+                validation = {"error": str(exc)}
+
+        return {"question_ids": ids, "count": len(ids), "validation": validation}
+
+    def question_bank(self, uid: str, *, notebook_id: str | None = None,
+                      concept_id: str | None = None, status: str | None = None) -> list[dict]:
+        """
+        The question repository, deliberately separate from weaknesses and from
+        the revision queue -- 'what questions exist for this topic' is a
+        different question from 'what should I revise'.
+        """
+        sql = ["""SELECT q.id, q.stem, q.family, q.difficulty, q.validation_status,
+                         q.generated_at, q.primary_notebook_id, n.title AS notebook_title,
+                         (SELECT COUNT(*) FROM attempts a
+                           WHERE a.question_id = q.id AND a.user_id = ?) AS attempt_count,
+                         (SELECT a2.user_colour FROM attempts a2
+                           WHERE a2.question_id = q.id AND a2.user_id = ?
+                           ORDER BY a2.created_at DESC LIMIT 1) AS last_colour
+                    FROM questions q
+                    JOIN notebooks n ON n.id = q.primary_notebook_id AND n.owner_id = ?"""]
+        params: list = [uid, uid, uid]
+        if notebook_id:
+            self._owned_notebook(uid, notebook_id)
+            sql.append(" AND q.primary_notebook_id = ?")
+            params.append(notebook_id)
+        if concept_id:
+            sql.append(" AND EXISTS (SELECT 1 FROM question_concepts qc"
+                       " WHERE qc.question_id = q.id AND qc.concept_id = ?)")
+            params.append(concept_id)
+        if status:
+            sql.append(" AND q.validation_status = ?")
+            params.append(status)
+        sql.append(" ORDER BY q.generated_at DESC")
+        return [dict(r) for r in self.db.query("".join(sql), tuple(params))]
+
+    def get_question(self, uid: str, qid: str) -> dict:
+        row = self.db.query_one(
+            "SELECT q.*, n.title AS notebook_title FROM questions q"
+            " JOIN notebooks n ON n.id = q.primary_notebook_id AND n.owner_id = ?"
+            " WHERE q.id = ?", (uid, qid))
+        if row is None:
+            raise ApiError(404, "no such question")
+        q = dict(row)
+        q["options"] = json.loads(q.pop("options_json"))
+        q["demo_ids"] = json.loads(q.pop("demo_ids_json"))
+        q["validation"] = json.loads(q.pop("validation_json") or "{}")
+        q["concepts"] = [dict(r) for r in self.db.query(
+            "SELECT c.id, c.canonical_name, qc.role FROM question_concepts qc"
+            " JOIN concepts c ON c.id = qc.concept_id WHERE qc.question_id = ?", (qid,))]
+        if q["chunk_id"]:
+            chunk = self.db.query_one(
+                "SELECT text, locator_json FROM source_chunks WHERE id = ?", (q["chunk_id"],))
+            if chunk:
+                q["source_passage"] = chunk["text"]
+                q["source_locator"] = json.loads(chunk["locator_json"])
+        q["attempts"] = [dict(r) for r in self.db.query(
+            "SELECT id, user_answer, is_correct, user_colour, created_at FROM attempts"
+            " WHERE question_id = ? AND user_id = ? ORDER BY created_at DESC", (qid, uid))]
+        return q
+
+    # ---------- demonstrations ----------
+
+    def list_demos(self, uid: str) -> list[dict]:
+        return [dict(r) for r in self.db.query(
+            "SELECT * FROM question_demos WHERE owner_id = ? ORDER BY created_at DESC", (uid,))]
+
+    def create_demo(self, uid: str, body: dict) -> dict:
+        title = (body.get("title") or "").strip()
+        question = (body.get("question") or "").strip()
+        if not title or not question:
+            raise ApiError(400, "a demonstration needs a title and an example question")
+        did = new_id("demo")
+        self.db.execute(
+            "INSERT INTO question_demos (id, owner_id, title, question, question_type,"
+            " difficulty, reasoning_depth, stem_structure, question_target,"
+            " distractor_strategy, answer_format, notes, created_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (did, uid, title, question, body.get("question_type", ""),
+             body.get("difficulty", ""), body.get("reasoning_depth", ""),
+             body.get("stem_structure", ""), body.get("question_target", ""),
+             body.get("distractor_strategy", ""), body.get("answer_format", ""),
+             body.get("notes", ""), now_iso()))
+        return {"id": did, "title": title}
+
+    # ---------- concepts ----------
+
+    def concept_detail(self, uid: str, concept_id: str) -> dict:
+        concept = self.concepts.get(concept_id)
+        if concept is None:
+            raise ApiError(404, "no such concept")
+        ranked = self.priority.explain(uid, concept_id)
+        if ranked is None:
+            raise ApiError(404, "no such concept")
+        state = self.knowledge.concept_state(uid, concept_id) or {}
+        return {
+            **concept,
+            "colour": state.get("colour", "ORANGE"),
+            "correct_count": state.get("correct_count", 0),
+            "wrong_count": state.get("wrong_count", 0),
+            "priority_rank": ranked["rank"],
+            "priority_score": ranked["priority_score"],
+            "why": ranked["why"],
+            "notebooks": self.concepts.notebooks_for(concept_id, uid),
+            "related": self.concepts.neighbours(concept_id),
+            "gaps": [g for g in self.knowledge.gaps(uid) if g["concept_id"] == concept_id],
+            "questions": self.question_bank(uid, concept_id=concept_id),
+        }
+
+    # ---------- gaps ----------
+
+    def gap_questions(self, uid: str, gap_id: str) -> list[dict]:
+        """'Test me on this' -- questions on the concept behind a gap, unseen
+        ones first so the learner retrieves rather than recognises."""
+        gap = self.db.query_one(
+            "SELECT * FROM knowledge_gaps WHERE id = ? AND user_id = ?", (gap_id, uid))
+        if gap is None:
+            raise ApiError(404, "no such gap")
+        if not gap["concept_id"]:
+            linked = self.db.query(
+                "SELECT DISTINCT question_id FROM gap_links WHERE gap_id = ?", (gap_id,))
+            ids = [r["question_id"] for r in linked if r["question_id"]]
+            if not ids:
+                return []
+            marks = ",".join("?" for _ in ids)
+            return [dict(r) for r in self.db.query(
+                f"SELECT id, stem, family FROM questions WHERE id IN ({marks})", tuple(ids))]
+        return self.question_bank(uid, concept_id=gap["concept_id"])
+
+    # ---------- revision ----------
+
+    def start_session(self, uid: str, body: dict) -> dict:
+        count = int(body.get("count") or body.get("selected_question_count") or 20)
+        strategy = body.get("strategy") or "adaptive"
+        try:
+            return self.revision.start_session(uid, count=count, strategy=strategy)
+        except ValueError as exc:
+            raise ApiError(422, str(exc))
+
+    def record_attempt(self, uid: str, body: dict) -> dict:
+        """
+        Records the attempt and only then reveals the answer.
+
+        The reveal is the response to this call, never available before it --
+        which is what makes 'what you thought' versus 'what was correct' a real
+        comparison rather than a formality.
+        """
+        question_id = body.get("question_id")
+        colour = body.get("user_colour") or body.get("colour")
+        if not question_id:
+            raise ApiError(400, "question_id is required")
+        answer = body.get("user_answer")
+        try:
+            answer = None if answer is None else int(answer)
+        except (TypeError, ValueError):
+            raise ApiError(400, "user_answer must be an option index")
+
+        try:
+            result = self.knowledge.record_attempt(
+                user_id=uid, question_id=question_id, user_answer=answer,
+                user_colour=colour, session_id=body.get("session_id"),
+                gaps=body.get("gaps") or [])
+        except ValueError as exc:
+            raise ApiError(400, str(exc))
+
+        question = self.db.query_one("SELECT * FROM questions WHERE id = ?", (question_id,))
+        reveal = {
+            "your_answer": answer,
+            "correct_answer": result["correct_answer"],
+            "is_correct": result["is_correct"],
+            "options": json.loads(question["options_json"]),
+            "rationale": question["rationale"],
+            "concepts_tested": [dict(r) for r in self.db.query(
+                "SELECT c.id, c.canonical_name FROM question_concepts qc"
+                " JOIN concepts c ON c.id = qc.concept_id WHERE qc.question_id = ?",
+                (question_id,))],
+        }
+        if question["chunk_id"]:
+            chunk = self.db.query_one(
+                "SELECT text, locator_json FROM source_chunks WHERE id = ?",
+                (question["chunk_id"],))
+            if chunk:
+                reveal["source_passage"] = chunk["text"]
+                reveal["source_locator"] = json.loads(chunk["locator_json"])
+        return {"attempt_id": result["attempt_id"], "reveal": reveal}
+
+    # ---------- progress ----------
+
+    def progress(self, uid: str) -> dict:
+        counts = self.knowledge.colour_counts(uid)
+        total = sum(counts.values())
+        attempts = self.db.query_one(
+            "SELECT COUNT(*) n, SUM(is_correct) c FROM attempts WHERE user_id = ?", (uid,))
+        by_day = self.db.query(
+            "SELECT substr(created_at,1,10) d, COUNT(*) n FROM attempts WHERE user_id = ?"
+            " GROUP BY d ORDER BY d DESC LIMIT 84", (uid,))
+        return {
+            "colour_counts": counts,
+            "concepts_tracked": total,
+            "mastery_pct": round(counts["GREEN"] / total * 100, 1) if total else None,
+            "attempts_total": attempts["n"] or 0,
+            "attempts_correct": attempts["c"] or 0,
+            "accuracy_pct": round((attempts["c"] or 0) / attempts["n"] * 100, 1)
+                            if attempts["n"] else None,
+            "open_gaps": len(self.knowledge.gaps(uid)),
+            "due_count": self.knowledge.due_count(uid),
+            "activity": [dict(r) for r in by_day],
         }

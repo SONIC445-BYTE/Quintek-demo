@@ -1,0 +1,138 @@
+"""
+HTTP transport for the learner API.
+
+Stdlib `http.server`, matching `benchmark/analytics_api.py`: the point is a
+reference implementation with no install step, not a production server. The
+routing and behaviour live in `student/api.py`, so porting to FastAPI or
+anything else means writing a new adapter, not rewriting the product.
+
+CORS is permissive because the design files are opened from `file://` or a
+different port during development. Narrow it before this is exposed anywhere.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+from .api import StudentAPI
+from .db import Database
+
+
+def build_api(db_path: str | Path | None = None, *, with_ai: bool = True) -> StudentAPI:
+    """
+    Assemble the engine.
+
+    AI-backed services are attached only when a provider can actually be built.
+    A server whose ingestion worker silently does nothing is worse than one
+    that says the source failed and why -- so `StudentAPI` reports 503 rather
+    than accepting work it cannot do.
+    """
+    db = Database(db_path)
+    if not with_ai:
+        return StudentAPI(db)
+
+    from .ai import AIEngine
+    from .generation import AIConceptExtractor, QuestionGenerator
+    from .ingestion import IngestionEngine
+    from .notifications import NotificationService
+    from .validation import QuestionValidator
+
+    registry, archive = None, None
+    registry_path = Path("configs/model_registry.json")
+    if registry_path.exists():
+        from benchmark import analytics as an
+        from benchmark.registry import Registry
+        registry, archive = Registry(registry_path), an.RunArchive("runs")
+
+    def provider_factory(candidate):
+        """NVIDIA NIM by default; the model id comes from the registry entry."""
+        from benchmark.providers.nvidia import NVIDIAProvider
+        model_id = getattr(candidate, "model_id", None) or os.environ.get(
+            "QUINTEK_MODEL", "meta/llama-3.3-70b-instruct")
+        return NVIDIAProvider(model_id,
+                              model_version=getattr(candidate, "model_version", "unknown"))
+
+    ai = AIEngine(db, registry=registry, archive=archive,
+                  provider_factory=provider_factory)
+    validator_ai = AIEngine(
+        db, registry=registry, archive=archive, provider_factory=provider_factory,
+        # A different configuration for validation, so independence holds even
+        # in a development deployment. Same rule as the benchmark's judge tiers.
+        development_candidate=os.environ.get("QUINTEK_DEV_VALIDATOR_CANDIDATE"))
+
+    engine = IngestionEngine(db, concept_extractor=AIConceptExtractor(db, ai))
+    return StudentAPI(db, engine=engine, ai=ai,
+                      generator=QuestionGenerator(db, ai),
+                      validator=QuestionValidator(db, validator_ai),
+                      notifier=NotificationService(db))
+
+
+def make_handler(api: StudentAPI):
+    class Handler(BaseHTTPRequestHandler):
+        server_version = "Quintek/0.4"
+
+        def _token(self) -> str | None:
+            auth = self.headers.get("Authorization") or ""
+            return auth[7:].strip() if auth.lower().startswith("bearer ") else None
+
+        def _send(self, status: int, body) -> None:
+            payload = json.dumps(body, indent=2, default=str).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Headers", "content-type, authorization")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def _dispatch(self, method: str) -> None:
+            parsed = urlparse(self.path)
+            params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
+            body = {}
+            if method in {"POST", "PUT"}:
+                try:
+                    length = int(self.headers.get("Content-Length") or 0)
+                    raw = self.rfile.read(length) if length else b""
+                    body = json.loads(raw) if raw else {}
+                except (ValueError, json.JSONDecodeError) as exc:
+                    self._send(400, {"error": f"malformed JSON body: {exc}"})
+                    return
+            status, payload = api.handle(method, parsed.path, params, body, self._token())
+            self._send(status, payload)
+
+        def do_GET(self):      # noqa: N802
+            self._dispatch("GET")
+
+        def do_POST(self):     # noqa: N802
+            self._dispatch("POST")
+
+        def do_PUT(self):      # noqa: N802
+            self._dispatch("PUT")
+
+        def do_OPTIONS(self):  # noqa: N802
+            self._send(204, {})
+
+        def log_message(self, fmt, *args):
+            pass
+
+    return Handler
+
+
+def serve(*, host: str = "127.0.0.1", port: int = 8500,
+          db_path: str | Path | None = None, with_ai: bool = True) -> None:
+    api = build_api(db_path, with_ai=with_ai)
+    server = ThreadingHTTPServer((host, port), make_handler(api))
+    print(f"Quintek student API on http://{host}:{port}  (Ctrl+C to stop)")
+    if api.generator is None:
+        print("  note: no AI services attached — ingestion and generation will report 503")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()

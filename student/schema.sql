@@ -335,6 +335,8 @@ CREATE TABLE IF NOT EXISTS production_deployments (
     activated_by        TEXT NOT NULL DEFAULT '',
     signoff_name        TEXT NOT NULL DEFAULT '',
     signoff_rationale   TEXT NOT NULL DEFAULT '',
-    deactivated_at      TEXT
+    deactivated_at      TEXT,
+    -- Standing a deployment down is a decision too, and needs an owner.
+    deactivated_by      TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS ix_deploy_task ON production_deployments(task_type, deactivated_at);

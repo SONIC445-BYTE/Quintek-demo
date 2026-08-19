@@ -5,6 +5,7 @@ Command line interface.
     python -m benchmark.cli preflight <dataset.jsonl>
     python -m benchmark.cli demo
     python -m benchmark.cli gates
+    python -m benchmark.cli serve-student
 """
 
 from __future__ import annotations
@@ -84,8 +85,39 @@ def cmd_serve_analytics(args) -> int:
     serve(args.runs_root, host=args.host, port=args.port, routing_log_path=args.routing_log,
           registry_path=args.registry, gate_registry_path=args.gate_registry,
           config_path=args.config, root=ROOT,
-          execution_log_path=args.execution_log, costs_path=args.costs)
+          execution_log_path=args.execution_log, costs_path=args.costs,
+          student_db_path=args.student_db)
     return 0
+
+
+def cmd_serve_student(args) -> int:
+    """
+    The learner-facing API -- see student/server.py.
+
+    Kept in this CLI rather than a second entry point because the two halves
+    are one product: the benchmark decides which model is fit to serve, and
+    this server is what serves it.
+    """
+    from student.server import serve
+
+    serve(host=args.host, port=args.port, db_path=args.db, with_ai=not args.no_ai)
+    return 0
+
+
+def cmd_notify(args) -> int:
+    """
+    Fire every learner whose chosen time has arrived, then exit.
+
+    Designed to be run from cron rather than to hold a scheduler open: a
+    process that must stay up to deliver a daily reminder is a process whose
+    restart silently drops a day.
+    """
+    from student.db import Database
+    from student.notifications import NotificationService
+
+    result = NotificationService(Database(args.db)).run_due()
+    print(json.dumps(result, indent=2))
+    return 0 if result["failed"] == 0 else 1
 
 
 def main(argv=None) -> int:
@@ -117,9 +149,24 @@ def main(argv=None) -> int:
                     help="orchestrator execution log; supplies real latency figures")
     sa.add_argument("--costs", default=str(ROOT / "configs" / "model_costs.json"),
                     help="operator-supplied price list; absent means cost reports as null")
+    sa.add_argument("--student-db", default=None,
+                    help="learner database; required to enable the promotion routes, which "
+                         "are the only ones here that change what the product does")
     sa.add_argument("--host", default="127.0.0.1")
     sa.add_argument("--port", type=int, default=8420)
     sa.set_defaults(func=cmd_serve_analytics)
+
+    ss = sub.add_parser("serve-student", help="run the learner-facing JSON API")
+    ss.add_argument("--db", default="quintek.db")
+    ss.add_argument("--host", default="127.0.0.1")
+    ss.add_argument("--port", type=int, default=8500)
+    ss.add_argument("--no-ai", action="store_true",
+                    help="start without AI services; ingestion and generation report 503")
+    ss.set_defaults(func=cmd_serve_student)
+
+    nt = sub.add_parser("notify", help="fire due daily revision triggers once, then exit")
+    nt.add_argument("--db", default="quintek.db")
+    nt.set_defaults(func=cmd_notify)
 
     args = p.parse_args(argv)
     return args.func(args)

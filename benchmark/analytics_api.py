@@ -78,6 +78,12 @@ HOW_IT_WORKS = {
 }
 
 
+_NO_PROMOTIONS = (
+    "this analytics server has no learner database configured, so it can report what the "
+    "benchmark found but cannot change what the product does; start it with --student-db to "
+    "enable promotion")
+
+
 class AnalyticsAPI:
     """Framework-agnostic core: given a request path + query params, returns
     (status_code, json_body). Kept separate from the HTTP transport so it can
@@ -93,7 +99,8 @@ class AnalyticsAPI:
                  root: str | Path | None = None,
                  run_launcher=None,
                  execution_log_path: str | Path | None = None,
-                 costs_path: str | Path | None = None):
+                 costs_path: str | Path | None = None,
+                 student_db_path: str | Path | None = None):
         self.archive = an.RunArchive(runs_root)
         self._failures = failures or []
         self.routing_log = an.RoutingLog(routing_log_path) if routing_log_path else None
@@ -108,6 +115,21 @@ class AnalyticsAPI:
         self.eval = EvalAPI(self.archive, registry=self.registry, router=self.router,
                             execution_log_path=execution_log_path,
                             costs_path=costs_path, failures=self._failures)
+        # Promotion is the only surface here that writes anything, and it
+        # writes to the learner database rather than to runs/. It is attached
+        # only when that database is named: an analytics server pointed at an
+        # archive alone can report what the benchmark found, but must not be
+        # able to change what the product does.
+        self.promotions = None
+        if student_db_path is not None:
+            from student.ai import AIEngine
+            from student.db import Database
+
+            from .promotion_api import PromotionAPI
+            self.promotions = PromotionAPI(
+                AIEngine(Database(student_db_path), registry=self.registry,
+                         archive=self.archive),
+                self.archive, registry=self.registry)
 
     def _latest(self, candidate_id: str):
         result = self.archive.latest_run_for_candidate(candidate_id)
@@ -278,6 +300,16 @@ class AnalyticsAPI:
             if delegated is not None:
                 return delegated
 
+            # Promotion state. 501 rather than 404 when unconfigured, because
+            # "this server was not given the learner database" is a different
+            # thing for an admin to read than "no such endpoint".
+            if path.startswith("/api/promotions"):
+                if self.promotions is None:
+                    return 501, {"error": _NO_PROMOTIONS}
+                delegated = self.promotions.handle_get(path, params)
+                if delegated is not None:
+                    return delegated
+
             return 404, {"error": f"no such endpoint: {path}"}
 
         except Exception as exc:  # a broken response must say so, never fabricate data
@@ -288,6 +320,12 @@ class AnalyticsAPI:
             delegated = self.runs.handle_post(path, body)
             if delegated is not None:
                 return delegated
+            if path.startswith("/api/promotions"):
+                if self.promotions is None:
+                    return 501, {"error": _NO_PROMOTIONS}
+                delegated = self.promotions.handle_post(path, body)
+                if delegated is not None:
+                    return delegated
             return 404, {"error": f"no such endpoint: POST {path}"}
         except Exception as exc:
             return 500, {"error": f"{type(exc).__name__}: {exc}"}
@@ -384,11 +422,13 @@ def serve(runs_root: str | Path, *, host: str = "127.0.0.1", port: int = 8420,
           root: str | Path | None = None,
           run_launcher=None,
           execution_log_path: str | Path | None = None,
-          costs_path: str | Path | None = None) -> None:
+          costs_path: str | Path | None = None,
+          student_db_path: str | Path | None = None) -> None:
     api = AnalyticsAPI(runs_root, failures=failures, routing_log_path=routing_log_path,
                        registry_path=registry_path, gate_registry_path=gate_registry_path,
                        config_path=config_path, root=root, run_launcher=run_launcher,
-                       execution_log_path=execution_log_path, costs_path=costs_path)
+                       execution_log_path=execution_log_path, costs_path=costs_path,
+                       student_db_path=student_db_path)
     server = ThreadingHTTPServer((host, port), make_handler(api))
     print(f"benchmark analytics reference API on http://{host}:{port}  (Ctrl+C to stop)")
     try:

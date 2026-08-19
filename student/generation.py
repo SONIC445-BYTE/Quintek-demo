@@ -144,8 +144,16 @@ class QuestionGenerator:
     # -- context assembly --
 
     def _passages(self, source_id: str | None, concept_ids: list[str],
-                  limit: int = 6) -> list[dict]:
-        """Grounding text: the chunks that actually mention the target concepts."""
+                  limit: int = 6, notebook_id: str | None = None) -> list[dict]:
+        """
+        Grounding text, narrowest source first: the chunks that mention the
+        target concepts, else the named source, else anything ingested into
+        this notebook.
+
+        The notebook fallback matters because "make questions from this
+        notebook" -- no concept, no source named -- is the ordinary request,
+        and without it the common case looks like an ungrounded one.
+        """
         if concept_ids:
             marks = ",".join("?" for _ in concept_ids)
             rows = self.db.query(
@@ -159,6 +167,14 @@ class QuestionGenerator:
             rows = self.db.query(
                 "SELECT id, text, locator_json, source_id FROM source_chunks"
                 " WHERE source_id = ? ORDER BY ordinal LIMIT ?", (source_id, limit))
+            if rows:
+                return [dict(r) for r in rows]
+        if notebook_id:
+            rows = self.db.query(
+                """SELECT ch.id, ch.text, ch.locator_json, ch.source_id
+                     FROM source_chunks ch JOIN sources s ON s.id = ch.source_id
+                    WHERE s.notebook_id = ? AND ch.status = 'processed'
+                    ORDER BY ch.ordinal LIMIT ?""", (notebook_id, limit))
             return [dict(r) for r in rows]
         return []
 
@@ -231,7 +247,7 @@ class QuestionGenerator:
         if count < 1:
             raise GenerationFailed("count must be at least 1")
 
-        passages = self._passages(source_id, concept_ids)
+        passages = self._passages(source_id, concept_ids, notebook_id=notebook_id)
         if not passages:
             # Ungrounded generation is exactly the thing the grounding rule
             # forbids; refusing is better than producing plausible invention.

@@ -89,7 +89,35 @@ class Database:
     def initialise(self) -> None:
         conn = self.connect()
         conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        self._apply_additive_migrations(conn)
         conn.commit()
+
+    def _apply_additive_migrations(self, conn) -> None:
+        """
+        Add columns that `CREATE TABLE IF NOT EXISTS` cannot add.
+
+        The schema file is idempotent for a fresh database and inert for an
+        existing one -- which means a column added to schema.sql after a
+        database exists never appears in it, and the first query touching that
+        column fails at runtime on someone's live data. SQLite's ALTER TABLE
+        can add a column with a default cheaply, so every such addition is
+        listed here explicitly.
+
+        Explicit rather than derived from parsing schema.sql: a migration list
+        that a reader can check line by line is worth more than one that is
+        clever. Only additions belong here. A change that drops or retypes a
+        column is not safe to apply automatically and must be a considered
+        migration, not a startup side effect.
+        """
+        migrations = [
+            ("production_deployments", "deactivated_by", "TEXT NOT NULL DEFAULT ''"),
+        ]
+        for table, column, ddl in migrations:
+            existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+            if not existing:
+                continue  # table absent entirely; schema.sql owns creating it
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     # ---------- helpers ----------
 
