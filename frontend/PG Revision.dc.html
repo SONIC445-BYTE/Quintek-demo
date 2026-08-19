@@ -98,7 +98,7 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
           </sc-for>
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:9px" data-comment-anchor="0c13850f3c-div">
+        <div style="display:flex;flex-direction:column;gap:9px">
           <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">Top priority gaps</span>
           <sc-for list="{{ topGaps }}" as="g" hint-placeholder-count="4">
             <button onClick="{{ g.open }}" style="display:flex;align-items:center;gap:11px;width:100%;box-sizing:border-box;padding:12px;min-height:48px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid {{ g.color }};border-radius:0 5px 5px 0;cursor:pointer;text-align:left;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif" style-hover="border-color:#1E7A57">
@@ -161,7 +161,7 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
           </div>
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:10px" data-comment-anchor="3124ef0767-div">
+        <div style="display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;align-items:baseline;justify-content:space-between">
             <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">How many questions?</span>
             <span style="font-size:11.5px;font-weight:600;color:#8a5f13">Recommended: {{ recommended }}</span>
@@ -187,7 +187,7 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
         </div>
 
         <button onClick="{{ startSession }}" style="width:100%;min-height:50px;background:#1E7A57;color:#fff;border:none;border-radius:6px;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#155F42">Start revision · {{ qCount }} questions</button>
-        <span style="font-size:11.5px;line-height:1.55;color:#9aa0a2" data-comment-anchor="99c857449f-span">Your session is saved, along with the exact questions it served.</span>
+        <span style="font-size:11.5px;line-height:1.55;color:#9aa0a2">Your session is saved, along with the exact questions it served.</span>
       </div>
     </sc-if>
 
@@ -913,9 +913,9 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
 
     <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ true }}">
       <div style="display:flex;flex-direction:column;gap:22px;padding:0 16px 26px">
-        <div style="display:flex;flex-direction:column;gap:11px" data-comment-anchor="46d07aa979-div">
+        <div style="display:flex;flex-direction:column;gap:11px">
           <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">Daily trigger</span>
-          <div style="display:flex;flex-direction:column;gap:8px;padding:13px;background:#fff;border:1px solid #E6E4DE;border-radius:6px" data-comment-anchor="9177f1721e-div">
+          <div style="display:flex;flex-direction:column;gap:8px;padding:13px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
             <span style="font-size:12px;line-height:1.5;color:#6f7679;text-wrap:pretty">One time each day. Quintek rebuilds your revision queue then, and never changes this time on its own.</span>
             <div style="display:flex;flex-wrap:wrap;gap:6px">
               <sc-for list="{{ triggerTimes }}" as="t" hint-placeholder-count="6">
@@ -961,7 +961,7 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
               </button>
             </sc-for>
           </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;background:#fff;border:1px solid #E6E4DE;border-radius:5px" data-comment-anchor="8415f9d21c-div">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;background:#fff;border:1px solid #E6E4DE;border-radius:5px">
             <span style="display:flex;flex-direction:column;gap:4px">
               <span style="font-size:12.5px;font-weight:600;color:{{ lastNotifFg }}">{{ lastNotif }}</span>
               <span style="font-size:11px;color:#8a9093">Last notification status</span>
@@ -1268,11 +1268,11 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
     </sc-if>
 
     <sc-if value="{{ isOnboard }}" hint-placeholder-val="{{ true }}">
-      <div style="display:flex;flex-direction:column;gap:22px;padding:8px 22px 28px;height:100%;box-sizing:border-box" data-comment-anchor="36d04895cb-div">
-        <div style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:#8a9093" data-comment-anchor="9c8c30fd33-div">Step {{ stepNo }} of 3</div>
+      <div style="display:flex;flex-direction:column;gap:22px;padding:8px 22px 28px;height:100%;box-sizing:border-box">
+        <div style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:#8a9093">Step {{ stepNo }} of 3</div>
         <div style="font-family:'Source Serif 4',Georgia,'Times New Roman',serif;font-size:27px;line-height:1.25;color:#16191A;letter-spacing:-.01em;text-wrap:pretty">{{ stepTitle }}</div>
         <div style="font-size:14px;line-height:1.6;color:#5d6467;text-wrap:pretty">{{ stepBody }}</div>
-        <div style="flex:1;display:flex;flex-direction:column;gap:8px;min-height:220px" data-comment-anchor="357e601457-div">
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px;min-height:220px">
           <sc-if value="{{ isSourceStep }}" hint-placeholder-val="{{ true }}">
             <sc-for list="{{ sourceTypes }}" as="st" hint-placeholder-count="5">
               <button onClick="{{ st.pick }}" style="display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;padding:13px;min-height:60px;background:{{ st.bg }};border:1.5px solid {{ st.bd }};border-radius:7px;cursor:pointer;text-align:left;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif" style-hover="border-color:#1E7A57">

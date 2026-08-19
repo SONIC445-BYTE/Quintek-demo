@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from dataclasses import replace
 import urllib.error
 import urllib.request
 
@@ -62,6 +63,23 @@ def _infer_family(model_id: str) -> str:
     return base.split("-")[0]
 
 
+#: Default per-attempt timeout for NIM inference, in seconds.
+#:
+#: `RetryPolicy`'s own default is 30s, which suits a fast dedicated endpoint
+#: and is far too tight for this one. Measured against
+#: integrate.api.nvidia.com on 2026-08-19: `GET /v1/models` returned in 0.6s,
+#: while an 8-token `POST /v1/chat/completions` on
+#: meta/llama-3.3-70b-instruct took **72.9s** wall clock. At 30s every attempt
+#: timed out, and a batch reported 8/8 failures at ~91s each (3 attempts x
+#: 30s) -- a result that looks like a broken model but was a broken timeout.
+#:
+#: This is a shared, free-tier, queue-behind-other-tenants endpoint; latency
+#: is dominated by queueing, not by token generation. Override per instance
+#: (`provider.retry_policy.timeout_seconds = ...`) or globally with
+#: NVIDIA_TIMEOUT_SECONDS for a dedicated deployment where 30s is realistic.
+NIM_DEFAULT_TIMEOUT_SECONDS = 180.0
+
+
 class NVIDIAProvider(BaseProvider):
     name = "nvidia"
 
@@ -75,6 +93,7 @@ class NVIDIAProvider(BaseProvider):
         parse_response=None,
         model_family: str | None = None,
         base_url: str = NIM_CHAT_COMPLETIONS_URL,
+        timeout_seconds: float | None = None,
     ):
         self.model = model_id
         self.model_version = model_version
@@ -83,6 +102,14 @@ class NVIDIAProvider(BaseProvider):
         self.system_prompt = system_prompt
         self.base_url = base_url
         self._parse = parse_response or extract_json_object
+        # Own the policy per instance rather than mutating the class-level
+        # default, so one slow provider cannot silently retune every other.
+        resolved = timeout_seconds
+        if resolved is None:
+            resolved = float(os.environ.get("NVIDIA_TIMEOUT_SECONDS",
+                                            NIM_DEFAULT_TIMEOUT_SECONDS))
+        self.retry_policy = replace(BaseProvider.retry_policy,
+                                    timeout_seconds=resolved)
 
     def _api_key(self) -> str:
         key = os.environ.get(self.api_key_env)

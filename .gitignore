@@ -19,3 +19,7 @@ routing.jsonl
 # Operator-supplied price list (real commercial figures) -- copy from
 # configs/model_costs.example.json. Never committed.
 configs/model_costs.json
+
+# Standalone bundles are build output of tools_build_standalone.py --
+# ~4.8MB each and fully reproducible from frontend/ + frontend/vendor/.
+frontend/dist/
