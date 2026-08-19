@@ -23,3 +23,9 @@ configs/model_costs.json
 # Standalone bundles are build output of tools_build_standalone.py --
 # ~4.8MB each and fully reproducible from frontend/ + frontend/vendor/.
 frontend/dist/
+
+# Student engine local database and uploaded sources -- per-deployment data,
+# never committed.
+quintek.db
+quintek.db-*
+sources/

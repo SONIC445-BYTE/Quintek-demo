@@ -1,0 +1,307 @@
+"""
+Question generation, and the AI concept extractor that completes ingestion.
+
+## What the generator is given
+
+Never "write me an MCQ". Every generation call carries, per
+`docs/QUINTEK_LOGIC.md` section 4.2:
+
+    source passages (grounding) + target concepts + related concepts
+      + cross-notebook context + question type + difficulty
+      + reasoning depth + demonstration examples + user constraints
+
+## Demonstrations supply structure, never facts
+
+A demo is an exemplar of *shape*: stem structure, distractor strategy, answer
+format, reasoning depth. The prompt says so explicitly and repeats it, because
+the failure mode is a model lifting a clinical value out of a demo and asserting
+it about the learner's material -- a fabricated fact wearing the costume of a
+grounded one.
+
+## Everything generated keeps its provenance
+
+`source_id`, `chunk_id`, `generated_by_candidate_id`, `prompt_version` and
+`demo_ids` are stored on every question. That is what makes "show me where this
+came from" answerable, and it is impossible to backfill.
+"""
+
+from __future__ import annotations
+
+import json
+
+from .ai import AIEngine, extract_json
+from .concepts import ConceptStore
+from .db import Database, new_id, now_iso
+
+GENERATION_PROMPT_VERSION = "gen-v1"
+EXTRACTION_PROMPT_VERSION = "ext-v1"
+
+_GROUNDING_RULE = (
+    "Every question must be answerable from the SOURCE PASSAGES alone. Do not "
+    "introduce a fact, value, threshold or guideline that does not appear in "
+    "them. If the passages do not support a question at the requested "
+    "difficulty, return fewer questions rather than inventing material."
+)
+
+_DEMO_RULE = (
+    "The DEMONSTRATIONS show STYLE ONLY -- stem structure, how distractors are "
+    "built, answer format, depth of reasoning. Never reuse a clinical fact, "
+    "number, drug or diagnosis from a demonstration. Their content is "
+    "irrelevant to this task; only their shape matters."
+)
+
+
+class GenerationFailed(RuntimeError):
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Concept extraction (the AI half of ingestion)
+# ---------------------------------------------------------------------------
+
+class AIConceptExtractor:
+    """
+    Pulls concepts and relationships out of one chunk.
+
+    Plugged into `IngestionEngine`, which owns ordering and resumability. This
+    class owns only "what is in this text", and resolution stays in
+    `ConceptStore`, which refuses to merge on similarity.
+    """
+
+    def __init__(self, db: Database, ai: AIEngine):
+        self.db = db
+        self.ai = ai
+        self.store = ConceptStore(db)
+
+    def extract_for_chunk(self, *, source_id: str, chunk_id: str, text: str,
+                          locator: dict) -> dict:
+        notebook = self.db.query_one(
+            "SELECT n.id, n.subject FROM sources s JOIN notebooks n ON n.id = s.notebook_id"
+            " WHERE s.id = ?", (source_id,))
+        subject = notebook["subject"] if notebook else ""
+
+        prompt = (
+            "Extract the medical concepts this passage TEACHES, and the "
+            "relationships between them.\n\n"
+            "Rules:\n"
+            "- Only concepts the passage actually explains or uses substantively. "
+            "A word mentioned in passing is not a concept.\n"
+            "- Use the canonical clinical name, not the passage's phrasing.\n"
+            "- Do not split one concept into near-duplicates.\n"
+            f"- Allowed relation types: {', '.join(sorted(_RELATIONS))}.\n\n"
+            "Reply with ONLY a JSON object:\n"
+            '{"concepts": [{"name": "...", "description": "..."}], '
+            '"relationships": [{"from": "...", "to": "...", "type": "...", '
+            '"confidence": 0.0}]}\n\n'
+            f"PASSAGE:\n{text}"
+        )
+        result = self.ai.call("CONCEPT_EXTRACTION", prompt,
+                              prompt_version=EXTRACTION_PROMPT_VERSION,
+                              max_tokens=900, temperature=0.0)
+        payload = result.parsed or extract_json(result.text) or {}
+
+        created: dict[str, str] = {}
+        for item in payload.get("concepts", []) or []:
+            name = (item.get("name") or "").strip()
+            if not name:
+                continue
+            cid = self.store.resolve_or_create(
+                name, subject=subject, description=(item.get("description") or "").strip())
+            created[name.lower()] = cid
+            self.store.link_to_source(source_id, cid, chunk_id)
+            if notebook:
+                self.store.link_to_notebook(notebook["id"], cid)
+
+        for rel in payload.get("relationships", []) or []:
+            a = created.get((rel.get("from") or "").strip().lower())
+            b = created.get((rel.get("to") or "").strip().lower())
+            rtype = (rel.get("type") or "related_to").strip()
+            if not (a and b) or rtype not in _RELATIONS:
+                continue
+            try:
+                self.store.relate(a, b, rtype,
+                                  confidence=float(rel.get("confidence") or 0.0),
+                                  provenance_source_id=source_id)
+            except ValueError:
+                continue
+
+        return {"concepts": len(created)}
+
+
+from .concepts import RELATION_TYPES as _RELATIONS  # noqa: E402  (cycle-free at runtime)
+
+
+# ---------------------------------------------------------------------------
+# Question generation
+# ---------------------------------------------------------------------------
+
+class QuestionGenerator:
+    def __init__(self, db: Database, ai: AIEngine):
+        self.db = db
+        self.ai = ai
+        self.store = ConceptStore(db)
+
+    # -- context assembly --
+
+    def _passages(self, source_id: str | None, concept_ids: list[str],
+                  limit: int = 6) -> list[dict]:
+        """Grounding text: the chunks that actually mention the target concepts."""
+        if concept_ids:
+            marks = ",".join("?" for _ in concept_ids)
+            rows = self.db.query(
+                f"""SELECT DISTINCT ch.id, ch.text, ch.locator_json, ch.source_id
+                      FROM source_concepts sc JOIN source_chunks ch ON ch.id = sc.chunk_id
+                     WHERE sc.concept_id IN ({marks}) ORDER BY ch.ordinal LIMIT ?""",
+                (*concept_ids, limit))
+            if rows:
+                return [dict(r) for r in rows]
+        if source_id:
+            rows = self.db.query(
+                "SELECT id, text, locator_json, source_id FROM source_chunks"
+                " WHERE source_id = ? ORDER BY ordinal LIMIT ?", (source_id, limit))
+            return [dict(r) for r in rows]
+        return []
+
+    def _related(self, concept_ids: list[str], limit: int = 10) -> list[str]:
+        names: list[str] = []
+        for cid in concept_ids:
+            for n in self.store.neighbours(cid):
+                if n["canonical_name"] not in names:
+                    names.append(n["canonical_name"])
+        return names[:limit]
+
+    def _demos(self, demo_ids: list[str]) -> list[dict]:
+        if not demo_ids:
+            return []
+        marks = ",".join("?" for _ in demo_ids)
+        return [dict(r) for r in self.db.query(
+            f"SELECT * FROM question_demos WHERE id IN ({marks})", tuple(demo_ids))]
+
+    def build_prompt(self, *, count: int, passages: list[dict], target_names: list[str],
+                     related_names: list[str], demos: list[dict], family: str,
+                     difficulty: str, reasoning_depth: str, constraints: str) -> str:
+        parts = [
+            f"Write {count} postgraduate-level medical question(s).",
+            "",
+            "GROUNDING RULE", _GROUNDING_RULE, "",
+            "SOURCE PASSAGES",
+        ]
+        for i, p in enumerate(passages, start=1):
+            loc = json.loads(p["locator_json"]) if p.get("locator_json") else {}
+            parts.append(f"[passage {i} | {json.dumps(loc)}]\n{p['text']}")
+        parts += ["", f"TARGET CONCEPTS: {', '.join(target_names) or '(any in the passages)'}"]
+        if related_names:
+            parts.append(f"RELATED CONCEPTS (may be integrated): {', '.join(related_names)}")
+        parts += [
+            "",
+            f"QUESTION TYPE: {family or 'single best answer'}",
+            f"DIFFICULTY: {difficulty or 'postgraduate'}",
+            f"REASONING DEPTH: {reasoning_depth or 'requires integrating two concepts'}",
+        ]
+        if constraints:
+            parts.append(f"ADDITIONAL CONSTRAINTS: {constraints}")
+
+        if demos:
+            parts += ["", "DEMONSTRATIONS", _DEMO_RULE]
+            for d in demos:
+                parts.append(
+                    f"- {d['title']}: structure={d['stem_structure'] or 'n/a'}; "
+                    f"target={d['question_target'] or 'n/a'}; "
+                    f"distractors={d['distractor_strategy'] or 'n/a'}; "
+                    f"format={d['answer_format'] or 'n/a'}\n  example: {d['question']}")
+            parts.append(_DEMO_RULE)   # repeated: this is the fact-leak failure mode
+
+        parts += [
+            "",
+            "Reply with ONLY a JSON object:",
+            '{"questions": [{"stem": "...", "options": ["...","...","...","..."], '
+            '"correct_index": 0, "rationale": "...", "concepts_tested": ["..."], '
+            '"passage": 1}]}',
+            "`passage` is the number of the SOURCE PASSAGE the question is answerable from.",
+        ]
+        return "\n".join(parts)
+
+    def generate(self, *, notebook_id: str, count: int = 5,
+                 concept_ids: list[str] | None = None, source_id: str | None = None,
+                 demo_ids: list[str] | None = None, family: str = "",
+                 difficulty: str = "", reasoning_depth: str = "",
+                 constraints: str = "") -> list[str]:
+        concept_ids = concept_ids or []
+        demo_ids = demo_ids or []
+        if count < 1:
+            raise GenerationFailed("count must be at least 1")
+
+        passages = self._passages(source_id, concept_ids)
+        if not passages:
+            # Ungrounded generation is exactly the thing the grounding rule
+            # forbids; refusing is better than producing plausible invention.
+            raise GenerationFailed(
+                "no source passages are available to ground these questions -- "
+                "ingest a source first")
+
+        targets = [self.store.get(c)["canonical_name"] for c in concept_ids
+                   if self.store.get(c)]
+        prompt = self.build_prompt(
+            count=count, passages=passages, target_names=targets,
+            related_names=self._related(concept_ids), demos=self._demos(demo_ids),
+            family=family, difficulty=difficulty, reasoning_depth=reasoning_depth,
+            constraints=constraints)
+
+        result = self.ai.call("QUESTION_GENERATION", prompt,
+                              prompt_version=GENERATION_PROMPT_VERSION,
+                              max_tokens=400 * count + 600, temperature=0.2)
+        payload = result.parsed or extract_json(result.text) or {}
+        raw = payload.get("questions") or []
+        if not raw:
+            raise GenerationFailed("the model returned no questions")
+
+        created: list[str] = []
+        for item in raw[:count]:
+            qid = self._store_question(item, notebook_id, passages, result, demo_ids,
+                                       family, difficulty, reasoning_depth)
+            if qid:
+                created.append(qid)
+        if not created:
+            raise GenerationFailed("no returned question was well-formed enough to store")
+        return created
+
+    def _store_question(self, item: dict, notebook_id: str, passages: list[dict],
+                        result, demo_ids: list[str], family: str, difficulty: str,
+                        reasoning_depth: str) -> str | None:
+        stem = (item.get("stem") or "").strip()
+        options = [str(o).strip() for o in (item.get("options") or []) if str(o).strip()]
+        try:
+            correct = int(item.get("correct_index"))
+        except (TypeError, ValueError):
+            return None
+        # A malformed question is dropped rather than stored broken: a question
+        # whose key points outside its own options can never be answered.
+        if not stem or len(options) < 2 or not (0 <= correct < len(options)):
+            return None
+
+        idx = item.get("passage")
+        chunk = None
+        if isinstance(idx, int) and 1 <= idx <= len(passages):
+            chunk = passages[idx - 1]
+        elif passages:
+            chunk = passages[0]
+
+        qid = new_id("q")
+        self.db.execute(
+            "INSERT INTO questions (id, primary_notebook_id, family, stem, options_json,"
+            " correct_index, rationale, difficulty, reasoning_depth, source_id, chunk_id,"
+            " generated_by_candidate_id, prompt_version, demo_ids_json, validation_status,"
+            " generated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending', ?)",
+            (qid, notebook_id, family, stem, json.dumps(options), correct,
+             (item.get("rationale") or "").strip(), difficulty, reasoning_depth,
+             chunk["source_id"] if chunk else None, chunk["id"] if chunk else None,
+             result.candidate_id, GENERATION_PROMPT_VERSION, json.dumps(demo_ids),
+             now_iso()))
+
+        for name in item.get("concepts_tested") or []:
+            cid = self.store.find(str(name))
+            if cid:
+                self.db.execute(
+                    "INSERT OR IGNORE INTO question_concepts (question_id, concept_id, role)"
+                    " VALUES (?,?, 'target')", (qid, cid))
+        return qid
