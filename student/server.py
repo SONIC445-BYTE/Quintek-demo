@@ -48,13 +48,27 @@ def build_api(db_path: str | Path | None = None, *, with_ai: bool = True) -> Stu
         from benchmark.registry import Registry
         registry, archive = Registry(registry_path), an.RunArchive("runs")
 
+    from benchmark.providers.registry import build_provider, spec_from_env
+
+    base_spec = spec_from_env()
+
     def provider_factory(candidate):
-        """NVIDIA NIM by default; the model id comes from the registry entry."""
-        from benchmark.providers.nvidia import NVIDIAProvider
-        model_id = getattr(candidate, "model_id", None) or os.environ.get(
-            "QUINTEK_MODEL", "meta/llama-3.3-70b-instruct")
-        return NVIDIAProvider(model_id,
-                              model_version=getattr(candidate, "model_version", "unknown"))
+        """
+        Resolve through the provider registry rather than naming a vendor here.
+
+        The registry entry's model_id wins when there is one -- a candidate is
+        a specific model, and serving a different one under its id would
+        misattribute every result. Otherwise the environment's spec applies.
+        A spec that cannot be built raises; it never degrades to the scripted
+        provider, because a fabricated answer must never be indistinguishable
+        from a real one.
+        """
+        spec = dict(base_spec)
+        model_id = getattr(candidate, "model_id", None)
+        if model_id:
+            spec["model_id"] = model_id
+            spec["model_version"] = getattr(candidate, "model_version", "unknown")
+        return build_provider(spec)
 
     ai = AIEngine(db, registry=registry, archive=archive,
                   provider_factory=provider_factory)
@@ -130,6 +144,18 @@ def serve(*, host: str = "127.0.0.1", port: int = 8500,
     print(f"Quintek student API on http://{host}:{port}  (Ctrl+C to stop)")
     if api.generator is None:
         print("  note: no AI services attached — ingestion and generation will report 503")
+    else:
+        # Say which model this process will actually call, at startup rather
+        # than on the first learner request. A deployment silently serving the
+        # scripted provider looks identical to one serving a real model until
+        # somebody reads an answer.
+        from benchmark.providers.registry import describe, spec_from_env
+        report = describe(spec_from_env())
+        label = f"{report['provider']}" + (f" · {report['model_id']}" if report["model_id"] else "")
+        print(f"  provider: {label}"
+              + ("" if report["is_real_model"] else "  (NOT a real model — scripted test double)"))
+        if not report["buildable"]:
+            print(f"  WARNING: this provider cannot be built here — {report['reason']}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

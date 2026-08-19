@@ -83,7 +83,17 @@ class QuestionValidator:
             '"verdict": "approved" | "flagged"}'
         )
 
-    def validate(self, question_id: str) -> dict:
+    def validate(self, question_id: str, *, trace=None) -> dict:
+        """
+        `trace` is a `student.trace.GenerationTrace`, or None.
+
+        The validator's prompt and raw reply are captured for the same reason
+        the generator's are: an approval nobody can inspect is not evidence
+        that anything was checked.
+        """
+        from .trace import NullTrace
+
+        trace = trace or NullTrace()
         row = self.db.query_one("SELECT * FROM questions WHERE id = ?", (question_id,))
         if row is None:
             raise ValueError(f"no such question: {question_id}")
@@ -91,10 +101,18 @@ class QuestionValidator:
 
         validator = self._independent_candidate(question["generated_by_candidate_id"])
         if validator is None:
-            raise ValidationSkipped(
+            skipped = ValidationSkipped(
                 "no configuration is available that differs from the one that generated this "
                 "question; validating with the same model would produce an approval that "
                 "means nothing")
+            trace.write("validation", {
+                "question_id": question_id, "status": "skipped",
+                "reason": str(skipped),
+                "generated_by": question["generated_by_candidate_id"],
+                # Recorded because "validation was skipped" and "validation
+                # approved" must never look the same in an audit.
+                "independence_satisfied": False})
+            raise skipped
 
         passage = ""
         if question["chunk_id"]:
@@ -102,8 +120,18 @@ class QuestionValidator:
                                       (question["chunk_id"],))
             passage = chunk["text"] if chunk else ""
 
+        validation_prompt = self.build_prompt(question, passage)
+        trace.write("validation_prompt", {
+            "question_id": question_id, "task_type": "QUESTION_VALIDATION",
+            "prompt_version": VALIDATION_PROMPT_VERSION,
+            "prompt": validation_prompt,
+            "generated_by": question["generated_by_candidate_id"],
+            "validated_by": validator,
+            "independence_satisfied": validator != question["generated_by_candidate_id"],
+            "passage_supplied": bool(passage)})
+
         try:
-            result = self.ai.call("QUESTION_VALIDATION", self.build_prompt(question, passage),
+            result = self.ai.call("QUESTION_VALIDATION", validation_prompt,
                                   prompt_version=VALIDATION_PROMPT_VERSION,
                                   max_tokens=700, temperature=0.0)
         except AICallFailed as exc:
@@ -111,6 +139,10 @@ class QuestionValidator:
             # be approved by default -- that is how unchecked questions reach a
             # learner.
             self._record(question_id, "pending", {"error": str(exc)}, "")
+            trace.write("validation", {
+                "question_id": question_id, "status": "pending",
+                "reason": f"the validator could not be reached: {exc}",
+                "validated_by": validator, "independence_satisfied": True})
             raise
 
         payload = result.parsed or extract_json(result.text) or {}
@@ -125,6 +157,18 @@ class QuestionValidator:
         detail = {"checks": checks, "issues": issues, "failed_checks": failed,
                   "validator_candidate": validator, "validated_at": now_iso()}
         self._record(question_id, status, detail, validator)
+        trace.write_raw("validation_raw_output", result.text or "")
+        trace.write("validation", {
+            "question_id": question_id, "status": status,
+            "checks": checks, "failed_checks": failed, "issues": issues,
+            "generated_by": question["generated_by_candidate_id"],
+            "validated_by": validator,
+            "independence_satisfied": validator != question["generated_by_candidate_id"],
+            # Stated explicitly: the stored verdict comes from the checks, not
+            # from whatever the model wrote on its summary line.
+            "verdict_derived_from": "checks",
+            "model_self_reported_verdict": payload.get("verdict"),
+            "validator_model": result.model, "validator_execution_id": result.execution_id})
         return {"question_id": question_id, "status": status, **detail}
 
     def _record(self, question_id: str, status: str, detail: dict, validator: str) -> None:

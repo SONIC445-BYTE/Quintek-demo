@@ -135,6 +135,31 @@ from .concepts import RELATION_TYPES as _RELATIONS  # noqa: E402  (cycle-free at
 # Question generation
 # ---------------------------------------------------------------------------
 
+def _rejection_reason(item: dict) -> str:
+    """
+    Why `_store_question` would refuse this item.
+
+    Deliberately mirrors that method's checks in the same order. Kept as a
+    separate function rather than returned from `_store_question` so the
+    storing path stays a simple "id or None" -- but it means the two must be
+    changed together, and `test_generation_trace.py` asserts they agree.
+    """
+    stem = (item.get("stem") or "").strip()
+    options = [str(o).strip() for o in (item.get("options") or []) if str(o).strip()]
+    try:
+        correct = int(item.get("correct_index"))
+    except (TypeError, ValueError):
+        return "correct_index is missing or not an integer"
+    if not stem:
+        return "stem is empty"
+    if len(options) < 2:
+        return f"only {len(options)} usable option(s); at least 2 are needed"
+    if not (0 <= correct < len(options)):
+        return (f"correct_index {correct} points outside the {len(options)} options -- "
+                "a key that points nowhere can never be answered")
+    return "unknown"
+
+
 class QuestionGenerator:
     def __init__(self, db: Database, ai: AIEngine):
         self.db = db
@@ -241,44 +266,97 @@ class QuestionGenerator:
                  concept_ids: list[str] | None = None, source_id: str | None = None,
                  demo_ids: list[str] | None = None, family: str = "",
                  difficulty: str = "", reasoning_depth: str = "",
-                 constraints: str = "") -> list[str]:
+                 constraints: str = "", trace=None) -> list[str]:
+        """
+        `trace` is a `student.trace.GenerationTrace`, or None for no capture.
+
+        Tracing is threaded through rather than bolted on afterwards because
+        the artifacts worth having -- the exact passages retrieved, the exact
+        prompt, the raw bytes returned, and what was dropped during
+        normalization -- only exist inside this method. Reconstructing them
+        from the stored question afterwards is guesswork.
+        """
+        from .trace import NullTrace
+
+        trace = trace or NullTrace()
         concept_ids = concept_ids or []
         demo_ids = demo_ids or []
         if count < 1:
             raise GenerationFailed("count must be at least 1")
 
+        trace.run_started(notebook_id=notebook_id, requested_count=count,
+                          concept_ids=concept_ids, source_id=source_id,
+                          demo_ids=demo_ids, family=family, difficulty=difficulty,
+                          reasoning_depth=reasoning_depth)
+
         passages = self._passages(source_id, concept_ids, notebook_id=notebook_id)
         if not passages:
             # Ungrounded generation is exactly the thing the grounding rule
             # forbids; refusing is better than producing plausible invention.
-            raise GenerationFailed(
+            failure = GenerationFailed(
                 "no source passages are available to ground these questions -- "
                 "ingest a source first")
+            trace.failed("retrieval", failure)
+            raise failure
+
+        source_row = self.db.query_one(
+            "SELECT * FROM sources WHERE id = ?", (passages[0]["source_id"],)) \
+            if passages[0].get("source_id") else None
+        trace.source(dict(source_row) if source_row else {}, passages)
 
         targets = [self.store.get(c)["canonical_name"] for c in concept_ids
                    if self.store.get(c)]
+        trace.concepts(
+            [{"concept_id": c, "canonical_name": n} for c, n in zip(concept_ids, targets)],
+            resolution=[{"related": self._related(concept_ids)}])
+
         prompt = self.build_prompt(
             count=count, passages=passages, target_names=targets,
             related_names=self._related(concept_ids), demos=self._demos(demo_ids),
             family=family, difficulty=difficulty, reasoning_depth=reasoning_depth,
             constraints=constraints)
+        trace.prompt(prompt=prompt, task_type="QUESTION_GENERATION",
+                     prompt_version=GENERATION_PROMPT_VERSION, temperature=0.2,
+                     max_tokens=400 * count + 600, demos=demo_ids)
 
-        result = self.ai.call("QUESTION_GENERATION", prompt,
-                              prompt_version=GENERATION_PROMPT_VERSION,
-                              max_tokens=400 * count + 600, temperature=0.2)
+        try:
+            result = self.ai.call("QUESTION_GENERATION", prompt,
+                                  prompt_version=GENERATION_PROMPT_VERSION,
+                                  max_tokens=400 * count + 600, temperature=0.2)
+        except Exception as exc:
+            trace.failed("model_call", exc)
+            raise
+        trace.raw_output(result)
+
         payload = result.parsed or extract_json(result.text) or {}
         raw = payload.get("questions") or []
         if not raw:
-            raise GenerationFailed("the model returned no questions")
+            failure = GenerationFailed("the model returned no questions")
+            trace.normalized(accepted=[], rejected=[
+                {"reason": "no 'questions' array in the reply", "payload_keys": sorted(payload)}])
+            trace.failed("normalization", failure)
+            raise failure
 
         created: list[str] = []
+        accepted, rejected = [], []
         for item in raw[:count]:
             qid = self._store_question(item, notebook_id, passages, result, demo_ids,
                                        family, difficulty, reasoning_depth)
             if qid:
                 created.append(qid)
+                accepted.append({"question_id": qid, "item": item})
+            else:
+                # Why it was dropped, not just that it was.
+                rejected.append({"item": item, "reason": _rejection_reason(item)})
+        trace.normalized(accepted=accepted, rejected=rejected)
+
         if not created:
-            raise GenerationFailed("no returned question was well-formed enough to store")
+            failure = GenerationFailed(
+                "no returned question was well-formed enough to store")
+            trace.failed("normalization", failure)
+            raise failure
+        trace.final(decision="stored", reason=f"{len(created)} of {len(raw)} stored",
+                    question_ids=created, dropped=len(rejected))
         return created
 
     def _store_question(self, item: dict, notebook_id: str, passages: list[dict],
