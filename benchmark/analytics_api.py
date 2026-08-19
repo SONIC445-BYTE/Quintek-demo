@@ -105,7 +105,7 @@ class AnalyticsAPI:
         # unmodified report.json the console contract requires.
         self.runs = RunsAPI(runs_root, gate_registry_path=gate_registry_path,
                             config_path=config_path, root=root, run_launcher=run_launcher)
-        self.eval = EvalAPI(self.archive, registry=self.registry,
+        self.eval = EvalAPI(self.archive, registry=self.registry, router=self.router,
                             execution_log_path=execution_log_path,
                             costs_path=costs_path, failures=self._failures)
 

@@ -77,11 +77,13 @@ def _label_for(index: int) -> str:
 class EvalAPI:
     def __init__(self, archive: an.RunArchive, *,
                  registry=None,
+                 router=None,
                  execution_log_path: str | Path | None = None,
                  costs_path: str | Path | None = None,
                  failures: list[an.FailureRecord] | None = None):
         self.archive = archive
         self.registry = registry
+        self.router = router
         self.execution_log_path = Path(execution_log_path) if execution_log_path else None
         self._failures = failures or []
         self.costs = {}
@@ -344,6 +346,43 @@ class EvalAPI:
         res = an.failure_analytics(self._failures)
         return [c if isinstance(c, dict) else c.as_dict() for c in res.categories]
 
+    def routing(self) -> list[dict]:
+        """
+        Which candidate currently serves each task -- the "Currently powering
+        Quintek" section of the student's reliability screen.
+
+        This is the one place where the benchmark visibly touches the product,
+        so it is also the one place where fabricated data would do the most
+        damage: a student reading "Question generation -> Model B" is being
+        told something about the app they are actually using.
+
+        An empty list is the correct answer whenever no candidate has earned a
+        task, and that is the answer today -- every candidate is REGISTERED
+        with no benchmark run behind it, so `Router.select()` returns nothing
+        for every task. The screen must render that emptiness rather than fall
+        back to an illustrative pairing.
+        """
+        if self.router is None:
+            return []
+        from .tasks import TaskType
+
+        rows = []
+        for task in TaskType:
+            result = self.router.select(task)
+            if result.selected_candidate is None:
+                continue
+            entry = self.registry.get(result.selected_candidate) if self.registry else None
+            latest = self.archive.latest_run_for_candidate(result.selected_candidate)
+            rows.append({
+                "task": task.value.replace("_", " ").capitalize(),
+                "taskType": task.value,
+                "candidateId": result.selected_candidate,
+                "candidate": entry.model_id if entry else result.selected_candidate,
+                "score": _pct(an.ai_overview(latest).get("overallScore")) if latest else None,
+                "policy": getattr(result, "policy", None) or "QUALITY_FIRST",
+            })
+        return rows
+
     def state(self) -> str:
         runs = self.archive.all_runs()
         if not runs:
@@ -362,6 +401,7 @@ class EvalAPI:
         current = candidate_id or (cands[0]["candidateId"] if cands else None)
         return {
             "state": self.state(),
+            "routing": self.routing(),
             "overview": self.overview(current) if current else None,
             "tracks": self.tracks(current) if current else [],
             "candidates": cands,
