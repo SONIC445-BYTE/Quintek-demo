@@ -1952,14 +1952,26 @@ class Component extends DCLogic {
       .sort((a, b) => scoreOf(b) - scoreOf(a))
       .concat(api.candidates.filter((c) => scoreOf(c) == null));
 
-    const md = api.candidates.find((c) => c.candidateId === s.modelId) || api.candidates[0];
+    // A live archive can hold one candidate, or none with the state still
+    // reading 'ok'. Indexing [0] and [1] blind was a crash on both, and the
+    // fixtures -- three candidates, always -- hid it. Every read below is
+    // guarded, and a comparison needs two real candidates or it is not
+    // offered.
+    const md = api.candidates.find((c) => c.candidateId === s.modelId) || api.candidates[0] || null;
+    if (!md) return blank;
     const mdDet = det[md.candidateId] || {};
     const mdOv = (api.overallByCandidate || {})[md.candidateId] || null;
-    const mdHist = api.history.map((h) => ({ ...h, score: h.scores[md.candidateId] })).filter((h) => h.score != null);
+    const mdHist = (api.history || [])
+      .map((h) => ({ ...h, score: (h.scores || {})[md.candidateId] }))
+      .filter((h) => h.score != null);
 
-    const A = api.candidates[s.cmpA ?? 0], B = api.candidates[s.cmpB ?? 1];
-    const dA = det[A.candidateId] || {}, dB = det[B.candidateId] || {};
-    const shared = Object.keys(A.trackScores || {}).filter((k) => (B.trackScores || {})[k] != null);
+    const A = api.candidates[s.cmpA ?? 0] || null, B = api.candidates[s.cmpB ?? 1] || null;
+    const comparable = !!A && !!B && A.candidateId !== B.candidateId;
+    const dA = comparable ? (det[A.candidateId] || {}) : {};
+    const dB = comparable ? (det[B.candidateId] || {}) : {};
+    const shared = comparable
+      ? Object.keys(A.trackScores || {}).filter((k) => (B.trackScores || {})[k] != null)
+      : [];
 
     return {
       isModel: s.route === 'model', isModelCmp: s.route === 'modelcmp',
@@ -2019,10 +2031,15 @@ class Component extends DCLogic {
         bd: (s.cmpA === i || s.cmpB === i) ? '#1E7A57' : '#E6E4DE',
         fg: (s.cmpA === i || s.cmpB === i) ? '#1E7A57' : '#6f7679' })),
       cmpEmpty: shared.length === 0,
-      cmpEmptyNote: [A, B].filter((c) => !Object.keys(c.trackScores || {}).length)
-        .map((c) => c.model + ' has no completed evaluation').join(' and ') + ', there is nothing to compare yet.',
+      cmpEmptyNote: !comparable
+        ? 'Comparison needs two evaluated configurations. This archive holds ' +
+          api.candidates.length + '.'
+        : [A, B].filter((c) => !Object.keys(c.trackScores || {}).length)
+            .map((c) => c.model + ' has no completed evaluation').join(' and ') +
+          ', there is nothing to compare yet.',
       cmpHasRows: shared.length > 0,
-      cmpHeads: [A, B].map((c, i) => ({ model: c.model, score: c.overallScore == null ? '—' : c.overallScore + '%',
+      cmpHeads: (comparable ? [A, B] : []).map((c, i) => ({ model: c.model,
+        score: c.overallScore == null ? '—' : c.overallScore + '%',
         status: c.status, edge: i ? '#9aa0a2' : '#1E7A57' })),
       cmpRows: shared.map((k) => {
         const a = A.trackScores[k], b = B.trackScores[k];

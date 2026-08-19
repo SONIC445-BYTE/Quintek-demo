@@ -644,32 +644,58 @@ const FIXTURE_overallByCandidate = {
 // `api.candidates` synchronously right after `import()` resolves, so the data
 // has to be in place by then rather than arriving later.
 //
-// A failed or unreachable backend falls back to the fixtures and records the
-// reason on `loadError` rather than throwing -- a dashboard that renders
-// stale demo data while announcing it is degraded is more useful than one
-// that renders nothing, and the banner keeps it from being mistaken for live.
+// FIXTURES ARE USED ONLY WHEN NO BACKEND WAS EVER CONFIGURED.
+//
+// This module previously fell back to the fixtures whenever a configured
+// backend failed, on the reasoning that a degraded dashboard beats a blank
+// one. That reasoning does not survive contact with the screen it feeds. The
+// fixtures name real vendors and real models and assert "93.4% PASS"; a
+// learner who opens the transparency screen during an outage would be told,
+// specifically and falsely, which AI is marking their work and how well it
+// scored. That is the exact claim this screen exists to make truthfully, and
+// a banner above it does not repair it -- the number is what gets read and
+// remembered.
+//
+// So the rule is now the origin of the data, not the health of it:
+//
+//   * No `window.__QUINTEK_API__` at all -> a design file opened standalone
+//     with no server. Fixtures, as before. Nobody mistakes an unhosted design
+//     mock for production.
+//   * `__QUINTEK_API__` set and the fetch fails -> a real outage. Report the
+//     outage. `state` becomes 'error', every collection is empty, and the
+//     screens' existing "Unavailable / No score is shown rather than a stale
+//     or invented one" branch renders. That branch was always written and
+//     never reachable, because this module kept handing it fixtures.
 // ---------------------------------------------------------------------------
 
 const BASE = (typeof window !== 'undefined' && window.__QUINTEK_API__) || null;
 
 let live = null;
 let loadErrorMessage = null;
+let liveFailed = false;
 if (BASE) {
   try {
     const res = await fetch(BASE + '/ai/eval', { headers: { accept: 'application/json' } });
     if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
     live = await res.json();
   } catch (e) {
-    loadErrorMessage = 'live evaluation API unreachable (' + (e && e.message ? e.message : e) + '); showing fixtures';
+    loadErrorMessage = 'live evaluation API unreachable (' + (e && e.message ? e.message : e) + '); no evaluation data is shown';
     live = null;
+    liveFailed = true;
   }
 }
 
-const pick = (key, fallback) => (live && live[key] !== undefined && live[key] !== null) ? live[key] : fallback;
+// When a configured backend failed, the fallback is emptiness, not fixtures.
+const pick = (key, fallback) => {
+  if (live && live[key] !== undefined && live[key] !== null) return live[key];
+  if (liveFailed) return Array.isArray(fallback) ? [] : (typeof fallback === 'object' && fallback !== null ? {} : null);
+  return fallback;
+};
 
 export const isLive = live !== null;
 export const loadError = loadErrorMessage;
-export const state = pick('state', FIXTURE_state);
+export const isOutage = liveFailed;
+export const state = liveFailed ? 'error' : pick('state', FIXTURE_state);
 export const overview = pick('overview', FIXTURE_overview);
 export const tracks = pick('tracks', FIXTURE_tracks);
 export const routing = pick('routing', FIXTURE_routing);

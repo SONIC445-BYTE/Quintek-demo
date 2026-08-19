@@ -268,25 +268,47 @@ export const PREFLIGHT = {
 };
 
 /* Set `window.__QUINTEK_API__` to the backend origin to go live; unset uses
- * FIXTURES, so these design files still open standalone with no server. */
+ * FIXTURES, so these design files still open standalone with no server.
+ *
+ * FIXTURES ARE USED ONLY WHEN NO BACKEND WAS CONFIGURED.
+ *
+ * The fallback used to trigger on any failure, so an outage rendered the
+ * console full of fixture scorecards. This console is where a benchmark run
+ * is read and a model is promoted off it; an admin approving production on
+ * fabricated gate results is a worse outcome than an admin looking at an
+ * empty screen and going to find out why. `getRun` was the sharpest form of
+ * it -- asking for run "abc" while the backend was down returned some other
+ * run's fixture wearing the label "abc".
+ *
+ * So: no BASE means a standalone design file and fixtures are correct. A
+ * BASE that fails means an outage, and an outage is reported as one. */
 const BASE = (typeof window !== 'undefined' && window.__QUINTEK_API__) || null;
 
+export class BackendUnavailable extends Error {
+  constructor(detail) {
+    super('The benchmark backend could not be reached (' + detail + '). No run data is ' +
+          'shown rather than sample data that could be mistaken for a real result.');
+    this.name = 'BackendUnavailable';
+  }
+}
+
 async function get(path) {
-  if (!BASE) return null;
+  if (!BASE) return null;                 /* unconfigured: fixtures are honest */
   try {
     const res = await fetch(BASE + path, { headers: { accept: 'application/json' } });
     if (!res.ok) throw new Error(res.status + ' ' + path);
     return res.json();
   } catch (e) {
-    /* Unreachable backend falls back to fixtures rather than blanking the
-     * console. `isLive` below is what tells the UI which it is looking at. */
     lastError = e && e.message ? e.message : String(e);
-    return null;
+    outage = true;
+    throw new BackendUnavailable(lastError);
   }
 }
 
 export let lastError = null;
+let outage = false;
 export const isConfigured = BASE !== null;
+export function isOutage() { return outage; }
 
 export async function listRuns() {
   /* GET /api/runs returns {total, offset, limit, runs:[...]} -- paginated,
@@ -310,7 +332,13 @@ export async function listRuns() {
 
 export async function getRun(runId) {
   const live = await get(ENDPOINTS.getRun.path.replace(':run_id', runId));
-  return assertSuppression(live || FIXTURES.filter((r) => r.run_id === runId)[0] || FIXTURES[0]);
+  if (live) return assertSuppression(live);
+  /* Unconfigured only -- `get` throws on an outage. Never substitute a
+   * different run: a report labelled with the id you asked for must be the
+   * report for that id. */
+  const match = FIXTURES.filter((r) => r.run_id === runId)[0];
+  if (!match) throw new Error('no such run: ' + runId);
+  return assertSuppression(match);
 }
 
 export async function getGates() { return (await get(ENDPOINTS.getGates.path)) || GATE_REGISTRY; }

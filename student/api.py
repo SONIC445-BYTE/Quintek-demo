@@ -28,7 +28,8 @@ class ApiError(Exception):
 
 class StudentAPI:
     def __init__(self, db: Database, *, engine: Any = None, ai: Any = None,
-                 generator: Any = None, validator: Any = None, notifier: Any = None):
+                 generator: Any = None, validator: Any = None, notifier: Any = None,
+                 transparency: Any = None):
         self.db = db
         # The ingestion engine and the AI services are injected so the API can
         # be tested without a provider, and so a deployment can run the API
@@ -38,6 +39,11 @@ class StudentAPI:
         self.generator = generator
         self.validator = validator
         self._notifier = notifier
+        # The AI-transparency surface. Absent on an install with no benchmark
+        # archive, in which case /ai/* answers with what is missing rather
+        # than with sample figures -- see student/transparency.py.
+        self._transparency = transparency
+        self._eval = None
 
         from .concepts import ConceptStore
         from .knowledge import KnowledgeStore
@@ -46,6 +52,31 @@ class StudentAPI:
         self.knowledge = KnowledgeStore(db)
         self.priority = PriorityEngine(db)
         self.revision = RevisionEngine(db)
+
+    def _eval_bundle(self) -> dict | None:
+        """
+        Compose `benchmark.eval_api.EvalAPI`'s bundle, if this install has an
+        archive to compose it from. Composed rather than reimplemented: two
+        implementations of the same payload drift, and the one the learner
+        sees would be the one nobody noticed had drifted.
+        """
+        archive = getattr(self.ai, "archive", None)
+        if archive is None:
+            return None
+        if self._eval is None:
+            from benchmark.eval_api import EvalAPI
+            self._eval = EvalAPI(archive, registry=getattr(self.ai, "registry", None))
+        return self._eval.bundle()
+
+    @property
+    def transparency(self):
+        if self._transparency is None:
+            from .transparency import TransparencyService
+            archive = getattr(self.ai, "archive", None)
+            registry = getattr(self.ai, "registry", None)
+            self._transparency = TransparencyService(
+                archive=archive, registry=registry, ai_engine=self.ai)
+        return self._transparency
 
     @property
     def notifier(self):
@@ -207,7 +238,64 @@ class StudentAPI:
         if seg == ["settings", "notifications", "history"] and method == "GET":
             return 200, {"history": self.notifier.history(uid)}
 
+        # --- AI transparency (the Quintek AI Benchmark screen) ---
+        # Behind authentication like everything else here, but deliberately
+        # requires nothing beyond being a learner: the whole point is that a
+        # user can check the system that is marking them.
+        if seg and seg[0] == "ai":
+            return self._ai(method, seg[1:], params)
+
         raise ApiError(404, f"no such endpoint: {method} /{'/'.join(seg)}")
+
+    def _ai(self, method: str, seg: list[str], params: dict) -> tuple[int, dict]:
+        if method != "GET":
+            raise ApiError(405, "the AI benchmark screen is read-only")
+
+        service = self.transparency
+
+        if seg == ["benchmark"]:
+            return 200, service.overview()
+
+        if seg == ["benchmark", "categories"]:
+            return 200, service.categories()
+
+        if seg == ["benchmark", "ranking"]:
+            category = params.get("category", "overall")
+            try:
+                return 200, service.ranking(category)
+            except KeyError:
+                raise ApiError(404, f"no such benchmark category: {category!r}")
+
+        if seg == ["benchmark", "powering"]:
+            return 200, service.powering()
+
+        if seg == ["eval"]:
+            # The bundle the existing design files consume, served from the
+            # learner backend so the app talks to one origin. A phone should
+            # not have to reach the admin console's server to render the
+            # screen that tells its owner which AI is marking them.
+            bundle = self._eval_bundle()
+            if bundle is None:
+                raise ApiError(503, "this install has no benchmark archive, so there are no "
+                                    "evaluation results to serve")
+            return 200, bundle
+
+        if len(seg) == 2 and seg[0] == "models":
+            try:
+                return 200, service.profile(seg[1])
+            except KeyError:
+                raise ApiError(404, f"no benchmark run found for model {seg[1]!r}")
+
+        if len(seg) == 3 and seg[0] == "models" and seg[2] == "history":
+            history = service.history(seg[1])
+            # A model with no runs is a model this archive does not know
+            # about. 404 rather than an empty chart, so a mistyped id does not
+            # render as "evaluated, no data".
+            if not history["points"]:
+                raise ApiError(404, f"no benchmark run found for model {seg[1]!r}")
+            return 200, history
+
+        raise ApiError(404, f"no such endpoint: {method} /ai/{'/'.join(seg)}")
 
     def _auth(self, method: str, seg: list[str], body: dict,
               token: str | None) -> tuple[int, Any]:
