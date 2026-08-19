@@ -72,7 +72,10 @@ val requiredAssets = listOf(
 tasks.register("checkQuintekAssets") {
     val assetDir = file("src/main/assets")
     doLast {
-        val missing = requiredAssets.filter { !File(assetDir, it).exists() }
+        // `assetDir.resolve(...)` rather than `File(assetDir, ...)`: resolve is
+        // a kotlin.io extension and needs no import, whereas java.io.File is
+        // not reliably in scope in a Kotlin DSL build script.
+        val missing = requiredAssets.filter { !assetDir.resolve(it).exists() }
         if (missing.isNotEmpty()) {
             throw GradleException(
                 "Missing web bundle(s) in app/src/main/assets: ${missing.joinToString()}\n" +
