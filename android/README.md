@@ -1,16 +1,23 @@
 # Quintek — Android app
 
-A native Android shell around the four Quintek screens. Each screen ships
+A native Android shell around the two Quintek screens. Each screen ships
 inside the APK as a single self-contained HTML file, so the app installs and
 runs with **no server and no network**. Pointing it at a benchmark backend is
 optional and only swaps demo figures for live ones.
 
 ```
-LauncherActivity   pick a screen; set the backend URL
-WebActivity        hosts one screen in a WebView
-Screens.kt         the four bundled screens and their asset names
+MainActivity       the learner's app -- launches straight into PG Revision
+AdminActivity      the benchmark console + the backend setting
+WebScreenActivity  shared WebView host (backend injection, file chooser, back)
+Screens.kt         the two bundled screens and their asset names
 Settings.kt        the one persisted setting: backend URL
 ```
+
+**Opening the app lands a learner in PG Revision.** There is no picker in
+front of it and no title bar over it -- the web screen draws its own header
+and bottom tabs. The benchmark console is reached by **long-pressing the
+launcher icon** (an app shortcut), which keeps it one gesture away for whoever
+runs the benchmark and invisible to everyone else.
 
 ## Build it
 
@@ -48,14 +55,26 @@ open it. Nothing here is on the Play Store.
 
 | Screen | Source | Notes |
 | --- | --- | --- |
-| PG Revision | `PG Revision.dc.html` | The student app. Designed for a phone. |
+| PG Revision | `PG Revision.dc.html` | The student app. Designed for a phone. The launch destination. |
 | Benchmark Console | `Quintek Admin.dc.html` | Runs, scorecards, integrity, gates. A 1440px desktop design — it loads zoomed out and pinch-zooms; a tablet or landscape is far more comfortable. |
-| Harness | `Quintek Harness.dc.html` | Run status and track progress. |
-| Implementation Audit | `Quintek Audit.dc.html` | What exists versus what is only described. |
+
+The harness and audit screens are **not** in the app. Both were checked before
+being dropped: the harness has three click handlers and all three are
+navigation, the audit has none at all, and neither performs a fetch or touches
+the backend. They are read-only views over hardcoded fixtures, so excluding
+them costs no functionality and halves the APK. `tools_build_standalone.py`
+still builds them for the browser.
+
+The design files draw each screen inside a phone mockup sitting on a dark
+backdrop, under a caption, with a painted-on status bar. That is right for
+reviewing a design and wrong for running one, so the build strips it — see
+`strip_device_frame` in the builder. Pass `--keep-frame` to preserve it.
 
 ## Connecting to a backend
 
-Menu → **Backend** on the launcher screen. Leave it empty for demo data.
+Long-press the launcher icon → **Benchmark console**, then its ⋮ menu → **Backend**.
+Leave it empty for demo data. The setting lives in the console rather than on the
+learner's screen because pointing the app at a benchmark API is an operator's job.
 
 The benchmark API has to be reachable from the phone, which means binding it to
 the network rather than loopback and using the computer's LAN address:
@@ -65,7 +84,7 @@ python -m benchmark.cli serve-analytics --host 0.0.0.0 --port 8420
 # then set the backend to http://<computer-lan-ip>:8420
 ```
 
-`WebActivity` injects `window.__QUINTEK_API__` by intercepting the document
+`WebScreenActivity` injects `window.__QUINTEK_API__` by intercepting the document
 request and prepending a one-line `<script>` to the asset stream. That timing
 matters: `quintek-eval-api.js` reads the global while its module body is
 evaluating, so anything injected after `onPageFinished` would arrive too late
@@ -88,10 +107,19 @@ points worth going native for — not layout.
 
 - **minSdk 26** (Android 8.0). Chosen so the launcher icon can be a pure vector
   adaptive icon instead of five densities of PNG.
-- **APK is large** — roughly 19 MB, because four ~4.6 MB bundles ship inside it.
-  Each one carries its own copy of React and Babel. Dropping a screen from
-  `Screens.kt` and `TARGETS` in the builder is the easy win if that matters.
-- **No native student-app backend.** Answering questions, gap tagging and the
-  revision queue are prototype-only in the web layer; attempts live in memory
-  and are not persisted anywhere. That is a property of the product as built,
-  not of this shell.
+- **APK is around 9 MB**, because two ~4.6 MB bundles ship inside it and each
+  carries its own copy of React and Babel. Sharing one runtime between them is
+  the remaining win if that matters.
+- **No student-app backend at all.** The student screens contain zero `fetch`
+  calls, zero `localStorage`, and no file input. Answering questions, grading
+  yourself, tagging gaps, uploading a source and generating questions are all
+  prototype interactions over hardcoded fixtures — `addSource` runs a timer
+  that counts pages, and `generate` flips a boolean that reveals pre-written
+  questions. Nothing is uploaded, stored or generated. That is a property of
+  the product as built, not of this shell. See `docs/APP_BEHAVIOUR.md`.
+
+- **File chooser is wired but unused.** `WebScreenActivity` implements
+  `onShowFileChooser`, because an `<input type="file">` in a WebView is
+  silently ignored without it. No screen has a file input yet, so this is
+  groundwork for the first real upload control rather than something you can
+  exercise today.

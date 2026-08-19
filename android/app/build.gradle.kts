@@ -35,10 +35,6 @@ android {
         jvmTarget = "17"
     }
 
-    buildFeatures {
-        viewBinding = true
-    }
-
     // The bundles are already-minified single files. Compressing them again
     // costs build time and blocks the WebView from streaming them straight
     // out of the APK.
@@ -65,9 +61,7 @@ dependencies {
  * checked-in source. Fail early and say exactly what to run rather than
  * producing an APK whose screens are blank.
  */
-val requiredAssets = listOf(
-    "pg-revision.html", "quintek-admin.html", "quintek-harness.html", "quintek-audit.html"
-)
+val requiredAssets = listOf("pg-revision.html", "quintek-admin.html")
 
 tasks.register("checkQuintekAssets") {
     val assetDir = file("src/main/assets")

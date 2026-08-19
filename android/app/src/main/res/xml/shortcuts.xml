@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Long-press the launcher icon to reach the benchmark console.
+
+  A learner opening the app lands in PG Revision and never sees this; an
+  engineer gets to it in one gesture without a menu button sitting on the
+  student's screen. That is what app shortcuts are for, and it beats the
+  alternatives: an overflow menu would be visible to everyone, and a hidden
+  tap-pattern would be undiscoverable and fire by accident.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="console"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:shortcutShortLabel="@string/console_title"
+        android:shortcutLongLabel="@string/console_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.quintek.app"
+            android:targetClass="com.quintek.app.AdminActivity" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+</shortcuts>

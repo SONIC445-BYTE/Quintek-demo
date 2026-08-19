@@ -3,5 +3,5 @@
     <item
         android:id="@+id/action_backend"
         android:title="@string/backend_title"
-        android:showAsAction="ifRoom" />
+        android:showAsAction="never" />
 </menu>

@@ -1,15 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Quintek</string>
-    <string name="tagline">PG revision, and the benchmark behind it</string>
 
+    <string name="console_title">Benchmark console</string>
+    <string name="console_long">Open the benchmark console</string>
     <string name="backend_title">Backend</string>
     <string name="backend_help">Where the benchmark API is running. Leave empty to use the built-in demo data. Typically a computer on the same Wi-Fi running: python -m benchmark.cli serve-analytics --host 0.0.0.0 --port 8420</string>
-    <string name="backend_unset">Backend: not set — showing demo data</string>
-    <string name="backend_set">Backend: %1$s</string>
     <string name="backend_needs_scheme">Include http:// or https:// at the start</string>
     <string name="save">Save</string>
     <string name="use_demo_data">Use demo data</string>
-
-    <string name="offline_note">Every screen is bundled inside the app and works with no network. A backend only replaces demo figures with live ones.</string>
 </resources>

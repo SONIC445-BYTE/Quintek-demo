@@ -3,9 +3,9 @@
 
     <!--
       INTERNET is needed only to reach a benchmark backend the user points the
-      app at (Settings -> backend URL). Every screen ships inside the APK and
-      renders with no network at all, so the app is fully usable offline and
-      denying it nothing but live data.
+      app at. Every screen ships inside the APK and renders with no network at
+      all, so the app is fully usable offline and denying it costs only live
+      data.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -23,25 +23,33 @@
         <!--
           usesCleartextTraffic is on because a developer pointing this at a
           local harness will use http://192.168.x.x:8420 on their own LAN.
-          Narrow it to a domain-specific network-security-config before any
-          release outside development.
+          Narrow it to a scoped network-security-config before any release
+          outside development.
         -->
 
+        <!-- The learner's app. Launching goes straight here. -->
         <activity
-            android:name=".LauncherActivity"
+            android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name">
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Quintek.NoActionBar"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Long-press the icon -> "Benchmark console". -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <activity
-            android:name=".WebActivity"
-            android:exported="false"
+            android:name=".AdminActivity"
+            android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
-            android:parentActivityName=".LauncherActivity" />
+            android:parentActivityName=".MainActivity" />
 
     </application>
 
