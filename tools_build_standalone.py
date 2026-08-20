@@ -159,7 +159,55 @@ def strip_device_frame(html: str, name: str) -> str:
         r"<div style=\"[^\"]*\">\s*Tap a graph node to re-centre[^<]*</div>\s*",
         "", html, f"{name}: design-review caption", required=False)
 
+    verify_frame_removed(html, name)
     return html
+
+
+# Signatures of the design mockup that must not survive into a shipped build.
+# Each is specific to the frame rather than to page content -- a 42px radius
+# on a full-screen slab, a hard 844px height, the viewport caption.
+_FRAME_MARKERS = (
+    ("844px", "the device mockup's fixed height"),
+    ("border-radius:42px", "the device mockup's rounded corners"),
+    ("IPHONE", "the viewport caption"),
+    ("box-shadow:0 40px 110px", "the device mockup's drop shadow"),
+    ("box-shadow:0 40px 120px", "the device mockup's drop shadow"),
+)
+
+
+class FrameNotStripped(RuntimeError):
+    """A device-frame signature survived the strip pass."""
+
+
+def verify_frame_removed(html: str, name: str) -> None:
+    """
+    Fail the build if any frame signature survives.
+
+    Every substitution in `strip_device_frame` is `required=False`, because a
+    given design file legitimately may not contain every element. The cost of
+    that tolerance is silence: if a design is restyled so a pattern no longer
+    matches, the strip quietly does nothing and the app ships with a picture
+    of a phone drawn inside the phone, complete with a second status bar.
+
+    That is exactly what happened, and it was diagnosed from a screenshot
+    rather than from the build. So the build now checks its own output and
+    refuses rather than warning -- a warning in a hundred lines of build log
+    is a warning nobody reads.
+    """
+    found = [(marker, why) for marker, why in _FRAME_MARKERS if marker in html]
+    if not found:
+        return
+    detail = "; ".join(f"{marker!r} ({why})" for marker, why in found)
+    raise FrameNotStripped(
+        f"{name}: the device mockup was not fully removed -- {detail}. The design file has "
+        "probably been restyled so a pattern in strip_device_frame no longer matches. Fix "
+        "the pattern; do not ship the frame.")
+
+
+def _status_bar_present(html: str) -> bool:
+    """A painted-on clock is the most visible half of the frame."""
+    import re as _re
+    return bool(_re.search(r"<span>\d{2}:\d{2}</span>", html))
 
 
 def _inline_js(js: str, label: str) -> str:

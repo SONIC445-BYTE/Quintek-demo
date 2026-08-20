@@ -1,0 +1,44 @@
+{
+  "_comment": "Launch configuration, not permanent promises. Allowances, caps, rollover and compute weights are changed HERE and take effect without a client release. The benchmark will recalibrate these once cost-per-500-accepted is measured.",
+  "currency": "INR",
+  "plans": [
+    {"family": "free",    "name": "Free",    "billing_interval": "none",
+     "price_minor": 0,      "monthly_question_allowance": 100,
+     "daily_question_limit": 20,  "session_question_limit": 50,
+     "rollover_percent": 0,  "sort_order": 0},
+
+    {"family": "student", "name": "Student", "billing_interval": "monthly",
+     "price_minor": 29900,  "monthly_question_allowance": 2500,
+     "daily_question_limit": 150, "session_question_limit": 500,
+     "rollover_percent": 50, "sort_order": 1},
+    {"family": "student", "name": "Student", "billing_interval": "annual",
+     "price_minor": 299000, "monthly_question_allowance": 2500,
+     "daily_question_limit": 150, "session_question_limit": 500,
+     "rollover_percent": 50, "sort_order": 1},
+
+    {"family": "pro",     "name": "Pro",     "billing_interval": "monthly",
+     "price_minor": 49900,  "monthly_question_allowance": 5000,
+     "daily_question_limit": 300, "session_question_limit": 500,
+     "rollover_percent": 50, "sort_order": 2},
+    {"family": "pro",     "name": "Pro",     "billing_interval": "annual",
+     "price_minor": 499000, "monthly_question_allowance": 5000,
+     "daily_question_limit": 300, "session_question_limit": 500,
+     "rollover_percent": 50, "sort_order": 2},
+
+    {"family": "power",   "name": "Power",   "billing_interval": "monthly",
+     "price_minor": 79900,  "monthly_question_allowance": 10000,
+     "daily_question_limit": 500, "session_question_limit": 500,
+     "rollover_percent": 50, "sort_order": 3},
+    {"family": "power",   "name": "Power",   "billing_interval": "annual",
+     "price_minor": 799000, "monthly_question_allowance": 10000,
+     "daily_question_limit": 500, "session_question_limit": 500,
+     "rollover_percent": 50, "sort_order": 3}
+  ],
+  "compute_unit_weights": [
+    {"question_type": "mcq",            "weight": 1, "note": "simple single-best-answer"},
+    {"question_type": "vignette",       "weight": 2, "note": "clinical vignette"},
+    {"question_type": "conceptual",     "weight": 2, "note": "mechanism/concept"},
+    {"question_type": "deep_reasoning", "weight": 3, "note": "multi-step reasoning"},
+    {"question_type": "image",          "weight": 4, "note": "vision input"}
+  ]
+}
