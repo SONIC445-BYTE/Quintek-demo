@@ -232,3 +232,20 @@ CREATE TABLE IF NOT EXISTS compute_unit_weights (
     note           TEXT NOT NULL DEFAULT '',
     updated_at     TEXT NOT NULL
 );
+
+-- ---------------------------------------------------------------------------
+-- Abuse observations
+-- ---------------------------------------------------------------------------
+-- Only what Quintek observes about its own accounts. `ip_hash` is a hash, not
+-- an address: the question asked of it is "have many accounts appeared here",
+-- which a hash answers, and storing the address itself would be collecting
+-- more than the purpose needs.
+CREATE TABLE IF NOT EXISTS abuse_observations (
+    user_id    TEXT NOT NULL,
+    device_id  TEXT NOT NULL DEFAULT '',
+    ip_hash    TEXT NOT NULL DEFAULT '',
+    seen_at    TEXT NOT NULL,
+    PRIMARY KEY (user_id, device_id, ip_hash)
+);
+CREATE INDEX IF NOT EXISTS ix_abuse_device ON abuse_observations(device_id);
+CREATE INDEX IF NOT EXISTS ix_abuse_ip ON abuse_observations(ip_hash);
