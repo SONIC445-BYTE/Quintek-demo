@@ -93,6 +93,21 @@ class SubscriptionService:
         this row exists so the webhook has something to attach to.
         """
         plan = self.plans.get(plan_id)
+
+        # Reuse an unfinished attempt at the SAME plan rather than stacking
+        # another. A learner who taps Upgrade, changes their mind, and taps it
+        # again should not leave two live gateway subscriptions behind, each
+        # of which would charge them.
+        pending = self.conn.execute(
+            "SELECT * FROM subscriptions WHERE user_id=? AND plan_id=? AND status=?"
+            " ORDER BY created_at DESC LIMIT 1", (user_id, plan.id, PENDING)).fetchone()
+        if pending is not None and pending["gateway_subscription_id"]:
+            return {"subscription_id": pending["id"], "plan": plan.as_dict(),
+                    "status": PENDING, "reused": True,
+                    "checkout": {"key": getattr(self.gateway, "key_id", ""),
+                                 "subscription_id": pending["gateway_subscription_id"],
+                                 "name": "Quintek", "recurring": 1}}
+
         subscription_id = new_id("sub")
         stamp = now_iso()
         self.conn.execute(
@@ -220,6 +235,7 @@ class SubscriptionService:
 
         # Entitlement follows the money, and only forward.
         if target in (ACTIVE, TRIALING):
+            self._supersede_others(row)
             self._grant_entitlement(row["user_id"], row["id"], row["plan_id"])
         elif target in (CANCELLED, EXPIRED):
             self._revoke_entitlement(row["user_id"])
@@ -227,6 +243,54 @@ class SubscriptionService:
         self.conn.commit()
         return ProcessResult("PROCESSED", f"{current} -> {target}",
                              subscription_id=row["id"], new_state=target)
+
+    def _supersede_others(self, row) -> list[str]:
+        """
+        One live subscription per learner. Retire the rest, HERE and not sooner.
+
+        An upgrade creates a second gateway subscription, and until one of them
+        is stopped the learner is billed twice -- the worst class of billing
+        bug, because the victim finds it before you do.
+
+        The retirement happens at ACTIVATION and never at checkout. Cancelling
+        the old subscription when the new one is merely PENDING would leave a
+        paying customer with nothing at all if the new payment then failed.
+        The order is: new one confirmed paid, then old one stopped.
+        """
+        others = self.conn.execute(
+            "SELECT id, gateway, gateway_subscription_id FROM subscriptions"
+            " WHERE user_id=? AND id != ? AND status IN (?,?,?,?)",
+            (row["user_id"], row["id"], ACTIVE, TRIALING, PAST_DUE,
+             CANCEL_AT_PERIOD_END)).fetchall()
+
+        retired = []
+        for other in others:
+            self.conn.execute(
+                "UPDATE subscriptions SET status=?, cancel_at_period_end=0, updated_at=?"
+                " WHERE id=?", (CANCELLED, now_iso(), other["id"]))
+            retired.append(other["id"])
+            # Stop the gateway charging for it too. A local CANCELLED row with
+            # a live gateway subscription behind it is a silent recurring
+            # charge for a plan the learner no longer has.
+            if self.gateway is not None and other["gateway_subscription_id"]:
+                try:
+                    self.gateway.cancel(other["gateway_subscription_id"],
+                                        at_period_end=False)
+                except Exception:
+                    # Recorded rather than raised: the new subscription is
+                    # already paid for, and failing the webhook here would
+                    # make the gateway retry an event that DID apply.
+                    self.conn.execute(
+                        "INSERT INTO webhook_events (id, gateway, gateway_event_id,"
+                        " event_type, payload, signature_valid, received_at,"
+                        " processed_at, processing_status, error)"
+                        " VALUES (?,?,?,?,?,1,?,?, 'FAILED', ?)",
+                        (new_id("evt"), other["gateway"] or "",
+                         f"supersede:{other['id']}",
+                         "subscription.supersede.failed", "{}", now_iso(), now_iso(),
+                         "the old gateway subscription could not be cancelled and may"
+                         " still be charging; cancel it by hand"))
+        return retired
 
     # ---------- entitlements ----------
 

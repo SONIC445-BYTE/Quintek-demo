@@ -324,3 +324,119 @@ def test_the_gateway_receives_its_own_plan_id_not_quinteks(env):
     service.begin_checkout("u1", plan.id)
     assert seen["plan_id"] == "plan_rzp_" + plan.id
     assert seen["plan_id"] != plan.id
+
+
+# ---------------------------------------------------------------------------
+# One live subscription per learner
+# ---------------------------------------------------------------------------
+
+def test_an_upgrade_retires_the_old_subscription_when_the_new_one_activates(env):
+    """
+    An upgrade creates a SECOND gateway subscription. Until one is stopped the
+    learner is billed twice, and they find it before you do.
+    """
+    conn, plans, service, engine = env
+    cancelled: list = []
+    service.gateway.cancel = lambda ref, at_period_end=True: cancelled.append(ref) or {}
+
+    pro = plans.active("pro", "monthly")
+    first = service.begin_checkout("u1", pro.id)
+    body, signature = webhook("subscription.activated", "active")
+    assert service.handle_webhook(body, signature).status == "PROCESSED"
+    assert conn.execute("SELECT status FROM subscriptions WHERE id=?",
+                        (first["subscription_id"],)).fetchone()["status"] == "ACTIVE"
+
+    power = plans.active("power", "monthly")
+    service.gateway.transport = lambda m, p, b, a: {"id": "sub_rzp_2"}
+    second = service.begin_checkout("u1", power.id)
+    body, signature = webhook("subscription.activated", "active",
+                              event_id="evt_2", sub="sub_rzp_2")
+    assert service.handle_webhook(body, signature).status == "PROCESSED"
+
+    states = dict(conn.execute(
+        "SELECT id, status FROM subscriptions WHERE user_id='u1'").fetchall())
+    assert states[second["subscription_id"]] == "ACTIVE"
+    assert states[first["subscription_id"]] == "CANCELLED"
+    assert cancelled == ["sub_rzp_1"], "the old GATEWAY subscription kept charging"
+
+
+def test_the_old_one_is_retired_at_activation_and_not_at_checkout(env):
+    """
+    Cancelling when the new subscription is merely PENDING would leave a paying
+    customer with nothing at all if that payment then failed.
+    """
+    conn, plans, service, _ = env
+    cancelled: list = []
+    service.gateway.cancel = lambda ref, at_period_end=True: cancelled.append(ref) or {}
+
+    first = service.begin_checkout("u2", plans.active("pro", "monthly").id)
+    service.handle_webhook(*webhook("subscription.activated", "active"))
+
+    service.gateway.transport = lambda m, p, b, a: {"id": "sub_rzp_3"}
+    service.begin_checkout("u2", plans.active("power", "monthly").id)
+
+    assert cancelled == [], "the old subscription was cancelled before the new one paid"
+    assert conn.execute("SELECT status FROM subscriptions WHERE id=?",
+                        (first["subscription_id"],)).fetchone()["status"] == "ACTIVE"
+
+
+def test_a_failed_gateway_cancel_is_recorded_rather_than_raised(env):
+    """
+    The new subscription is already paid for. Failing the webhook would make
+    the gateway retry an event that DID apply -- but an old subscription that
+    may still be charging must not vanish silently either.
+    """
+    conn, plans, service, _ = env
+
+    def refuses(ref, at_period_end=True):
+        raise RuntimeError("gateway is down")
+
+    service.gateway.cancel = refuses
+    service.begin_checkout("u3", plans.active("pro", "monthly").id)
+    service.handle_webhook(*webhook("subscription.activated", "active"))
+
+    service.gateway.transport = lambda m, p, b, a: {"id": "sub_rzp_4"}
+    service.begin_checkout("u3", plans.active("power", "monthly").id)
+    result = service.handle_webhook(*webhook("subscription.activated", "active",
+                                             event_id="evt_9", sub="sub_rzp_4"))
+    assert result.status == "PROCESSED"
+
+    flagged = conn.execute(
+        "SELECT error FROM webhook_events"
+        " WHERE event_type='subscription.supersede.failed'").fetchall()
+    assert flagged, "a gateway subscription that may still be charging was not flagged"
+    assert "cancel it by hand" in flagged[0]["error"]
+
+
+def test_tapping_upgrade_twice_does_not_create_two_gateway_subscriptions(env):
+    """
+    A learner who taps Upgrade, changes their mind and taps it again must not
+    leave two live subscriptions behind, each of which would charge them.
+    """
+    conn, plans, service, _ = env
+    calls: list = []
+
+    def transport(method, path, body, auth):
+        calls.append(path)
+        return {"id": "sub_rzp_1"}
+
+    service.gateway.transport = transport
+    plan = plans.active("pro", "monthly").id
+    first = service.begin_checkout("u4", plan)
+    second = service.begin_checkout("u4", plan)
+
+    assert second["subscription_id"] == first["subscription_id"]
+    assert second.get("reused") is True
+    assert len(calls) == 1, "a second gateway subscription was created"
+    assert conn.execute(
+        "SELECT COUNT(*) AS n FROM subscriptions WHERE user_id='u4'").fetchone()["n"] == 1
+
+
+def test_a_different_plan_still_gets_its_own_checkout(env):
+    """Reuse is per PLAN. Changing your mind about which plan is not a retry."""
+    conn, plans, service, _ = env
+    service.begin_checkout("u5", plans.active("pro", "monthly").id)
+    service.gateway.transport = lambda m, p, b, a: {"id": "sub_rzp_5"}
+    service.begin_checkout("u5", plans.active("power", "monthly").id)
+    assert conn.execute(
+        "SELECT COUNT(*) AS n FROM subscriptions WHERE user_id='u5'").fetchone()["n"] == 2
