@@ -1,0 +1,24 @@
+{
+  "provider": "Cerebras",
+  "probed": 2,
+  "counts": {
+    "BILLING_BLOCKED": 2
+  },
+  "results": [
+    {
+      "model": "gpt-oss-120b",
+      "http": 402,
+      "status": "BILLING_BLOCKED",
+      "latency_ms": 289.9,
+      "detail": "{\"message\":\"Payment required to access this resource. Visit your billing tab.\",\"type\":\"payment_required_error\",\"param\":\""
+    },
+    {
+      "model": "gemma-4-31b",
+      "http": 402,
+      "status": "BILLING_BLOCKED",
+      "latency_ms": 300.9,
+      "detail": "{\"message\":\"Payment required to access this resource. Visit your billing tab.\",\"type\":\"payment_required_error\",\"param\":\""
+    }
+  ],
+  "observed_at": "2026-08-20T07:23:05Z"
+}

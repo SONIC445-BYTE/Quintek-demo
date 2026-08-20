@@ -1,0 +1,220 @@
+{
+  "provider": "NVIDIA",
+  "results": [
+    {
+      "model": "deepseek-ai/deepseek-v4-flash-0731",
+      "structured_ok": true,
+      "clean_json": true,
+      "latency_ms": 3533.8,
+      "chars": 34,
+      "sample": "{\"answer\": \"B\", \"confidence\": 0.9}"
+    },
+    {
+      "model": "google/diffusiongemma-26b-a4b-it",
+      "structured_ok": true,
+      "clean_json": true,
+      "latency_ms": 952.3,
+      "chars": 34,
+      "sample": "{\"answer\": \"B\", \"confidence\": 0.9}"
+    },
+    {
+      "model": "meta/llama-3.1-70b-instruct",
+      "structured_ok": true,
+      "clean_json": true,
+      "latency_ms": 3725.8,
+      "chars": 34,
+      "sample": "{\"answer\": \"B\", \"confidence\": 0.9}"
+    },
+    {
+      "model": "meta/llama-3.1-8b-instruct",
+      "structured_ok": true,
+      "clean_json": true,
+      "latency_ms": 858.1,
+      "chars": 34,
+      "sample": "{\"answer\": \"B\", \"confidence\": 0.9}"
+    },
+    {
+      "model": "meta/llama-3.2-11b-vision-instruct",
+      "structured_ok": true,
+      "clean_json": true,
+      "latency_ms": 2499.5,
+      "chars": 34,
+      "sample": "{\"answer\": \"B\", \"confidence\": 0.9}"
+    },
+    {
+      "model": "minimaxai/minimax-m3",
+      "structured_ok": true,
+      "clean_json": true,
+      "latency_ms": 2189.3,
+      "chars": 34,
+      "sample": "{\"answer\": \"B\", \"confidence\": 0.9}"
+    },
+    {
+      "model": "nvidia/ising-calibration-1.5-31b",
+      "structured_ok": true,
+      "clean_json": false,
+      "latency_ms": 827.2,
+      "chars": 52,
+      "sample": "```json\n{\n  \"answer\": \"B\",\n  \"confidence\": 0.9\n}\n```"
+    },
+    {
+      "model": "nvidia/llama-3.1-nemoguard-8b-content-safety",
+      "structured_ok": false,
+      "clean_json": true,
+      "latency_ms": 456.6,
+      "chars": 24,
+      "sample": "{\"User Safety\": \"safe\"} "
+    },
+    {
+      "model": "nvidia/llama-3.1-nemoguard-8b-topic-control",
+      "structured_ok": false,
+      "clean_json": false,
+      "latency_ms": 426.6,
+      "chars": 10,
+      "sample": "off-topic "
+    },
+    {
+      "model": "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+      "structured_ok": true,
+      "clean_json": true,
+      "latency_ms": 20397.6,
+      "chars": 34,
+      "sample": "{\"answer\": \"B\", \"confidence\": 0.9}"
+    },
+    {
+      "model": "nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
+      "structured_ok": false,
+      "clean_json": true,
+      "latency_ms": 521.6,
+      "chars": 24,
+      "sample": "{\"User Safety\": \"safe\"} "
+    },
+    {
+      "model": "nvidia/llama-3.3-nemotron-super-49b-v1",
+      "structured_ok": true,
+      "clean_json": true,
+      "latency_ms": 953.6,
+      "chars": 34,
+      "sample": "{\"answer\": \"B\", \"confidence\": 0.9}"
+    },
+    {
+      "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+      "structured_ok": false,
+      "clean_json": false,
+      "latency_ms": 2263.7,
+      "chars": 0,
+      "sample": ""
+    },
+    {
+      "model": "nvidia/nemotron-3-nano-30b-a3b",
+      "structured_ok": true,
+      "clean_json": false,
+      "latency_ms": 2633.0,
+      "chars": 253,
+      "sample": "The user asks: \"Reply with ONLY this JSON object and nothing else: {\"answer\": \"B"
+    },
+    {
+      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "structured_ok": true,
+      "clean_json": true,
+      "latency_ms": 878.0,
+      "chars": 34,
+      "sample": "{\"answer\": \"B\", \"confidence\": 0.9}"
+    },
+    {
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "structured_ok": true,
+      "clean_json": true,
+      "latency_ms": 1012.6,
+      "chars": 34,
+      "sample": "{\"answer\": \"B\", \"confidence\": 0.9}"
+    },
+    {
+      "model": "nvidia/nemotron-3-ultra-550b-a55b",
+      "structured_ok": true,
+      "clean_json": false,
+      "latency_ms": 841.7,
+      "chars": 254,
+      "sample": "The user wants me to reply with ONLY a specific JSON object and nothing else. Th"
+    },
+    {
+      "model": "nvidia/nemotron-3.5-content-safety",
+      "structured_ok": false,
+      "clean_json": false,
+      "latency_ms": 333.1,
+      "chars": 17,
+      "sample": "User Safety: safe"
+    },
+    {
+      "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "structured_ok": true,
+      "clean_json": false,
+      "latency_ms": 621.2,
+      "chars": 230,
+      "sample": "Here's a thinking process:\n\n1.  **Analyze User Input:**\n   - User says: \"Reply w"
+    },
+    {
+      "model": "nvidia/nemotron-mini-4b-instruct",
+      "structured_ok": true,
+      "clean_json": true,
+      "latency_ms": 552.2,
+      "chars": 34,
+      "sample": "{\"answer\": \"B\", \"confidence\": 0.9}"
+    },
+    {
+      "model": "nvidia/nvidia-nemotron-nano-9b-v2",
+      "structured_ok": false,
+      "clean_json": false,
+      "latency_ms": 1699.2,
+      "chars": 0,
+      "sample": ""
+    },
+    {
+      "model": "nvidia/riva-translate-4b-instruct-v1.1",
+      "structured_ok": null,
+      "clean_json": null,
+      "latency_ms": 153.6,
+      "error": "HTTPError: HTTP Error 502: Bad Gateway"
+    },
+    {
+      "model": "nvidia/riva-translate-4b-instruct-v2",
+      "structured_ok": true,
+      "clean_json": false,
+      "latency_ms": 680.9,
+      "chars": 85,
+      "sample": "Reply with ONLY this JSON object and nothing else: {\"answer\": \"B\", \"confidence\":"
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "structured_ok": false,
+      "clean_json": false,
+      "latency_ms": 2488.7,
+      "chars": 0,
+      "sample": ""
+    },
+    {
+      "model": "poolside/laguna-xs-2.1",
+      "structured_ok": true,
+      "clean_json": true,
+      "latency_ms": 442.8,
+      "chars": 34,
+      "sample": "{\"answer\": \"B\", \"confidence\": 0.9}"
+    },
+    {
+      "model": "stepfun-ai/step-3.7-flash",
+      "structured_ok": false,
+      "clean_json": false,
+      "latency_ms": 10555.3,
+      "chars": 0,
+      "sample": ""
+    },
+    {
+      "model": "thinkingmachines/inkling",
+      "structured_ok": false,
+      "clean_json": false,
+      "latency_ms": 1856.0,
+      "chars": 0,
+      "sample": ""
+    }
+  ]
+}

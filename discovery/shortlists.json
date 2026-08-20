@@ -1,0 +1,905 @@
+{
+  "generation": [
+    {
+      "key": "openrouter:dots-studio/dots-3-note-preview:free",
+      "provider": "openrouter",
+      "model_id": "dots-studio/dots-3-note-preview:free",
+      "context_length": 512000,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n\n         \n{\"id\":\"gen-1787210580-exirvCoITNBcT6tLaUeC\",\"object\":\"chat.completion\",\"created\":178721",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 2056.8,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:google/gemma-4-26b-a4b-it:free",
+      "provider": "openrouter",
+      "model_id": "google/gemma-4-26b-a4b-it:free",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "image",
+        "text",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n{\"id\":\"gen-1787210581-ysJ2t0AzqqCw75hnBqng\",\"object\":\"chat.completion\",\"created\":1787210581,\"model",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 1053.7,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:google/gemma-4-31b-it:free",
+      "provider": "openrouter",
+      "model_id": "google/gemma-4-31b-it:free",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "image",
+        "text",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210581-9ufenCM66APJfaphoBdP\",\"object\":\"chat.completion\",\"created\":1787210581,\"model\":\"google/gemma-4-31b-",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 557.0,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+      "provider": "openrouter",
+      "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210582-OaRhDsQyzcOdVQ4F9EZC\",\"object\":\"chat.completion\",\"created\":1787210582,\"model\":\"nvidia/nemotron-3-s",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 476.4,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:openrouter/free",
+      "provider": "openrouter",
+      "model_id": "openrouter/free",
+      "context_length": 200000,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n{\"id\":\"gen-1787210582-J73Tfk20gIpydNDqIQzY\",\"object\":\"chat.completion\",\"created\":1787210582,\"model\":\"nvidia/n",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 883.8,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:openai/gpt-oss-20b:free",
+      "provider": "openrouter",
+      "model_id": "openai/gpt-oss-20b:free",
+      "context_length": 131072,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n{\"id\":\"gen-1787210583-aynY3ooKcOdpSP3nSAGD\",\"object\":\"chat.completion\",\"created\":1787210583,\"model",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 1162.7,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:liquid/lfm-2.5-2.6b:free",
+      "provider": "openrouter",
+      "model_id": "liquid/lfm-2.5-2.6b:free",
+      "context_length": 128000,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n\n         \n{\"id\":\"gen-1787210580-gHBAGSkyzEdDdluewvA3\",\"object\":\"chat.completion\",\"created\":178721",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 2037.9,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:nvidia/nemotron-nano-9b-v2:free",
+      "provider": "openrouter",
+      "model_id": "nvidia/nemotron-nano-9b-v2:free",
+      "context_length": 128000,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210583-N3BrT91L2Qi9jtHOoKI4\",\"object\":\"chat.completion\",\"created\":1787210583,\"model\":\"nvidia/nemotron-nan",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 388.3,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:inclusionai/ling-2.6-flash",
+      "provider": "openrouter",
+      "model_id": "inclusionai/ling-2.6-flash",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": false,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.01,
+      "price_out_per_m": 0.03,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n{\"id\":\"gen-1787210581-ZvhczdrqVC5sVPzP6aZ6\",\"object\":\"chat.completion\",\"created\":1787210581,\"model\":\"inclusio",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 673.7,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:ibm-granite/granite-4.0-h-micro",
+      "provider": "openrouter",
+      "model_id": "ibm-granite/granite-4.0-h-micro",
+      "context_length": 131000,
+      "structured": true,
+      "tools": false,
+      "reasoning": false,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.017,
+      "price_out_per_m": 0.112,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210583-Bm69O0vNlF59wfc6fgNT\",\"object\":\"chat.completion\",\"created\":1787210583,\"model\":\"ibm-granite/granite",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 371.1,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:mistralai/mistral-nemo",
+      "provider": "openrouter",
+      "model_id": "mistralai/mistral-nemo",
+      "context_length": 131072,
+      "structured": true,
+      "tools": true,
+      "reasoning": false,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.019000000000000003,
+      "price_out_per_m": 0.03,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210583-zU1XLPwEvSM1KY81DTUO\",\"object\":\"chat.completion\",\"created\":1787210583,\"model\":\"mistralai/mistral-n",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 538.6,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:inclusionai/ling-3.0-flash",
+      "provider": "openrouter",
+      "model_id": "inclusionai/ling-3.0-flash",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.020999999999999998,
+      "price_out_per_m": 0.063,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210580-lpD8KvkHiXjBUHhM7CU4\",\"object\":\"chat.completion\",\"created\":1787210580,\"model\":\"inclusionai/ling-3.",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 1145.7,
+      "confirmed": true,
+      "recheckable": false
+    }
+  ],
+  "validation": [
+    {
+      "key": "openrouter:dots-studio/dots-3-note-preview:free",
+      "provider": "openrouter",
+      "model_id": "dots-studio/dots-3-note-preview:free",
+      "context_length": 512000,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n\n         \n{\"id\":\"gen-1787210580-exirvCoITNBcT6tLaUeC\",\"object\":\"chat.completion\",\"created\":178721",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 2056.8,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:google/gemma-4-26b-a4b-it:free",
+      "provider": "openrouter",
+      "model_id": "google/gemma-4-26b-a4b-it:free",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "image",
+        "text",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n{\"id\":\"gen-1787210581-ysJ2t0AzqqCw75hnBqng\",\"object\":\"chat.completion\",\"created\":1787210581,\"model",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 1053.7,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:google/gemma-4-31b-it:free",
+      "provider": "openrouter",
+      "model_id": "google/gemma-4-31b-it:free",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "image",
+        "text",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210581-9ufenCM66APJfaphoBdP\",\"object\":\"chat.completion\",\"created\":1787210581,\"model\":\"google/gemma-4-31b-",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 557.0,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+      "provider": "openrouter",
+      "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210582-OaRhDsQyzcOdVQ4F9EZC\",\"object\":\"chat.completion\",\"created\":1787210582,\"model\":\"nvidia/nemotron-3-s",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 476.4,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:openrouter/free",
+      "provider": "openrouter",
+      "model_id": "openrouter/free",
+      "context_length": 200000,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n{\"id\":\"gen-1787210582-J73Tfk20gIpydNDqIQzY\",\"object\":\"chat.completion\",\"created\":1787210582,\"model\":\"nvidia/n",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 883.8,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:openai/gpt-oss-20b:free",
+      "provider": "openrouter",
+      "model_id": "openai/gpt-oss-20b:free",
+      "context_length": 131072,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n{\"id\":\"gen-1787210583-aynY3ooKcOdpSP3nSAGD\",\"object\":\"chat.completion\",\"created\":1787210583,\"model",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 1162.7,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:liquid/lfm-2.5-2.6b:free",
+      "provider": "openrouter",
+      "model_id": "liquid/lfm-2.5-2.6b:free",
+      "context_length": 128000,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n\n         \n{\"id\":\"gen-1787210580-gHBAGSkyzEdDdluewvA3\",\"object\":\"chat.completion\",\"created\":178721",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 2037.9,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:nvidia/nemotron-nano-9b-v2:free",
+      "provider": "openrouter",
+      "model_id": "nvidia/nemotron-nano-9b-v2:free",
+      "context_length": 128000,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210583-N3BrT91L2Qi9jtHOoKI4\",\"object\":\"chat.completion\",\"created\":1787210583,\"model\":\"nvidia/nemotron-nan",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 388.3,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:inclusionai/ling-3.0-flash",
+      "provider": "openrouter",
+      "model_id": "inclusionai/ling-3.0-flash",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.020999999999999998,
+      "price_out_per_m": 0.063,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210580-lpD8KvkHiXjBUHhM7CU4\",\"object\":\"chat.completion\",\"created\":1787210580,\"model\":\"inclusionai/ling-3.",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 1145.7,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:nex-agi/nex-n2-mini",
+      "provider": "openrouter",
+      "model_id": "nex-agi/nex-n2-mini",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.024999999999999998,
+      "price_out_per_m": 0.09999999999999999,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n{\"id\":\"gen-1787210580-aoah5eKeUltlJzcidPdW\",\"object\":\"chat.completion\",\"created\":1787210580,\"model",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 1983.0,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:qwen/qwen3.7-flash",
+      "provider": "openrouter",
+      "model_id": "qwen/qwen3.7-flash",
+      "context_length": 1000000,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.03,
+      "price_out_per_m": 0.13,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n\n         \n\n         \n{\"id\":\"gen-1787210580-oafjKSfPiCzW5QB6dUQV\",\"object\":\"chat.completion\",\"crea",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 2679.2,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:upstage/solar-pro4",
+      "provider": "openrouter",
+      "model_id": "upstage/solar-pro4",
+      "context_length": 524288,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": false,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.03,
+      "price_out_per_m": 0.12,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n\n         \n\n         \n{\"id\":\"gen-1787210580-2KLrxQR4VIlX4GyV9lKD\",\"object\":\"chat.completion\",\"crea",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 2824.8,
+      "confirmed": true,
+      "recheckable": false
+    }
+  ],
+  "vision": [
+    {
+      "key": "openrouter:dots-studio/dots-3-note-preview:free",
+      "provider": "openrouter",
+      "model_id": "dots-studio/dots-3-note-preview:free",
+      "context_length": 512000,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n\n         \n{\"id\":\"gen-1787210580-exirvCoITNBcT6tLaUeC\",\"object\":\"chat.completion\",\"created\":178721",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 2056.8,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:google/gemma-4-26b-a4b-it:free",
+      "provider": "openrouter",
+      "model_id": "google/gemma-4-26b-a4b-it:free",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "image",
+        "text",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n{\"id\":\"gen-1787210581-ysJ2t0AzqqCw75hnBqng\",\"object\":\"chat.completion\",\"created\":1787210581,\"model",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 1053.7,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:google/gemma-4-31b-it:free",
+      "provider": "openrouter",
+      "model_id": "google/gemma-4-31b-it:free",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "image",
+        "text",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210581-9ufenCM66APJfaphoBdP\",\"object\":\"chat.completion\",\"created\":1787210581,\"model\":\"google/gemma-4-31b-",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 557.0,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:openrouter/free",
+      "provider": "openrouter",
+      "model_id": "openrouter/free",
+      "context_length": 200000,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.0,
+      "price_out_per_m": 0.0,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n{\"id\":\"gen-1787210582-J73Tfk20gIpydNDqIQzY\",\"object\":\"chat.completion\",\"created\":1787210582,\"model\":\"nvidia/n",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 883.8,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:nex-agi/nex-n2-mini",
+      "provider": "openrouter",
+      "model_id": "nex-agi/nex-n2-mini",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.024999999999999998,
+      "price_out_per_m": 0.09999999999999999,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n{\"id\":\"gen-1787210580-aoah5eKeUltlJzcidPdW\",\"object\":\"chat.completion\",\"created\":1787210580,\"model",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 1983.0,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:qwen/qwen3.7-flash",
+      "provider": "openrouter",
+      "model_id": "qwen/qwen3.7-flash",
+      "context_length": 1000000,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.03,
+      "price_out_per_m": 0.13,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n\n         \n\n         \n{\"id\":\"gen-1787210580-oafjKSfPiCzW5QB6dUQV\",\"object\":\"chat.completion\",\"crea",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 2679.2,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:qwen/qwen3.5-flash-02-23",
+      "provider": "openrouter",
+      "model_id": "qwen/qwen3.5-flash-02-23",
+      "context_length": 1000000,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.065,
+      "price_out_per_m": 0.26,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n\n         \n\n         \n\n         \n{\"id\":\"gen-1787210582-8satval87NSDUAOCQ6Nl\",\"object\":\"chat.comple",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 2372.3,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:bytedance-seed/seed-1.6-flash",
+      "provider": "openrouter",
+      "model_id": "bytedance-seed/seed-1.6-flash",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "image",
+        "text",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.075,
+      "price_out_per_m": 0.3,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210582-vKOBnRoLSRXhYeuVYeLm\",\"object\":\"chat.completion\",\"created\":1787210582,\"model\":\"bytedance-seed/seed",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 534.2,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:mistralai/mistral-small-3.2-24b-instruct",
+      "provider": "openrouter",
+      "model_id": "mistralai/mistral-small-3.2-24b-instruct",
+      "context_length": 256000,
+      "structured": true,
+      "tools": true,
+      "reasoning": false,
+      "vision": true,
+      "input_modalities": [
+        "image",
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.09375,
+      "price_out_per_m": 0.25,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210583-PsRAX5a2WQ4mJ4lGP9RU\",\"object\":\"chat.completion\",\"created\":1787210583,\"model\":\"mistralai/mistral-s",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 518.8,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:meta-llama/llama-4-scout",
+      "provider": "openrouter",
+      "model_id": "meta-llama/llama-4-scout",
+      "context_length": 1310720,
+      "structured": true,
+      "tools": true,
+      "reasoning": false,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.09999999999999999,
+      "price_out_per_m": 0.3,
+      "inference_status": "SERVING",
+      "inference_reason": "{\"id\":\"gen-1787210583-DrjqrLiRQu5KwzltbpFG\",\"object\":\"chat.completion\",\"created\":1787210583,\"model\":\"meta-llama/llama-4-",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 503.6,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:bytedance-seed/seed-2.0-mini",
+      "provider": "openrouter",
+      "model_id": "bytedance-seed/seed-2.0-mini",
+      "context_length": 262144,
+      "structured": true,
+      "tools": true,
+      "reasoning": true,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.09999999999999999,
+      "price_out_per_m": 0.39999999999999997,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n{\"id\":\"gen-1787210582-PFniAuz7PQy4mw1UoJ8o\",\"object\":\"chat.completion\",\"created\":1787210582,\"model\":\"bytedanc",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 701.9,
+      "confirmed": true,
+      "recheckable": false
+    },
+    {
+      "key": "openrouter:mistralai/ministral-3b-2512",
+      "provider": "openrouter",
+      "model_id": "mistralai/ministral-3b-2512",
+      "context_length": 131072,
+      "structured": true,
+      "tools": true,
+      "reasoning": false,
+      "vision": true,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "price_in_per_m": 0.09999999999999999,
+      "price_out_per_m": 0.09999999999999999,
+      "inference_status": "SERVING",
+      "inference_reason": "\n         \n\n         \n\n         \n\n         \n\n         \n{\"id\":\"gen-1787210582-YPUAwm8C3sbuk7Kb9AZ2\",\"object\":\"chat.comple",
+      "observed_at": "2026-08-20T07:23:27Z",
+      "latency_ms": 2298.6,
+      "confirmed": true,
+      "recheckable": false
+    }
+  ]
+}

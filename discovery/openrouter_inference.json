@@ -1,0 +1,195 @@
+{
+  "provider": "OpenRouter",
+  "probed": 26,
+  "counts": {
+    "SERVING": 21,
+    "429_RATE_LIMIT": 1,
+    "5xx_PROVIDER": 2,
+    "404_MODEL_UNAVAILABLE": 2
+  },
+  "results": [
+    {
+      "model": "dots-studio/dots-3-note-preview:free",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 2056.8,
+      "detail": "\n         \n\n         \n\n         \n{\"id\":\"gen-1787210580-exirvCoITNBcT6tLaUeC\",\"object\":\"chat.completion\",\"created\":178721"
+    },
+    {
+      "model": "liquid/lfm-2.5-2.6b:free",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 2037.9,
+      "detail": "\n         \n\n         \n\n         \n{\"id\":\"gen-1787210580-gHBAGSkyzEdDdluewvA3\",\"object\":\"chat.completion\",\"created\":178721"
+    },
+    {
+      "model": "upstage/solar-pro4",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 2824.8,
+      "detail": "\n         \n\n         \n\n         \n\n         \n{\"id\":\"gen-1787210580-2KLrxQR4VIlX4GyV9lKD\",\"object\":\"chat.completion\",\"crea"
+    },
+    {
+      "model": "qwen/qwen3.7-flash",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 2679.2,
+      "detail": "\n         \n\n         \n\n         \n\n         \n{\"id\":\"gen-1787210580-oafjKSfPiCzW5QB6dUQV\",\"object\":\"chat.completion\",\"crea"
+    },
+    {
+      "model": "inclusionai/ling-3.0-flash",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 1145.7,
+      "detail": "{\"id\":\"gen-1787210580-lpD8KvkHiXjBUHhM7CU4\",\"object\":\"chat.completion\",\"created\":1787210580,\"model\":\"inclusionai/ling-3."
+    },
+    {
+      "model": "nex-agi/nex-n2-mini",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 1983.0,
+      "detail": "\n         \n\n         \n{\"id\":\"gen-1787210580-aoah5eKeUltlJzcidPdW\",\"object\":\"chat.completion\",\"created\":1787210580,\"model"
+    },
+    {
+      "model": "z-ai/glm-5.2:free",
+      "http": 429,
+      "status": "429_RATE_LIMIT",
+      "latency_ms": 351.2,
+      "detail": "{\"error\":{\"message\":\"Provider returned error\",\"code\":429,\"metadata\":{\"raw\":\"z-ai/glm-5.2:free is temporarily rate-limite"
+    },
+    {
+      "model": "inclusionai/ling-2.6-flash",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 673.7,
+      "detail": "\n         \n{\"id\":\"gen-1787210581-ZvhczdrqVC5sVPzP6aZ6\",\"object\":\"chat.completion\",\"created\":1787210581,\"model\":\"inclusio"
+    },
+    {
+      "model": "google/gemma-4-26b-a4b-it:free",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 1053.7,
+      "detail": "\n         \n\n         \n{\"id\":\"gen-1787210581-ysJ2t0AzqqCw75hnBqng\",\"object\":\"chat.completion\",\"created\":1787210581,\"model"
+    },
+    {
+      "model": "google/gemma-4-31b-it:free",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 557.0,
+      "detail": "{\"id\":\"gen-1787210581-9ufenCM66APJfaphoBdP\",\"object\":\"chat.completion\",\"created\":1787210581,\"model\":\"google/gemma-4-31b-"
+    },
+    {
+      "model": "google/lyria-3-pro-preview",
+      "http": 502,
+      "status": "5xx_PROVIDER",
+      "latency_ms": 709.4,
+      "detail": "{\"error\":{\"message\":\"Provider returned error\",\"code\":502,\"metadata\":{\"raw\":\"{\\n  \\\"error\\\": {\\n    \\\"code\\\": 500,\\n    \\"
+    },
+    {
+      "model": "google/lyria-3-clip-preview",
+      "http": 502,
+      "status": "5xx_PROVIDER",
+      "latency_ms": 747.0,
+      "detail": "{\"error\":{\"message\":\"Provider returned error\",\"code\":502,\"metadata\":{\"raw\":\"{\\n  \\\"error\\\": {\\n    \\\"code\\\": 500,\\n    \\"
+    },
+    {
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 476.4,
+      "detail": "{\"id\":\"gen-1787210582-OaRhDsQyzcOdVQ4F9EZC\",\"object\":\"chat.completion\",\"created\":1787210582,\"model\":\"nvidia/nemotron-3-s"
+    },
+    {
+      "model": "bytedance-seed/seed-2.0-mini",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 701.9,
+      "detail": "\n         \n{\"id\":\"gen-1787210582-PFniAuz7PQy4mw1UoJ8o\",\"object\":\"chat.completion\",\"created\":1787210582,\"model\":\"bytedanc"
+    },
+    {
+      "model": "qwen/qwen3.5-flash-02-23",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 2372.3,
+      "detail": "\n         \n\n         \n\n         \n\n         \n\n         \n{\"id\":\"gen-1787210582-8satval87NSDUAOCQ6Nl\",\"object\":\"chat.comple"
+    },
+    {
+      "model": "openrouter/free",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 883.8,
+      "detail": "\n         \n{\"id\":\"gen-1787210582-J73Tfk20gIpydNDqIQzY\",\"object\":\"chat.completion\",\"created\":1787210582,\"model\":\"nvidia/n"
+    },
+    {
+      "model": "bytedance-seed/seed-1.6-flash",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 534.2,
+      "detail": "{\"id\":\"gen-1787210582-vKOBnRoLSRXhYeuVYeLm\",\"object\":\"chat.completion\",\"created\":1787210582,\"model\":\"bytedance-seed/seed"
+    },
+    {
+      "model": "mistralai/ministral-3b-2512",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 2298.6,
+      "detail": "\n         \n\n         \n\n         \n\n         \n\n         \n{\"id\":\"gen-1787210582-YPUAwm8C3sbuk7Kb9AZ2\",\"object\":\"chat.comple"
+    },
+    {
+      "model": "ibm-granite/granite-4.0-h-micro",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 371.1,
+      "detail": "{\"id\":\"gen-1787210583-Bm69O0vNlF59wfc6fgNT\",\"object\":\"chat.completion\",\"created\":1787210583,\"model\":\"ibm-granite/granite"
+    },
+    {
+      "model": "nvidia/nemotron-nano-9b-v2:free",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 388.3,
+      "detail": "{\"id\":\"gen-1787210583-N3BrT91L2Qi9jtHOoKI4\",\"object\":\"chat.completion\",\"created\":1787210583,\"model\":\"nvidia/nemotron-nan"
+    },
+    {
+      "model": "openai/gpt-5-nano:batch",
+      "http": 404,
+      "status": "404_MODEL_UNAVAILABLE",
+      "latency_ms": 175.7,
+      "detail": "{\"error\":{\"message\":\"This model is only available through the Batch API. Use the /api/beta/batches endpoint instead.\",\"c"
+    },
+    {
+      "model": "openai/gpt-oss-20b:free",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 1162.7,
+      "detail": "\n         \n\n         \n{\"id\":\"gen-1787210583-aynY3ooKcOdpSP3nSAGD\",\"object\":\"chat.completion\",\"created\":1787210583,\"model"
+    },
+    {
+      "model": "mistralai/mistral-small-3.2-24b-instruct",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 518.8,
+      "detail": "{\"id\":\"gen-1787210583-PsRAX5a2WQ4mJ4lGP9RU\",\"object\":\"chat.completion\",\"created\":1787210583,\"model\":\"mistralai/mistral-s"
+    },
+    {
+      "model": "openai/gpt-4.1-nano:batch",
+      "http": 404,
+      "status": "404_MODEL_UNAVAILABLE",
+      "latency_ms": 250.0,
+      "detail": "{\"error\":{\"message\":\"This model is only available through the Batch API. Use the /api/beta/batches endpoint instead.\",\"c"
+    },
+    {
+      "model": "meta-llama/llama-4-scout",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 503.6,
+      "detail": "{\"id\":\"gen-1787210583-DrjqrLiRQu5KwzltbpFG\",\"object\":\"chat.completion\",\"created\":1787210583,\"model\":\"meta-llama/llama-4-"
+    },
+    {
+      "model": "mistralai/mistral-nemo",
+      "http": 200,
+      "status": "SERVING",
+      "latency_ms": 538.6,
+      "detail": "{\"id\":\"gen-1787210583-zU1XLPwEvSM1KY81DTUO\",\"object\":\"chat.completion\",\"created\":1787210583,\"model\":\"mistralai/mistral-n"
+    }
+  ],
+  "observed_at": "2026-08-20T07:23:05Z"
+}
