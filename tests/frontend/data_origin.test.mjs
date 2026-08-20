@@ -130,5 +130,68 @@ try {
 }
 check('report: an unknown run id never returns a different run', substituted === false);
 
+// ---------------------------------------------------------------------------
+// quintek-student-api.js -- feeds the wired "write questions" interaction
+// ---------------------------------------------------------------------------
+
+const STUDENT = 'quintek-student-api.js';
+
+m = await load(STUDENT, () => { globalThis.window = {}; });
+check('student: no backend configured -> reports itself unconfigured', m.configured === false);
+let studentThrew = null;
+try { await m.notebooks(); } catch (e) { studentThrew = e; }
+check('student: an unconfigured call throws rather than returning demo data',
+  studentThrew !== null && studentThrew.name === 'BackendError');
+
+m = await load(STUDENT, () => {
+  globalThis.window = { __QUINTEK_STUDENT_API__: 'http://127.0.0.1:9' };
+  globalThis.fetch = async () => { throw new Error('ECONNREFUSED'); };
+});
+check('student: a configured backend is reported as configured', m.configured === true);
+studentThrew = null;
+try { await m.notebooks(); } catch (e) { studentThrew = e; }
+check('student: an unreachable backend throws an outage, not demo questions',
+  studentThrew !== null && /could not be reached/.test(studentThrew.message));
+
+m = await load(STUDENT, () => {
+  globalThis.window = { __QUINTEK_STUDENT_API__: 'http://live' };
+  globalThis.fetch = async (url, init) => {
+    if (String(url).includes('/notebooks/') && init && init.method === 'POST') {
+      return { ok: true, status: 200, text: async () => JSON.stringify(
+        { question_ids: ['q1'], count: 1,
+          validation: { approved: 1, flagged: 0, skipped: 0, failed: 0 } }) };
+    }
+    if (String(url).includes('/questions')) {
+      return { ok: true, status: 200, text: async () => JSON.stringify({ questions: [
+        { id: 'q1', stem: 'A real stem from a real model', options: ['a', 'b'],
+          family: 'Clinical vignette', validation_status: 'approved',
+          generated_by_candidate_id: 'nvidia:meta/llama-3.1-70b-instruct',
+          source_id: 's1', chunk_id: 'c1' }] }) };
+    }
+    return { ok: true, status: 200, text: async () => '{}' };
+  };
+});
+const generated = await m.generateQuestions('nb1', 1, {});
+check('student: generateQuestions returns the engine\'s real questions',
+  generated.count === 1 && generated.questions[0].stem === 'A real stem from a real model');
+check('student: provenance travels with each question',
+  generated.questions[0].validationStatus === 'approved' &&
+  /llama/.test(generated.questions[0].generatedBy) &&
+  generated.questions[0].chunkId === 'c1');
+check('student: the validation summary is carried through',
+  generated.validation && generated.validation.approved === 1);
+
+m = await load(STUDENT, () => {
+  globalThis.window = { __QUINTEK_STUDENT_API__: 'http://live' };
+  globalThis.fetch = async () => ({
+    ok: false, status: 503, statusText: 'Service Unavailable',
+    text: async () => JSON.stringify({ error: 'no AI services are configured' }),
+  });
+});
+studentThrew = null;
+try { await m.generateQuestions('nb1', 1, {}); } catch (e) { studentThrew = e; }
+check('student: a 503 from the engine surfaces the engine\'s own reason',
+  studentThrew !== null && /no AI services are configured/.test(studentThrew.message));
+
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');
 process.exit(failures ? 1 : 0);

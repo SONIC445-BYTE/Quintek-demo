@@ -1650,6 +1650,7 @@ class Component extends DCLogic {
     custom: false, customTime: false,
     srcType: null, srcValue: '', families: [], otherFamily: '',
     makeSrc: null, makeStage: 'idle', makeCount: 10, makeDone: 0,
+    studentApi: null, makeLive: null, makeError: '',
     makeFams: ['Clinical vignette', 'Interpretation', 'Mechanism'],
     makeCustomOn: false, makeCustomVal: '', makeOther: '',
     obCount: 10, obCustomOn: false, obCustomVal: '', studioOther: {},
@@ -1692,6 +1693,13 @@ class Component extends DCLogic {
     import('./quintek-eval-api.js')
       .then((api) => this.setState({ evalApi: api, evalState: api.state }))
       .catch(() => this.setState({ evalState: 'error' }));
+    /* The learner backend. Only ONE interaction is wired to it so far --
+     * "write questions" on the Make screen. Everything else on this screen
+     * still runs on the in-file constants, deliberately: wiring a screen at a
+     * time keeps the debugging surface small enough to actually debug. */
+    import('./quintek-student-api.js')
+      .then((api) => this.setState({ studentApi: api.configured ? api : null }))
+      .catch(() => this.setState({ studentApi: null }));
   }
   componentWillUnmount() { cancelAnimationFrame(this._raf); clearInterval(this._ext); }
 
@@ -1772,11 +1780,25 @@ class Component extends DCLogic {
     const cur = st.makeFams;
     return { makeFams: cur.indexOf(l) >= 0 ? cur.filter((x) => x !== l) : cur.concat([l]) };
   });
-  resetMake = () => this.setState({ makeStage: 'idle', makeDone: 0 });
+  resetMake = () => this.setState({ makeStage: 'idle', makeDone: 0, makeLive: null, makeError: '' });
+
+  /* WIRED INTERACTION: click -> engine -> real model -> validation -> UI.
+   *
+   * With a backend configured this calls it and renders what the engine
+   * actually produced. With none configured it runs the original simulation,
+   * which is correct for a design file opened from disk. What it never does
+   * is fall back to the simulation when a CONFIGURED backend fails: a learner
+   * would then be shown four invented question stems as though a model had
+   * written them, which is the same defect as the fixtures fallback and
+   * worse, because these are the questions they would go on to answer. */
   startMake = () => {
     if (this.state.makeStage === 'running') return;
-    this.setState({ makeStage: 'running', makeDone: 0 });
+    this.setState({ makeStage: 'running', makeDone: 0, makeLive: null, makeError: '' });
     clearInterval(this._gen);
+
+    const api = this.state.studentApi;
+    if (api) { this.startMakeLive(api); return; }
+
     this._gen = setInterval(() => {
       this.setState((st) => {
         const next = st.makeDone + 1;
@@ -1784,6 +1806,28 @@ class Component extends DCLogic {
         return { makeDone: next };
       });
     }, 420);
+  };
+
+  startMakeLive = (api) => {
+    const notebookId = this.state.makeNotebookId || (this.state.makeSrc && this.state.makeSrc.notebookId);
+    if (!notebookId) {
+      this.setState({ makeStage: 'error', makeError:
+        'This screen has no backend notebook id yet. Generation needs a notebook that exists ' +
+        'server-side; the source picker is still running on in-file constants.' });
+      return;
+    }
+    /* Real generation has no per-question progress to report -- one call
+     * returns all of them -- so the bar advances to an indeterminate state
+     * rather than counting up a number the engine never emits. */
+    api.generateQuestions(notebookId, this.state.makeCount, {})
+      .then((result) => this.setState({
+        makeStage: 'done', makeDone: result.count, makeLive: result,
+      }))
+      .catch((e) => this.setState({
+        makeStage: 'error',
+        makeError: (e && e.message ? e.message : String(e)) +
+          '. No questions are shown rather than demo questions that were not written by a model.',
+      }));
   };
   select = (id) => () => { this.setState({ sel: id }); this.reheat(); };
   toggleFilter = (k) => () => this.setState((s) => ({ filters: { ...s.filters, [k]: !s.filters[k] } }));
@@ -2176,6 +2220,8 @@ class Component extends DCLogic {
       makeSourceMeta: (s.makeSrc && s.makeSrc.detail) || '',
       makeColor: SUBJ[nb.subject].color,
       makeIdle: s.makeStage === 'idle', makeRunning: s.makeStage === 'running', makeDone: s.makeStage === 'done',
+      makeFailed: s.makeStage === 'error', makeErrorText: s.makeError,
+      makeIsLive: !!s.makeLive,
       makeCounts: [5, 10, 15, 20, 'custom'].map((v) => {
         const on = v === 'custom' ? s.makeCustomOn : (!s.makeCustomOn && s.makeCount === v);
         return { label: v === 'custom' ? 'Custom' : String(v), set: this.setMakeCount(v),
@@ -2208,19 +2254,49 @@ class Component extends DCLogic {
       makeCtaFg: s.makeFams.length ? '#fff' : '#9aa0a2',
       makeCtaCursor: s.makeFams.length ? 'pointer' : 'not-allowed',
       startMade: this.startMade,
-      makeProgressText: 'Writing question ' + Math.min(s.makeDone + 1, s.makeCount) + ' of ' + s.makeCount + ', then checking it against the source',
-      makeProgressPct: Math.round((s.makeDone / Math.max(1, s.makeCount)) * 100) + '%',
-      makeDrafts: Array.from({ length: Math.min(s.makeDone, 4) }, (_, i) => {
-        const fam = s.makeFams[i % Math.max(1, s.makeFams.length)] || 'Clinical vignette';
-        const colour = (FAMILIES.find((x) => x[0] === fam) || ['', '#1E7A57'])[1];
-        return { family: fam, color: colour,
-          stem: ['A 62-year-old woman with preserved ejection fraction reports…',
-            'Ferritin 9 ng/mL with normal CRP. The most likely reading is…',
-            'Hepcidin binds ferroportin. The immediate consequence is…',
-            'Which finding separates iron deficiency from anaemia of chronic disease?'][i] };
-      }).reverse(),
-      makeReadyLine: s.makeCount + ' questions written from this source.',
-      makeReadyNote: 'Each one carries its page reference and the concepts it tests. They join the queue for this notebook.',
+      makeProgressText: s.studentApi
+        ? 'Asking the model to write ' + s.makeCount + ' questions from this source, then '
+          + 'checking each one with a different model'
+        : 'Writing question ' + Math.min(s.makeDone + 1, s.makeCount) + ' of ' + s.makeCount
+          + ', then checking it against the source',
+      /* Real generation returns all questions in one call, so there is no
+       * per-question progress to report. An indeterminate bar is honest; a
+       * bar counting up to a number the engine never emits is not. */
+      makeProgressPct: s.studentApi ? '100%'
+        : Math.round((s.makeDone / Math.max(1, s.makeCount)) * 100) + '%',
+      makeDrafts: (s.makeLive
+        ? s.makeLive.questions.slice(0, 4).map((q) => {
+            const fam = q.family || 'Question';
+            const colour = (FAMILIES.find((x) => x[0] === fam) || ['', '#1E7A57'])[1];
+            return { family: fam, color: colour, stem: q.stem,
+              /* Provenance travels with the question. The simulation could
+               * not supply any of this, which is the point of wiring it. */
+              validation: q.validationStatus, model: q.generatedBy };
+          })
+        : Array.from({ length: Math.min(s.makeDone, 4) }, (_, i) => {
+            const fam = s.makeFams[i % Math.max(1, s.makeFams.length)] || 'Clinical vignette';
+            const colour = (FAMILIES.find((x) => x[0] === fam) || ['', '#1E7A57'])[1];
+            return { family: fam, color: colour,
+              stem: ['A 62-year-old woman with preserved ejection fraction reports…',
+                'Ferritin 9 ng/mL with normal CRP. The most likely reading is…',
+                'Hepcidin binds ferroportin. The immediate consequence is…',
+                'Which finding separates iron deficiency from anaemia of chronic disease?'][i],
+              validation: '', model: '' };
+          }).reverse()),
+      makeReadyLine: s.makeLive
+        ? s.makeLive.count + ' question' + (s.makeLive.count === 1 ? '' : 's')
+          + ' written from this source.'
+        : s.makeCount + ' questions written from this source.',
+      makeReadyNote: s.makeLive
+        ? (s.makeLive.validation
+            ? s.makeLive.validation.approved + ' approved by an independent model, '
+              + s.makeLive.validation.flagged + ' flagged for review'
+              + (s.makeLive.validation.skipped
+                  ? ', ' + s.makeLive.validation.skipped
+                    + ' not checked (no independent model was available)' : '')
+              + '. Each carries its source locator and the concepts it tests.'
+            : 'Each one carries its source locator and the concepts it tests.')
+        : 'Each one carries its page reference and the concepts it tests. They join the queue for this notebook.',
       resetMake: this.resetMake, startMake: this.startMake,
       isToday: r === 'today', isWeak: r === 'weak', isMore: r === 'more',
       isHome: r === 'home', isNotebook: r === 'notebook' && nb.sources > 0, isGraph: r === 'graph',
