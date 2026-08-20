@@ -671,6 +671,106 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
       </div>
     </sc-if>
 
+    <sc-if value="{{ isBilling }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:16px;padding:0 16px 24px">
+
+        <sc-if value="{{ billOutage }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:8px;padding:16px;background:#fff;border:1px solid rgba(188,76,67,.3);border-top:2px solid #BC4C43;border-radius:0 0 7px 7px">
+            <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:#BC4C43">Unavailable</span>
+            <span style="font-size:13px;line-height:1.55;color:#5d6467">{{ billError }}</span>
+          </div>
+        </sc-if>
+
+        <div style="display:flex;flex-direction:column;gap:12px;padding:16px;background:#fff;border:1px solid #E6E4DE;border-top:2px solid #1E7A57;border-radius:0 0 7px 7px">
+          <span style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:#8a9093">Your plan</span>
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.06em;color:#7c8386">{{ billStatus }}</span>
+          </span>
+          <span style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px">
+            <span style="font-family:'Source Serif 4',Georgia,'Times New Roman',serif;font-size:26px;line-height:1;color:#16191A">{{ billPlanName }}</span>
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:15px;color:#16191A">{{ billPrice }}</span>
+          </span>
+          <span style="font-size:11.5px;color:#7c8386">{{ billRenewal }}</span>
+          <sc-if value="{{ billScheduled }}" hint-placeholder-val="{{ true }}">
+            <span style="font-size:11.5px;color:#B5812B">{{ billScheduled }}</span>
+          </sc-if>
+          <sc-if value="{{ billDemoNote }}" hint-placeholder-val="{{ true }}">
+            <span style="font-size:11.5px;color:#8a9093">{{ billDemoNote }}</span>
+          </sc-if>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px;padding:16px;background:#fff;border:1px solid #E6E4DE;border-radius:7px">
+          <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">This month</span>
+          <span style="display:flex;flex-direction:column;gap:6px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:13px;color:#16191A">{{ billMonthLabel }}</span>
+            <span style="position:relative;height:6px;background:#EDEBE4;border-radius:3px;overflow:hidden">
+              <span style="position:absolute;left:0;top:0;bottom:0;width:{{ billMonthPct }};background:#1E7A57"></span>
+            </span>
+            <span style="font-size:11.5px;color:#7c8386">Remaining {{ billMonthRemaining }}</span>
+          </span>
+
+          <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">Today</span>
+          <span style="display:flex;flex-direction:column;gap:6px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:13px;color:#16191A">{{ billTodayLabel }}</span>
+            <span style="position:relative;height:6px;background:#EDEBE4;border-radius:3px;overflow:hidden">
+              <span style="position:absolute;left:0;top:0;bottom:0;width:{{ billTodayPct }};background:#B5812B"></span>
+            </span>
+            <span style="font-size:11.5px;color:#7c8386">Remaining today {{ billTodayRemaining }}</span>
+          </span>
+
+          <sc-if value="{{ billBindingNote }}" hint-placeholder-val="{{ true }}">
+            <span style="padding:9px 11px;background:#FAF8F2;border:1px solid #E6E4DE;border-radius:5px;font-size:11.5px;line-height:1.5;color:#5d6467">{{ billBindingNote }}</span>
+          </sc-if>
+          <sc-if value="{{ billRollover }}" hint-placeholder-val="{{ true }}">
+            <span style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11.5px;color:#7c8386">
+              <span>Rollover</span><span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:#1E7A57">{{ billRollover }}</span>
+            </span>
+          </sc-if>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px;padding:16px;background:#fff;border:1px solid #E6E4DE;border-radius:7px">
+          <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">{{ billSessionLimit }}-Q session</span>
+          <span style="font-size:13px;line-height:1.55;color:#5d6467">You can generate up to {{ billSessionLimit }} questions in one session.</span>
+          <span style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-size:11.5px;color:#7c8386">Available now</span>
+            <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:18px;color:#16191A">{{ billAvailableNow }}</span>
+          </span>
+        </div>
+
+        <button onClick="{{ goPlans }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;padding:14px 15px;min-height:52px;background:#1E7A57;border:none;border-radius:6px;cursor:pointer;text-align:left;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif">
+          <span style="font-size:13.5px;font-weight:600;color:#fff">Change plan</span>
+          <span style="font-size:11.5px;color:rgba(255,255,255,.8)">View all plans</span>
+        </button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isPlans }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:16px;padding:0 16px 24px">
+        <div style="display:flex;gap:0;padding:3px;background:#EDEBE4;border-radius:7px">
+          <button onClick="{{ setMonthly }}" style="flex:1;padding:9px;border:none;border-radius:5px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;font-weight:600;background:{{ billMonthlyBg }};color:{{ billMonthlyFg }}">Monthly</button>
+          <button onClick="{{ setAnnual }}" style="flex:1;padding:9px;border:none;border-radius:5px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;font-weight:600;background:{{ billAnnualBg }};color:{{ billAnnualFg }}">Annual</button>
+        </div>
+
+        <sc-for list="{{ billPlanCards }}" as="pc" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:11px;padding:16px;background:#fff;border:1px solid #E6E4DE;border-radius:7px">
+            <span style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+              <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.06em;color:#8a9093">{{ pc.name }}</span>
+              <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11px;font-weight:600;color:#1E7A57">{{ pc.saving }}</span>
+            </span>
+            <span style="display:flex;align-items:baseline;gap:6px">
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:24px;color:#16191A">{{ pc.price }}</span>
+              <span style="font-size:12px;color:#7c8386">{{ pc.priceSuffix }}</span>
+              <span style="font-size:11px;color:#9aa0a2">{{ pc.monthlyEquivalent }}</span>
+            </span>
+            <span style="display:flex;flex-direction:column;gap:4px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#5d6467">
+              <span>{{ pc.allowance }}</span><span>{{ pc.daily }}</span><span>{{ pc.session }}</span>
+            </span>
+            <button onClick="{{ pc.choose }}" style="width:100%;box-sizing:border-box;padding:11px;min-height:44px;background:#1E7A57;border:none;border-radius:6px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:13px;font-weight:600;color:#fff">Upgrade</button>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
     <sc-if value="{{ isNotebookEmpty }}" hint-placeholder-val="{{ true }}">
       <div style="display:flex;flex-direction:column;gap:16px;padding:24px 20px">
         <div style="display:flex;flex-direction:column;gap:12px;padding:26px 20px;border:1px dashed #CFCCC2;border-radius:8px;text-align:center;align-items:center">
@@ -1651,6 +1751,8 @@ class Component extends DCLogic {
     srcType: null, srcValue: '', families: [], otherFamily: '',
     makeSrc: null, makeStage: 'idle', makeCount: 10, makeDone: 0,
     studentApi: null, makeLive: null, makeError: '',
+    billingApi: null, billing: null, billingError: '', planInterval: 'monthly',
+    pricing: null,
     makeFams: ['Clinical vignette', 'Interpretation', 'Mechanism'],
     makeCustomOn: false, makeCustomVal: '', makeOther: '',
     obCount: 10, obCustomOn: false, obCustomVal: '', studioOther: {},
@@ -1700,6 +1802,17 @@ class Component extends DCLogic {
     import('./quintek-student-api.js')
       .then((api) => this.setState({ studentApi: api.configured ? api : null }))
       .catch(() => this.setState({ studentApi: null }));
+    /* Billing. Unconfigured means a design file opened from disk, and the
+     * screen keeps its constants. A CONFIGURED backend that fails shows the
+     * outage: a user told they have 3,000 questions left when the server
+     * thinks otherwise hits a refusal they cannot explain. */
+    import('./quintek-billing-api.js')
+      .then((api) => {
+        if (!api.configured) { this.setState({ billingApi: null }); return; }
+        this.setState({ billingApi: api });
+        this.loadBilling(api);
+      })
+      .catch(() => this.setState({ billingApi: null }));
   }
   componentWillUnmount() { cancelAnimationFrame(this._raf); clearInterval(this._ext); }
 
@@ -1780,6 +1893,21 @@ class Component extends DCLogic {
     const cur = st.makeFams;
     return { makeFams: cur.indexOf(l) >= 0 ? cur.filter((x) => x !== l) : cur.concat([l]) };
   });
+  loadBilling = (api) => {
+    const client = api || this.state.billingApi;
+    if (!client) return;
+    Promise.all([client.subscription(), client.usage(), client.pricing()])
+      .then(([subscription, usage, pricing]) =>
+        this.setState({ billing: { subscription, usage }, pricing, billingError: '' }))
+      .catch((e) => this.setState({
+        billing: null,
+        billingError: (e && e.message ? e.message : String(e)) +
+          '. Your plan and usage are not shown rather than showing figures the server has ' +
+          'not confirmed.',
+      }));
+  };
+  setPlanInterval = (interval) => () => this.setState({ planInterval: interval });
+
   resetMake = () => this.setState({ makeStage: 'idle', makeDone: 0, makeLive: null, makeError: '' });
 
   /* WIRED INTERACTION: click -> engine -> real model -> validation -> UI.
@@ -2097,6 +2225,103 @@ class Component extends DCLogic {
     };
   }
 
+  billingVals() {
+    const s = this.state;
+    const api = s.billingApi;
+    const live = s.billing;
+
+    /* No backend configured: the design-file constants, which is honest for a
+     * file opened from disk. Configured but failed: the outage, never
+     * invented numbers. */
+    if (!api) {
+      return {
+        billLive: false, billOutage: false, billError: '',
+        billPlanName: 'Free', billStatus: 'ACTIVE', billPrice: '—',
+        billMonthLabel: '— / — questions', billMonthPct: '0%', billMonthRemaining: '—',
+        billTodayLabel: '— / — questions', billTodayPct: '0%', billTodayRemaining: '—',
+        billRollover: '', billSessionLimit: '—', billAvailableNow: '—', billBindingNote: '',
+        billManageable: false, billRenewal: '', billScheduled: '',
+        billPlanCards: [], ...this.intervalStyles(),
+        setMonthly: this.setPlanInterval('monthly'),
+        setAnnual: this.setPlanInterval('annual'),
+        goPlans: this.go('plans'), goBilling: this.go('billing'),
+        billDemoNote: 'Sign in to see your plan and usage.',
+      };
+    }
+
+    if (s.billingError || !live) {
+      return {
+        billLive: false, billOutage: true, billError: s.billingError,
+        billPlanName: '—', billStatus: 'UNAVAILABLE', billPrice: '—',
+        billMonthLabel: '—', billMonthPct: '0%', billMonthRemaining: '—',
+        billTodayLabel: '—', billTodayPct: '0%', billTodayRemaining: '—',
+        billRollover: '', billSessionLimit: '—', billAvailableNow: '—', billBindingNote: '',
+        billManageable: false, billRenewal: '', billScheduled: '',
+        billPlanCards: [], ...this.intervalStyles(),
+        setMonthly: this.setPlanInterval('monthly'),
+        setAnnual: this.setPlanInterval('annual'),
+        goPlans: this.go('plans'), goBilling: this.go('billing'), billDemoNote: '',
+      };
+    }
+
+    const bars = api.usageBars(live.usage);
+    const sub = live.subscription || {};
+    const cards = s.pricing ? api.planCards(s.pricing, s.planInterval) : [];
+
+    return {
+      billLive: true, billOutage: false, billError: '',
+      billPlanName: sub.plan_name || 'Free',
+      billStatus: sub.status || 'ACTIVE',
+      billPrice: sub.price_display || '—',
+      billMonthLabel: bars.monthLabel,
+      billMonthPct: bars.monthPercent + '%',
+      billMonthRemaining: bars.monthRemaining,
+      billTodayLabel: bars.todayLabel,
+      billTodayPct: bars.todayPercent + '%',
+      billTodayRemaining: bars.todayRemaining,
+      billRollover: bars.rollover,
+      billSessionLimit: bars.sessionLimit,
+      billAvailableNow: bars.availableNow,
+      /* The sentence that keeps monthly and daily from being confused. */
+      billBindingNote: bars.bindingNote,
+      billManageable: !!sub.manageable,
+      billRenewal: sub.cancel_at_period_end && sub.current_period_end
+        ? 'Does not renew. Access until ' + String(sub.current_period_end).slice(0, 10)
+        : (sub.current_period_end ? 'Renews ' + String(sub.current_period_end).slice(0, 10) : ''),
+      billScheduled: sub.scheduled_change
+        ? sub.scheduled_change.plan + ' begins ' +
+          String(sub.scheduled_change.effective_at || '').slice(0, 10)
+        : '',
+      billPlanCards: cards.map((c) => ({ ...c, choose: this.chooseePlan(c.planId) })),
+      ...this.intervalStyles(),
+      setMonthly: this.setPlanInterval('monthly'),
+      setAnnual: this.setPlanInterval('annual'),
+      goPlans: this.go('plans'), goBilling: this.go('billing'), billDemoNote: '',
+    };
+  }
+
+  /* The toggle binds colours, not booleans. Returning `true` for a
+   * background produced `background:true`, which every browser drops -- the
+   * selected side then looked identical to the unselected one and the toggle
+   * appeared not to work. */
+  intervalStyles = () => {
+    const annual = this.state.planInterval === 'annual';
+    return {
+      billMonthlyBg: annual ? 'transparent' : '#fff',
+      billMonthlyFg: annual ? '#7c8386' : '#16191A',
+      billAnnualBg: annual ? '#fff' : 'transparent',
+      billAnnualFg: annual ? '#16191A' : '#7c8386',
+    };
+  };
+
+  chooseePlan = (planId) => () => {
+    const api = this.state.billingApi;
+    if (!api || !planId) return;
+    api.beginCheckout(planId)
+      .then(() => this.loadBilling())
+      .catch((e) => this.setState({ billingError: e && e.message ? e.message : String(e) }));
+  };
+
   renderVals() {
     const s = this.state;
     const r = s.route;
@@ -2123,6 +2348,8 @@ class Component extends DCLogic {
       onboard: ['', '', false],
       concept: [(s.cpt && s.cpt.name) || 'Concept', 'Concept in ' + ((s.cpt && SUBJ[s.cpt.subject].label.charAt(0) + SUBJ[s.cpt.subject].label.slice(1).toLowerCase()) || ''), true, s.cptFrom || 'weak', '← Back'],
       settings: ['Settings', 'Notifications, sources and account', true, 'more', '← More'],
+      billing: ['Billing', 'Your plan and usage', true, 'more', '← More'],
+      plans: ['Choose your plan', 'Monthly or annual', true, 'billing', '← Billing'],
     };
     const head = heads[r] || heads.today;
     const active = Object.keys(s.filters).filter((k) => s.filters[k]);
@@ -2298,6 +2525,8 @@ class Component extends DCLogic {
             : 'Each one carries its source locator and the concepts it tests.')
         : 'Each one carries its page reference and the concepts it tests. They join the queue for this notebook.',
       resetMake: this.resetMake, startMake: this.startMake,
+      isBilling: r === 'billing', isPlans: r === 'plans',
+      ...this.billingVals(),
       isToday: r === 'today', isWeak: r === 'weak', isMore: r === 'more',
       isHome: r === 'home', isNotebook: r === 'notebook' && nb.sources > 0, isGraph: r === 'graph',
       isNotebookEmpty: r === 'notebook' && nb.sources === 0,
@@ -2354,7 +2583,7 @@ class Component extends DCLogic {
         ['weak', 'Weak', [], 'alert'],
         ['revise', 'Revise', [], 'layers'],
         ['graph', 'Graph', [], 'network'],
-        ['more', 'More', ['home', 'notebook', 'concept', 'settings', 'progress', 'studio', 'bank', 'demos', 'trust', 'chooses', 'model', 'modelcmp'], 'menu'],
+        ['more', 'More', ['home', 'notebook', 'concept', 'settings', 'progress', 'studio', 'bank', 'demos', 'trust', 'chooses', 'model', 'modelcmp', 'billing', 'plans'], 'menu'],
       ].map(([id, label, also, icon]) => {
         const on = r === id || also.indexOf(r) >= 0;
         return { label, d: ICONS[icon], go: this.go(id), fg: on ? '#1E7A57' : '#9aa0a2' };
@@ -2508,6 +2737,7 @@ class Component extends DCLogic {
         { label: 'Demonstrations', note: 'Framing library the AI writes to', go: this.go('demos') },
         { label: 'Progress', note: 'Mastery, intervals, history', go: this.go('progress') },
         { label: 'Settings', note: 'Trigger time, sources, account', go: this.go('settings') },
+        { label: 'Billing', note: 'Plan, usage and payment', go: this.go('billing') },
       ],
 
       notebooks: NOTEBOOKS.map((n) => ({

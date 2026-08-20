@@ -193,5 +193,67 @@ try { await m.generateQuestions('nb1', 1, {}); } catch (e) { studentThrew = e; }
 check('student: a 503 from the engine surfaces the engine\'s own reason',
   studentThrew !== null && /no AI services are configured/.test(studentThrew.message));
 
+// ---------------------------------------------------------------------------
+// quintek-billing-api.js -- plan, usage and subscription
+// ---------------------------------------------------------------------------
+
+const BILLING = 'quintek-billing-api.js';
+
+m = await load(BILLING, () => { globalThis.window = {}; });
+check('billing: no backend configured -> reports itself unconfigured',
+  m.configured === false);
+let billingThrew = null;
+try { await m.usage(); } catch (e) { billingThrew = e; }
+check('billing: an unconfigured call throws rather than inventing an allowance',
+  billingThrew !== null && billingThrew.name === 'BillingError');
+
+m = await load(BILLING, () => {
+  globalThis.window = { __QUINTEK_STUDENT_API__: 'http://127.0.0.1:9' };
+  globalThis.fetch = async () => { throw new Error('ECONNREFUSED'); };
+});
+billingThrew = null;
+try { await m.usage(); } catch (e) { billingThrew = e; }
+check('billing: an unreachable backend is an outage, not a fabricated balance',
+  billingThrew !== null && /could not be reached/.test(billingThrew.message));
+
+// The formatting helpers must not invent numbers of their own.
+m = await load(BILLING, () => { globalThis.window = {}; });
+const bars = m.usageBars({
+  this_month: { used: 1840, allowance: 5000, remaining: 3160 },
+  today: { used: 127, limit: 300, remaining: 173 },
+  rollover: 1200, session_limit: 500, available_now: 173,
+  binding_constraint: 'daily', monthly_remaining: 3160, daily_remaining: 173,
+});
+check('billing: usage bars render the server\'s figures verbatim',
+  bars.monthLabel === '1,840 / 5,000 questions' &&
+  bars.todayLabel === '127 / 300 questions' &&
+  bars.availableNow === '173');
+check('billing: available-now follows the DAILY figure, not the monthly one',
+  bars.availableNow === '173' && bars.monthRemaining === '3,160');
+check('billing: the monthly/daily confusion is called out in words',
+  /daily cap applies today/.test(bars.bindingNote));
+
+const empty = m.usageBars({});
+check('billing: a missing payload renders zeros, not NaN',
+  empty.monthPercent === 0 && !/NaN/.test(JSON.stringify(empty)));
+
+const cards = m.planCards({ families: [
+  { family: 'free', name: 'Free', intervals: { none: { price_display: '₹0' } },
+    monthly_question_allowance: 100, daily_question_limit: 20,
+    session_question_limit: 50 },
+  { family: 'pro', name: 'Pro',
+    intervals: { monthly: { plan_id: 'pro_monthly_v1', price_display: '₹499' },
+                 annual: { plan_id: 'pro_annual_v1', price_display: '₹4,990',
+                           monthly_equivalent_display: '₹415' } },
+    monthly_question_allowance: 5000, daily_question_limit: 300,
+    session_question_limit: 500,
+    annual_saving: { label: 'Save ~2 months' } },
+] }, 'annual');
+check('billing: the free plan is not offered as an upgrade card',
+  cards.every((c) => c.family !== 'free'));
+check('billing: an annual card shows the per-month equivalent for comparison',
+  cards[0].price === '₹4,990' && cards[0].monthlyEquivalent === '₹415/mo' &&
+  cards[0].saving === 'Save ~2 months');
+
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');
 process.exit(failures ? 1 : 0);
