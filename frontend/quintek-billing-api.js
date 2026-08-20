@@ -157,16 +157,50 @@ export function usageBars(payload) {
   };
 }
 
-export function planCards(pricingPayload, interval) {
+/* Rank by what a plan costs per month, so "cheaper" and "dearer" are decided
+ * on the price rather than on the order the families happen to arrive in.
+ * Comparing an annual card to a monthly one on the sticker price would call
+ * every annual plan an upgrade. */
+function monthlyMinor(family, wanted) {
+  const chosen = (family.intervals || {})[wanted] || (family.intervals || {}).monthly || {};
+  if (typeof chosen.monthly_equivalent_minor === 'number') return chosen.monthly_equivalent_minor;
+  if (typeof chosen.price_minor !== 'number') return null;
+  return wanted === 'annual' ? Math.round(chosen.price_minor / 12) : chosen.price_minor;
+}
+
+export function planCards(pricingPayload, interval, currentFamily) {
   const wanted = interval === 'annual' ? 'annual' : 'monthly';
-  return (pricingPayload.families || [])
+  const families = (pricingPayload.families || []);
+  const current = currentFamily
+    ? families.find((f) => f.family === currentFamily)
+    : null;
+  const currentPrice = current ? monthlyMinor(current, wanted) : null;
+
+  return families
     .filter((f) => f.family !== 'free')
     .map((f) => {
       const chosen = f.intervals[wanted] || f.intervals.monthly || {};
+      const price = monthlyMinor(f, wanted);
+      /* The direction matters to the user and to the backend: an upgrade is
+       * immediate and prorated, a downgrade waits for the next cycle. A card
+       * labelled "Upgrade" that quietly schedules a downgrade is the kind of
+       * surprise that becomes a refund request. */
+      const isCurrent = !!currentFamily && f.family === currentFamily;
+      const direction = isCurrent ? 'current'
+        : (currentPrice === null || price === null) ? 'choose'
+          : price > currentPrice ? 'upgrade' : 'downgrade';
       return {
         family: f.family,
         name: f.name.toUpperCase(),
         planId: chosen.plan_id,
+        direction,
+        isCurrent,
+        actionLabel: { current: 'Your plan', upgrade: 'Upgrade',
+          downgrade: 'Switch down', choose: 'Choose' }[direction],
+        /* Said on the card, before the tap, not in a dialog afterwards. */
+        actionNote: { upgrade: 'Starts immediately, prorated',
+          downgrade: 'Starts at your next renewal',
+          current: '', choose: '' }[direction],
         price: chosen.price_display,
         /* An annual card shows the per-month equivalent so the toggle
          * compares like with like rather than 4,990 against 499. */
@@ -178,4 +212,60 @@ export function planCards(pricingPayload, interval) {
         saving: (f.annual_saving && wanted === 'annual') ? f.annual_saving.label : '',
       };
     });
+}
+
+/* The 500-question batch, and what happens when you cannot have 500.
+ *
+ * The product decision is to OFFER what is available rather than refuse: a
+ * user who asks for 500 with 173 left is shown the 173 and allowed to take it.
+ * That only works if the offer is honest, so two rules hold here absolutely:
+ *
+ *   `granted` is the server's number, copied. It is never Math.min'd against
+ *   anything this client believes, never rounded, never nudged up to a
+ *   friendlier figure. The server authorised exactly that many and will refuse
+ *   the 174th.
+ *
+ *   `reason` is the server's sentence, shown verbatim. It names the limit that
+ *   actually bound. A client that assembled its own message from the numbers
+ *   would eventually say "monthly limit reached" to somebody who had hit the
+ *   daily cap, and that person would upgrade for nothing. */
+export function capacityOffer(decision) {
+  const d = decision || {};
+  const availability = d.availability || {};
+  const actions = d.actions || [];
+  const granted = d.granted || 0;
+  const requested = d.requested || 0;
+
+  const headline = !d.allowed
+    ? 'You cannot generate right now'
+    : d.partial
+      ? 'You asked for ' + requested.toLocaleString() + '. You can generate ' +
+        granted.toLocaleString() + ' now.'
+      : 'Generating ' + granted.toLocaleString() + ' questions';
+
+  return {
+    allowed: !!d.allowed,
+    partial: !!d.partial,
+    granted,
+    requested,
+    /* The server's words. Not ours. */
+    reason: d.reason || '',
+    headline,
+    shortfall: requested > granted ? requested - granted : 0,
+    canGenerateNow: !!d.allowed && granted > 0,
+    canUpgrade: actions.indexOf('upgrade') >= 0,
+    canViewUsage: actions.indexOf('view_usage') >= 0,
+    bindingConstraint: availability.binding_constraint || '',
+    availableNow: availability.available_now || 0,
+    dailyRemaining: availability.daily_remaining,
+    monthlyRemaining: availability.monthly_remaining,
+    sessionLimit: availability.session_limit,
+    /* Only said when the daily cap is what bound, because it is the only case
+     * where waiting actually helps. Telling someone out of monthly allowance
+     * to "come back tomorrow" wastes their evening. */
+    waitHelps: availability.binding_constraint === 'daily',
+    generateLabel: granted > 0
+      ? 'Generate ' + granted.toLocaleString() + ' now'
+      : 'Nothing available',
+  };
 }

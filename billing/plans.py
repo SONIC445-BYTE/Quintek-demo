@@ -314,6 +314,10 @@ class PlanStore:
                 "plan_id": plan.id,
                 "price_minor": plan.price_minor,
                 "price_display": plan.price.format(decimals=False),
+                # The minor value as well as the string. Ranking plans by price
+                # is the client's job; dividing money is not, and an annual
+                # price divided by twelve in JavaScript is a float.
+                "monthly_equivalent_minor": plan.monthly_equivalent().minor,
                 "monthly_equivalent_display": plan.monthly_equivalent().format(decimals=False),
             }
 

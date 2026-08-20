@@ -674,6 +674,12 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
     <sc-if value="{{ isBilling }}" hint-placeholder-val="{{ true }}">
       <div style="display:flex;flex-direction:column;gap:16px;padding:0 16px 24px">
 
+        <sc-if value="{{ billNote }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:6px;padding:13px 15px;background:#FAF8F2;border:1px solid #E6E4DE;border-left:2px solid #1E7A57;border-radius:0 6px 6px 0">
+            <span style="font-size:12.5px;line-height:1.6;color:#5d6467;text-wrap:pretty">{{ billNote }}</span>
+          </div>
+        </sc-if>
+
         <sc-if value="{{ billOutage }}" hint-placeholder-val="{{ true }}">
           <div style="display:flex;flex-direction:column;gap:8px;padding:16px;background:#fff;border:1px solid rgba(188,76,67,.3);border-top:2px solid #BC4C43;border-radius:0 0 7px 7px">
             <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:#BC4C43">Unavailable</span>
@@ -741,6 +747,14 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
           <span style="font-size:13.5px;font-weight:600;color:#fff">Change plan</span>
           <span style="font-size:11.5px;color:rgba(255,255,255,.8)">View all plans</span>
         </button>
+
+        <sc-if value="{{ billCanCancel }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:9px;padding:16px;background:#fff;border:1px solid #E6E4DE;border-radius:7px">
+            <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">Cancel</span>
+            <span style="font-size:12.5px;line-height:1.6;color:#5d6467;text-wrap:pretty">{{ billCancelNote }}</span>
+            <button onClick="{{ cancelPlan }}" disabled="{{ billCancelling }}" style="width:100%;box-sizing:border-box;padding:11px;min-height:44px;background:#fff;border:1px solid rgba(188,76,67,.4);border-radius:6px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:13px;font-weight:600;color:#BC4C43">{{ billCancelLabel }}</button>
+          </div>
+        </sc-if>
       </div>
     </sc-if>
 
@@ -765,7 +779,10 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
             <span style="display:flex;flex-direction:column;gap:4px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#5d6467">
               <span>{{ pc.allowance }}</span><span>{{ pc.daily }}</span><span>{{ pc.session }}</span>
             </span>
-            <button onClick="{{ pc.choose }}" style="width:100%;box-sizing:border-box;padding:11px;min-height:44px;background:#1E7A57;border:none;border-radius:6px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:13px;font-weight:600;color:#fff">Upgrade</button>
+            <sc-if value="{{ pc.actionNote }}" hint-placeholder-val="{{ true }}">
+              <span style="font-size:11px;line-height:1.5;color:#8a9093">{{ pc.actionNote }}</span>
+            </sc-if>
+            <button onClick="{{ pc.choose }}" style="width:100%;box-sizing:border-box;padding:11px;min-height:44px;background:{{ pc.ctaBg }};border:none;border-radius:6px;cursor:{{ pc.ctaCursor }};font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:13px;font-weight:600;color:{{ pc.ctaFg }}">{{ pc.actionLabel }}</button>
           </div>
         </sc-for>
       </div>
@@ -871,6 +888,42 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
             </div>
 
             <button onClick="{{ startMake }}" disabled="{{ makeBlocked }}" style="width:100%;min-height:50px;background:{{ makeCtaBg }};color:{{ makeCtaFg }};border:none;border-radius:6px;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:15px;font-weight:600;cursor:{{ makeCtaCursor }}">{{ makeCta }}</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ makeCapacity }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:13px">
+            <div style="display:flex;flex-direction:column;gap:10px;padding:15px;background:#fff;border:1px solid #E6E4DE;border-top:2px solid {{ capAccent }};border-radius:0 0 7px 7px">
+              <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:{{ capAccent }}">{{ capBadge }}</span>
+              <span style="font-family:'Source Serif 4',Georgia,'Times New Roman',serif;font-size:19px;line-height:1.35;color:#16191A;text-wrap:pretty">{{ capHeadline }}</span>
+              <span style="font-size:12.5px;line-height:1.6;color:#5d6467;text-wrap:pretty">{{ capReason }}</span>
+
+              <sc-if value="{{ capHasCounts }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;gap:0;margin-top:2px;border:1px solid #E6E4DE;border-radius:6px;overflow:hidden">
+                  <sc-for list="{{ capCounts }}" as="cc" hint-placeholder-count="3">
+                    <span style="flex:1;display:flex;flex-direction:column;gap:3px;padding:10px 11px;border-right:1px solid #E6E4DE">
+                      <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:15px;color:{{ cc.fg }}">{{ cc.value }}</span>
+                      <span style="font-size:10.5px;letter-spacing:.02em;color:#8a9093">{{ cc.label }}</span>
+                    </span>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ capWaitNote }}" hint-placeholder-val="{{ true }}">
+                <span style="padding:9px 11px;background:#FAF8F2;border:1px solid #E6E4DE;border-radius:5px;font-size:11.5px;line-height:1.55;color:#5d6467">{{ capWaitNote }}</span>
+              </sc-if>
+            </div>
+
+            <sc-if value="{{ capCanGenerate }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ acceptOffer }}" style="width:100%;min-height:50px;background:#1E7A57;color:#fff;border:none;border-radius:6px;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#155F42">{{ capGenerateLabel }}</button>
+            </sc-if>
+
+            <div style="display:flex;gap:8px">
+              <sc-if value="{{ capCanUpgrade }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ goPlans }}" style="flex:1;min-height:46px;background:#fff;color:#16191A;border:1px solid #E6E4DE;border-radius:6px;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:13px;font-weight:600;cursor:pointer" style-hover="border-color:#1E7A57">See plans</button>
+              </sc-if>
+              <button onClick="{{ resetMake }}" style="flex:1;min-height:46px;background:#fff;color:#7c8386;border:1px solid #E6E4DE;border-radius:6px;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:13px;font-weight:500;cursor:pointer">Back</button>
+            </div>
           </div>
         </sc-if>
 
@@ -1751,7 +1804,9 @@ class Component extends DCLogic {
     srcType: null, srcValue: '', families: [], otherFamily: '',
     makeSrc: null, makeStage: 'idle', makeCount: 10, makeDone: 0,
     studentApi: null, makeLive: null, makeError: '',
+    makeOffer: null, makeReservation: null,
     billingApi: null, billing: null, billingError: '', planInterval: 'monthly',
+    billingBusy: '', billingNote: '', pendingCheckout: null,
     pricing: null,
     makeFams: ['Clinical vignette', 'Interpretation', 'Mechanism'],
     makeCustomOn: false, makeCustomVal: '', makeOther: '',
@@ -1908,7 +1963,8 @@ class Component extends DCLogic {
   };
   setPlanInterval = (interval) => () => this.setState({ planInterval: interval });
 
-  resetMake = () => this.setState({ makeStage: 'idle', makeDone: 0, makeLive: null, makeError: '' });
+  resetMake = () => this.setState({ makeStage: 'idle', makeDone: 0, makeLive: null,
+    makeError: '', makeOffer: null });
 
   /* WIRED INTERACTION: click -> engine -> real model -> validation -> UI.
    *
@@ -1921,9 +1977,18 @@ class Component extends DCLogic {
    * worse, because these are the questions they would go on to answer. */
   startMake = () => {
     if (this.state.makeStage === 'running') return;
-    this.setState({ makeStage: 'running', makeDone: 0, makeLive: null, makeError: '' });
     clearInterval(this._gen);
 
+    /* Ask the server whether this batch is allowed BEFORE starting it.
+     *
+     * The alternative -- generate first, discover the limit on the 174th
+     * question -- wastes the model calls that produced the first 173 and
+     * leaves the user with a half-finished batch and no explanation. The
+     * check consumes nothing; it only reports. */
+    const billing = this.state.billingApi;
+    if (billing) { this.checkCapacity(billing); return; }
+
+    this.setState({ makeStage: 'running', makeDone: 0, makeLive: null, makeError: '' });
     const api = this.state.studentApi;
     if (api) { this.startMakeLive(api); return; }
 
@@ -1934,6 +1999,103 @@ class Component extends DCLogic {
         return { makeDone: next };
       });
     }, 420);
+  };
+
+  /* Step one: what may this user have? The answer, including the sentence
+   * explaining it, comes from the server. Nothing here computes a remaining
+   * count -- a client that decided entitlement would eventually disagree with
+   * the backend, and the user would meet a refusal they had been told would
+   * not happen. */
+  checkCapacity = (billing) => {
+    const wanted = this.state.makeCount;
+    this.setState({ makeStage: 'checking', makeError: '', makeOffer: null });
+    billing.check(wanted)
+      .then((decision) => {
+        const offer = billing.capacityOffer(decision);
+        /* A full grant needs no confirmation screen: the user asked for a
+         * number they can have, so asking them to confirm it again is a
+         * dialog that only ever has one answer. */
+        if (offer.allowed && !offer.partial) { this.reserveAndGenerate(billing, offer.granted); return; }
+        this.setState({ makeStage: 'capacity', makeOffer: offer });
+      })
+      .catch((e) => this.setState({ makeStage: 'error',
+        makeError: 'Could not check your remaining allowance: ' +
+          (e && e.message ? e.message : String(e)) +
+          '. Nothing was generated and nothing was consumed.' }));
+  };
+
+  /* The user accepted a partial offer. Reserve exactly what the SERVER
+   * granted, not what they originally asked for. */
+  acceptOffer = () => {
+    const billing = this.state.billingApi;
+    const offer = this.state.makeOffer;
+    if (!billing || !offer || !offer.canGenerateNow) return;
+    this.reserveAndGenerate(billing, offer.granted);
+  };
+
+  /* Reserve -> generate -> commit. The reservation is what stops two devices
+   * both spending the same 173 questions; it is taken before any model call
+   * and settled after, with the count that was actually produced. A batch
+   * that dies mid-flight releases rather than silently holding capacity until
+   * the reservation expires. */
+  reserveAndGenerate = (billing, count) => {
+    this.setState({ makeStage: 'running', makeDone: 0, makeLive: null, makeError: '',
+      makeCount: count });
+    billing.reserve(count, { allowPartial: false })
+      .then((reservation) => {
+        const id = reservation && reservation.reservation_id;
+        if (!id) {
+          /* No reservation means nothing is holding this capacity and nothing
+           * will record it. Generating anyway would hand out questions the
+           * ledger never sees, which is the one bug that makes every usage
+           * figure in the product wrong at once. */
+          throw new Error('the server did not return a reservation, so nothing was generated');
+        }
+        this.setState({ makeReservation: id });
+        return this.generateWithReservation(count);
+      })
+      .catch((e) => {
+        this.releaseHeld('generation failed');
+        this.setState({ makeStage: 'error',
+          makeError: (e && e.message ? e.message : String(e)) +
+            '. No questions are shown rather than demo questions that were not written by a model.' });
+      });
+  };
+
+  generateWithReservation = (count) => {
+    const api = this.state.studentApi;
+    const billing = this.state.billingApi;
+    const notebookId = this.state.makeNotebookId || (this.state.makeSrc && this.state.makeSrc.notebookId);
+    if (!api || !notebookId) {
+      this.releaseHeld('no backend notebook');
+      this.setState({ makeStage: 'error', makeError:
+        'This screen has no backend notebook id yet. Generation needs a notebook that exists ' +
+        'server-side; the source picker is still running on in-file constants. ' +
+        'Your allowance was not consumed.' });
+      return Promise.resolve();
+    }
+    return api.generateQuestions(notebookId, count, {}).then((result) => {
+      const produced = result.count || 0;
+      const reservationId = this.state.makeReservation;
+      /* Settle for what was PRODUCED. The engine can return fewer than were
+       * reserved -- a source runs thin, a validator rejects everything -- and
+       * charging for questions that do not exist is the one billing error a
+       * user will always notice. */
+      const settle = reservationId && billing
+        ? billing.commitReservation(reservationId, produced).catch(() => null)
+        : Promise.resolve();
+      return settle.then(() => this.setState({
+        makeStage: 'done', makeDone: produced, makeLive: result, makeReservation: null,
+      }));
+    });
+  };
+
+  releaseHeld = (reason) => {
+    const billing = this.state.billingApi;
+    const reservationId = this.state.makeReservation;
+    if (!billing || !reservationId) return;
+    this.setState({ makeReservation: null });
+    billing.releaseReservation(reservationId, reason).catch(() => null);
   };
 
   startMakeLive = (api) => {
@@ -2225,6 +2387,42 @@ class Component extends DCLogic {
     };
   }
 
+  /* The partial-capacity screen. Every string on it either came from the
+   * server or is a fixed label; none of the numbers is computed here. */
+  capacityVals() {
+    const o = this.state.makeOffer;
+    if (!o) {
+      return { capBadge: '', capHeadline: '', capReason: '', capAccent: '#B5812B',
+        capCounts: [], capHasCounts: false, capWaitNote: '', capCanGenerate: false,
+        capCanUpgrade: false, capGenerateLabel: '', acceptOffer: this.acceptOffer };
+    }
+    const counts = [];
+    if (o.requested) counts.push({ label: 'Asked for', value: o.requested.toLocaleString(), fg: '#7c8386' });
+    counts.push({ label: 'Available now', value: o.availableNow.toLocaleString(),
+      fg: o.availableNow > 0 ? '#1E7A57' : '#BC4C43' });
+    if (o.shortfall) counts.push({ label: 'Short by', value: o.shortfall.toLocaleString(), fg: '#B5812B' });
+
+    return {
+      capBadge: o.allowed ? 'Partial capacity' : 'Not available',
+      capHeadline: o.headline,
+      /* The server's sentence, verbatim. It names the limit that actually
+       * bound; a message assembled here would eventually blame the monthly
+       * allowance for a daily cap and send someone to upgrade for nothing. */
+      capReason: o.reason,
+      capAccent: o.allowed ? '#B5812B' : '#BC4C43',
+      capCounts: counts,
+      capHasCounts: counts.length > 0,
+      /* Only offered when waiting actually helps. */
+      capWaitNote: o.waitHelps
+        ? 'Your daily allowance resets tomorrow. The rest of your monthly allowance is still there.'
+        : '',
+      capCanGenerate: o.canGenerateNow,
+      capCanUpgrade: o.canUpgrade,
+      capGenerateLabel: o.generateLabel,
+      acceptOffer: this.acceptOffer,
+    };
+  }
+
   billingVals() {
     const s = this.state;
     const api = s.billingApi;
@@ -2241,11 +2439,13 @@ class Component extends DCLogic {
         billTodayLabel: '— / — questions', billTodayPct: '0%', billTodayRemaining: '—',
         billRollover: '', billSessionLimit: '—', billAvailableNow: '—', billBindingNote: '',
         billManageable: false, billRenewal: '', billScheduled: '',
+        billCanCancel: false, billCancelNote: '', billCancelling: false,
+        billCancelLabel: 'Cancel subscription', cancelPlan: this.cancelPlan,
         billPlanCards: [], ...this.intervalStyles(),
         setMonthly: this.setPlanInterval('monthly'),
         setAnnual: this.setPlanInterval('annual'),
         goPlans: this.go('plans'), goBilling: this.go('billing'),
-        billDemoNote: 'Sign in to see your plan and usage.',
+        billDemoNote: 'Sign in to see your plan and usage.', billNote: '',
       };
     }
 
@@ -2257,16 +2457,24 @@ class Component extends DCLogic {
         billTodayLabel: '—', billTodayPct: '0%', billTodayRemaining: '—',
         billRollover: '', billSessionLimit: '—', billAvailableNow: '—', billBindingNote: '',
         billManageable: false, billRenewal: '', billScheduled: '',
+        billCanCancel: false, billCancelNote: '', billCancelling: false,
+        billCancelLabel: 'Cancel subscription', cancelPlan: this.cancelPlan,
         billPlanCards: [], ...this.intervalStyles(),
         setMonthly: this.setPlanInterval('monthly'),
         setAnnual: this.setPlanInterval('annual'),
         goPlans: this.go('plans'), goBilling: this.go('billing'), billDemoNote: '',
+        billNote: '',
       };
     }
 
     const bars = api.usageBars(live.usage);
     const sub = live.subscription || {};
-    const cards = s.pricing ? api.planCards(s.pricing, s.planInterval) : [];
+    const cards = s.pricing
+      /* `plan` is the FAMILY on this payload -- 'free', 'pro', 'power'. Reading
+       * `plan_id` here would never match a family name and every card would
+       * silently fall back to a plain "Choose". */
+      ? api.planCards(s.pricing, s.planInterval, sub.plan || '')
+      : [];
 
     return {
       billLive: true, billOutage: false, billError: '',
@@ -2285,6 +2493,17 @@ class Component extends DCLogic {
       /* The sentence that keeps monthly and daily from being confused. */
       billBindingNote: bars.bindingNote,
       billManageable: !!sub.manageable,
+      /* Cancellation is offered only where there is something to cancel, and
+       * it says what it does: access continues to the end of the period that
+       * has already been paid for. */
+      billCanCancel: !!sub.manageable && !sub.cancel_at_period_end,
+      billCancelNote: sub.current_period_end
+        ? 'You keep everything until ' + String(sub.current_period_end).slice(0, 10) +
+          '. Nothing is refunded, and nothing is charged again.'
+        : 'You keep access to the end of the period you have paid for.',
+      billCancelling: s.billingBusy === 'cancel',
+      billCancelLabel: s.billingBusy === 'cancel' ? 'Cancelling…' : 'Cancel subscription',
+      cancelPlan: this.cancelPlan,
       billRenewal: sub.cancel_at_period_end && sub.current_period_end
         ? 'Does not renew. Access until ' + String(sub.current_period_end).slice(0, 10)
         : (sub.current_period_end ? 'Renews ' + String(sub.current_period_end).slice(0, 10) : ''),
@@ -2292,11 +2511,19 @@ class Component extends DCLogic {
         ? sub.scheduled_change.plan + ' begins ' +
           String(sub.scheduled_change.effective_at || '').slice(0, 10)
         : '',
-      billPlanCards: cards.map((c) => ({ ...c, choose: this.chooseePlan(c.planId) })),
+      billPlanCards: cards.map((c) => ({
+        ...c,
+        choose: this.choosePlan(c.planId, c.direction),
+        /* A current plan's button is inert and looks it. */
+        ctaBg: c.isCurrent ? '#EDEBE4' : '#1E7A57',
+        ctaFg: c.isCurrent ? '#7c8386' : '#fff',
+        ctaCursor: c.isCurrent ? 'default' : 'pointer',
+      })),
       ...this.intervalStyles(),
       setMonthly: this.setPlanInterval('monthly'),
       setAnnual: this.setPlanInterval('annual'),
       goPlans: this.go('plans'), goBilling: this.go('billing'), billDemoNote: '',
+      billNote: s.billingNote || '',
     };
   }
 
@@ -2314,12 +2541,57 @@ class Component extends DCLogic {
     };
   };
 
-  chooseePlan = (planId) => () => {
+  /* Upgrade and downgrade are different operations with different timing, and
+   * the button already said which one this is. Sending both through
+   * `beginCheckout` would charge somebody immediately for a plan they meant to
+   * move down to at the end of the month. */
+  choosePlan = (planId, direction) => () => {
     const api = this.state.billingApi;
-    if (!api || !planId) return;
-    api.beginCheckout(planId)
-      .then(() => this.loadBilling())
-      .catch((e) => this.setState({ billingError: e && e.message ? e.message : String(e) }));
+    if (!api || !planId || direction === 'current' || this.state.billingBusy) return;
+
+    this.setState({ billingBusy: 'plan', billingError: '' });
+    const request = direction === 'downgrade'
+      ? api.downgrade(planId)
+      : api.beginCheckout(planId);
+
+    request
+      .then((result) => this.afterPlanChange(result, direction))
+      .catch((e) => this.setState({ billingBusy: '',
+        billingError: (e && e.message ? e.message : String(e)) +
+          '. Your plan has not changed.' }))
+      .then(() => this.loadBilling());
+  };
+
+  /* A checkout that returns a gateway payload has NOT completed. The
+   * subscription becomes active when the gateway says so, over the webhook --
+   * not when this promise resolves. Showing "you're on Pro" here would be a
+   * lie for as long as the payment takes, and a permanent one if it fails. */
+  afterPlanChange = (result, direction) => {
+    const payload = result || {};
+    if (direction !== 'downgrade' && payload.checkout) {
+      this.setState({ billingBusy: '', pendingCheckout: payload.checkout,
+        billingNote: 'Complete the payment to finish upgrading. Your plan changes '
+          + 'once the payment is confirmed, not before.' });
+      return;
+    }
+    this.setState({ billingBusy: '', pendingCheckout: null,
+      billingNote: direction === 'downgrade'
+        ? 'Scheduled. Your current plan runs to the end of this period.'
+        : '' });
+    this.go('billing')();
+  };
+
+  cancelPlan = () => {
+    const api = this.state.billingApi;
+    if (!api || this.state.billingBusy) return;
+    this.setState({ billingBusy: 'cancel', billingError: '' });
+    api.cancel()
+      .then(() => this.setState({ billingBusy: '',
+        billingNote: 'Cancelled. You keep access to the end of the period you have paid for.' }))
+      .catch((e) => this.setState({ billingBusy: '',
+        billingError: (e && e.message ? e.message : String(e)) +
+          '. Your subscription has not been cancelled.' }))
+      .then(() => this.loadBilling());
   };
 
   renderVals() {
@@ -2446,8 +2718,14 @@ class Component extends DCLogic {
       makeSourceName: (s.makeSrc && s.makeSrc.name) || '',
       makeSourceMeta: (s.makeSrc && s.makeSrc.detail) || '',
       makeColor: SUBJ[nb.subject].color,
-      makeIdle: s.makeStage === 'idle', makeRunning: s.makeStage === 'running', makeDone: s.makeStage === 'done',
+      makeIdle: s.makeStage === 'idle',
+      /* 'checking' shares the running treatment: something is happening and
+       * the user should not be able to start it twice. */
+      makeRunning: s.makeStage === 'running' || s.makeStage === 'checking',
+      makeCapacity: s.makeStage === 'capacity',
+      makeDone: s.makeStage === 'done',
       makeFailed: s.makeStage === 'error', makeErrorText: s.makeError,
+      ...this.capacityVals(),
       makeIsLive: !!s.makeLive,
       makeCounts: [5, 10, 15, 20, 'custom'].map((v) => {
         const on = v === 'custom' ? s.makeCustomOn : (!s.makeCustomOn && s.makeCount === v);

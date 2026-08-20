@@ -243,6 +243,66 @@ await m.pricing();
 check('billing: a trailing slash on the configured origin does not double up',
   requestedUrl === 'http://live/billing/pricing');
 
+// ---------------------------------------------------------------------------
+// The 500-question batch, and what happens when 500 is not available.
+// ---------------------------------------------------------------------------
+m = await load(BILLING, () => { globalThis.window = {}; });
+
+const partial = m.capacityOffer({
+  allowed: true, partial: true, granted: 173, requested: 500,
+  reason: 'You can generate 173 questions today. Your plan allows up to 500 per session, '
+    + 'but your remaining daily allowance is 173.',
+  actions: ['generate_available', 'upgrade', 'view_usage'],
+  availability: { binding_constraint: 'daily', available_now: 173, daily_remaining: 173,
+    monthly_remaining: 3160, session_limit: 500 },
+});
+
+check('capacity: the granted number is the server\'s, copied',
+  partial.granted === 173 && partial.requested === 500 && partial.shortfall === 327);
+check('capacity: the reason is the server\'s sentence, verbatim',
+  partial.reason.indexOf('remaining daily allowance is 173') > 0);
+check('capacity: a partial offer can be taken now',
+  partial.canGenerateNow === true && partial.generateLabel === 'Generate 173 now');
+check('capacity: the headline states both numbers',
+  partial.headline === 'You asked for 500. You can generate 173 now.');
+check('capacity: waiting is only suggested when the DAILY cap bound',
+  partial.waitHelps === true);
+
+const monthlyExhausted = m.capacityOffer({
+  allowed: false, partial: false, granted: 0, requested: 500,
+  reason: 'You have used your monthly allowance.',
+  actions: ['upgrade', 'view_usage'],
+  availability: { binding_constraint: 'monthly', available_now: 0, daily_remaining: 300,
+    monthly_remaining: 0, session_limit: 500 },
+});
+check('capacity: out of monthly allowance is not told to come back tomorrow',
+  monthlyExhausted.waitHelps === false);
+check('capacity: nothing available offers no generate button',
+  monthlyExhausted.canGenerateNow === false && monthlyExhausted.granted === 0);
+check('capacity: a refusal still offers the upgrade path',
+  monthlyExhausted.canUpgrade === true);
+
+const full = m.capacityOffer({
+  allowed: true, partial: false, granted: 50, requested: 50,
+  reason: 'within your current allowance', actions: [],
+  availability: { binding_constraint: 'monthly', available_now: 3160 },
+});
+check('capacity: a full grant is not reported as partial',
+  full.partial === false && full.shortfall === 0);
+
+check('capacity: a missing decision does not throw or invent an allowance',
+  (() => { const o = m.capacityOffer(undefined);
+    return o.granted === 0 && o.canGenerateNow === false && o.reason === ''; })());
+
+// The helper must never improve on the server's answer.
+const stingy = m.capacityOffer({
+  allowed: true, partial: true, granted: 1, requested: 500,
+  reason: 'You can generate 1 question today.', actions: ['generate_available'],
+  availability: { binding_constraint: 'daily', available_now: 1, session_limit: 500 },
+});
+check('capacity: a grant of one is reported as one, not rounded up to something friendlier',
+  stingy.granted === 1 && stingy.generateLabel === 'Generate 1 now');
+
 // The formatting helpers must not invent numbers of their own.
 m = await load(BILLING, () => { globalThis.window = {}; });
 const bars = m.usageBars({
@@ -278,6 +338,62 @@ const cards = m.planCards({ families: [
 ] }, 'annual');
 check('billing: the free plan is not offered as an upgrade card',
   cards.every((c) => c.family !== 'free'));
+// ---------------------------------------------------------------------------
+// Upgrade and downgrade are different operations with different timing.
+// ---------------------------------------------------------------------------
+const PRICING = { families: [
+  { family: 'free', name: 'Free', monthly_question_allowance: 100,
+    daily_question_limit: 20, session_question_limit: 50,
+    intervals: { none: { plan_id: 'f', price_minor: 0, price_display: '₹0' } } },
+  { family: 'student', name: 'Student', monthly_question_allowance: 2500,
+    daily_question_limit: 150, session_question_limit: 500,
+    intervals: { monthly: { plan_id: 's', price_minor: 29900, price_display: '₹299',
+      monthly_equivalent_minor: 29900, monthly_equivalent_display: '₹299' } } },
+  { family: 'pro', name: 'Pro', monthly_question_allowance: 5000,
+    daily_question_limit: 300, session_question_limit: 500,
+    intervals: { monthly: { plan_id: 'p', price_minor: 49900, price_display: '₹499',
+      monthly_equivalent_minor: 49900, monthly_equivalent_display: '₹499' } } },
+  { family: 'power', name: 'Power', monthly_question_allowance: 10000,
+    daily_question_limit: 500, session_question_limit: 500,
+    intervals: { monthly: { plan_id: 'w', price_minor: 79900, price_display: '₹799',
+      monthly_equivalent_minor: 79900, monthly_equivalent_display: '₹799' } } },
+] };
+
+const onPro = m.planCards(PRICING, 'monthly', 'pro');
+const byFamily = Object.fromEntries(onPro.map((c) => [c.family, c]));
+
+check('plans: a dearer plan is an upgrade',
+  byFamily.power.direction === 'upgrade' && byFamily.power.actionLabel === 'Upgrade');
+check('plans: a cheaper plan is NOT labelled upgrade',
+  byFamily.student.direction === 'downgrade' && byFamily.student.actionLabel !== 'Upgrade');
+check('plans: the current plan is marked and not sold again',
+  byFamily.pro.isCurrent === true && byFamily.pro.direction === 'current');
+check('plans: the timing is stated on the card, before the tap',
+  byFamily.power.actionNote.indexOf('immediately') >= 0
+  && byFamily.student.actionNote.indexOf('next renewal') >= 0);
+
+const anonymous = m.planCards(PRICING, 'monthly', '');
+check('plans: with no current plan every card is a plain choice',
+  anonymous.every((c) => c.direction === 'choose' && c.actionLabel === 'Choose'));
+check('plans: the free plan is never a card, whatever the current plan',
+  onPro.every((c) => c.family !== 'free'));
+
+/* Annual against monthly must be compared per month, or every annual plan
+ * looks like an upgrade on its sticker price. */
+const ANNUAL = { families: [
+  { family: 'student', name: 'Student', monthly_question_allowance: 2500,
+    daily_question_limit: 150, session_question_limit: 500,
+    intervals: { annual: { plan_id: 'sa', price_minor: 299000, price_display: '₹2,990',
+      monthly_equivalent_minor: 24916, monthly_equivalent_display: '₹249.16' } } },
+  { family: 'pro', name: 'Pro', monthly_question_allowance: 5000,
+    daily_question_limit: 300, session_question_limit: 500,
+    intervals: { annual: { plan_id: 'pa', price_minor: 499000, price_display: '₹4,990',
+      monthly_equivalent_minor: 41583, monthly_equivalent_display: '₹415.83' } } },
+] };
+const annualCards = m.planCards(ANNUAL, 'annual', 'pro');
+check('plans: annual cards rank on the per-month figure, not the sticker price',
+  annualCards.find((c) => c.family === 'student').direction === 'downgrade');
+
 check('billing: an annual card shows the per-month equivalent for comparison',
   cards[0].price === '₹4,990' && cards[0].monthlyEquivalent === '₹415/mo' &&
   cards[0].saving === 'Save ~2 months');
