@@ -41,6 +41,13 @@ CREATE TABLE IF NOT EXISTS plans (
     version                     INTEGER NOT NULL DEFAULT 1,
     active                      INTEGER NOT NULL DEFAULT 1,
     sort_order                  INTEGER NOT NULL DEFAULT 0,
+    -- The gateway's id for this plan, stored ONE WAY ROUND: Quintek's plan is
+    -- the record and the gateway id is an attribute of it. Razorpay collects
+    -- money; it is not Quintek's pricing database. Allowances, daily caps,
+    -- rollover and compute weights all live here, so a gateway change is an
+    -- adapter change rather than a migration of the product's economics.
+    gateway                     TEXT NOT NULL DEFAULT '',
+    gateway_plan_id             TEXT NOT NULL DEFAULT '',
     created_at                  TEXT NOT NULL,
     updated_at                  TEXT NOT NULL,
     UNIQUE (family, billing_interval, version)
