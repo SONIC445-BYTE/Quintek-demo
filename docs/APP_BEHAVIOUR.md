@@ -288,6 +288,58 @@ Neither controls any functionality. Both are still built for the browser by
 
 ---
 
+## 6b. What a real model actually does — measured, not assumed
+
+Everything above this section describes behaviour. This section describes
+measurement, taken on 20 Aug 2026 against NVIDIA NIM with a supplied key. It
+is here because the rest of this document would otherwise read as though the
+AI half were as settled as the UI half, and it is not.
+
+### The chain, end to end, on real output
+
+`tools_alpha0.py` drives one real source through every stage. With
+`meta/llama-3.1-70b-instruct` generating:
+
+| Stage | What actually happened |
+|---|---|
+| Ingestion | 1,477-character screening passage → 1 chunk, processed |
+| Concept extraction | 9 concepts, all correct: Sensitivity, Specificity, Predictive Value, Prevalence, True/False Positive, True/False Negative, Cut-off Value |
+| Relationships | 8 typed edges, e.g. `Cut-off Value --[causes]--> Sensitivity` |
+| Generation | One grounded, correct PG-entry MCQ with a rationale |
+| Persistence | Stored with source id, chunk id, generating candidate |
+| Artifacts | 11 files including the unmodified raw reply |
+
+So the pipeline works, and the 70B's concept extraction is genuinely good.
+
+### Validation does not work on the configuration tested
+
+With `meta/llama-3.1-8b-instruct` as validator, across the 20-item
+adversarial battery and a 10-item sound control arm:
+
+| Figure | Value | What it means |
+|---|---|---|
+| Detection rate | 11/20 (55%) | Nearly half of deliberately broken questions were approved |
+| Caught for the right reason | 4/11 | Most catches did not cite a check matching the planted defect |
+| False-flag rate | 9/10 (90%) | Nine of ten SOUND questions were also rejected |
+| `ungrounded` | 0/2 | It never noticed a question unanswerable from its own passage |
+
+**A learner on this configuration would lose most of their good questions and
+still be shown false ones.** The validator is not currently doing the job the
+product's central promise depends on.
+
+This does not mean validation is unimplementable — it means this model, with
+this prompt, does not do it. That is now a measurement with a reproducible
+script behind it (`tools_adversarial_run.py`) rather than an assumption, which
+is the difference between a problem you can work on and one you cannot see.
+
+### What this changes about the screens above
+
+Nothing yet — the screens are still simulated. But it changes what the
+transparency screen will have to say once they are wired. `/ai/benchmark`
+already reports `evidence_backed: false` and states in plain language that a
+model serving without a passing benchmark run is not evidence-backed. On this
+configuration that warning is not a formality.
+
 ## 7. Honest summary of build state
 
 | Area | State |
