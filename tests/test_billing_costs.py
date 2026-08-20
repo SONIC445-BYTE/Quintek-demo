@@ -165,3 +165,46 @@ def test_the_cost_ledger_cannot_be_deleted_from(ledger):
     row_id = ledger.record(OperationCost("p", "m", input_tokens=10, output_tokens=10))
     with pytest.raises(sqlite3.IntegrityError, match="append-only"):
         ledger.conn.execute("DELETE FROM cost_ledger WHERE id=?", (row_id,))
+
+
+# ---------------------------------------------------------------------------
+# The admin dashboard's contract with its client
+# ---------------------------------------------------------------------------
+# `frontend/quintek-admin-billing.js` reads these keys by name. A rename here
+# renders as an em dash there, which the UI means as "not measured yet" -- so a
+# silent rename turns a real number into a claim that nothing was measured.
+
+DAILY_KEYS = {
+    "day", "revenue", "ai_cost", "payment_fees", "direct_infra", "contribution",
+    "contribution_minor", "users", "paying_users", "ai_calls", "ai_by_model",
+    "warnings", "fee_note",
+}
+
+
+def test_the_daily_payload_keys_are_the_ones_the_admin_client_reads(tmp_path) -> None:
+    from billing.db import connect
+    from billing.economics import EconomicsService
+    from billing.plans import PlanStore
+
+    conn = connect(tmp_path / "b.db")
+    PlanStore(conn).seed_from_config()
+    payload = EconomicsService(conn).daily()
+
+    assert set(payload) == DAILY_KEYS, (
+        "the daily economics payload changed shape; update"
+        " frontend/quintek-admin-billing.js in the same commit")
+
+
+def test_the_cost_per_500_payload_reports_unmeasured_as_none(tmp_path) -> None:
+    """
+    Nothing accepted is not the same as free. A zero here would be planned
+    against.
+    """
+    from billing.costs import CostLedger
+    from billing.db import connect
+
+    conn = connect(tmp_path / "b.db")
+    payload = CostLedger(conn).cost_per_accepted()
+    assert payload["accepted"] == 0
+    assert payload["cost_per_batch"] is None
+    assert payload["cost_per_batch_display"] == "—"

@@ -12,7 +12,11 @@
 
 import { readFileSync } from 'node:fs';
 
-const FILES = ['frontend/PG Revision.dc.html'];
+const FILES = ['frontend/PG Revision.dc.html', 'frontend/Quintek Admin.dc.html'];
+const SCREENS = {
+  'frontend/PG Revision.dc.html': ['isBilling', 'isPlans', 'makeCapacity'],
+  'frontend/Quintek Admin.dc.html': ['isEconomics'],
+};
 let failures = 0;
 let checked = 0;
 
@@ -50,7 +54,7 @@ for (const file of FILES) {
     missing.length === 0 || (console.log('   unbound: ' + missing.join(', ')), false));
 
   /* The screens added for billing must actually be reachable. */
-  for (const flag of ['isBilling', 'isPlans', 'makeCapacity']) {
+  for (const flag of SCREENS[file] || []) {
     check(file + ': ' + flag + ' is both rendered and computed',
       src.indexOf('{{ ' + flag + ' }}') >= 0 && new RegExp('\\b' + flag + '\\s*:').test(script));
   }

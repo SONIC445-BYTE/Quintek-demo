@@ -498,6 +498,70 @@ a{color:#2dd4bf;text-decoration:none}a:hover{color:#5eead4}
         </div>
       </sc-if>
 
+      <sc-if value="{{ isEconomics }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:22px">
+
+          <sc-if value="{{ econUnavailable }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:9px;padding:20px;border:1px solid rgba(245,158,11,.3);background:rgba(245,158,11,.05);border-radius:4px;max-width:760px">
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.12em;color:#f59e0b">NO FIGURES</span>
+              <span style="font-size:13px;line-height:1.65;color:#9a9aa4;text-wrap:pretty">{{ econUnavailable }}</span>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ econLive }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:22px">
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#1a1a1e;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden">
+                <sc-for list="{{ econTiles }}" as="t" hint-placeholder-count="4">
+                  <div style="display:flex;flex-direction:column;gap:7px;padding:15px 16px;background:#0c0c0e">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.12em;color:#4e4e57">{{ t.label }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:19px;color:{{ t.fg }}">{{ t.value }}</span>
+                    <span style="font-size:11px;line-height:1.5;color:#6b6b75;text-wrap:pretty">{{ t.note }}</span>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:11px;padding:17px 18px;border:1px solid #1a1a1e;border-radius:4px;max-width:860px">
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.12em;color:#4e4e57">COST PER 500 ACCEPTED QUESTIONS</span>
+                <span style="display:flex;align-items:baseline;gap:14px">
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:28px;color:#e8e8ec">{{ econPer500 }}</span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;color:#6b6b75">{{ econAcceptedLine }}</span>
+                </span>
+                <span style="font-size:12.5px;line-height:1.65;color:#9a9aa4;text-wrap:pretty">Everything spent — generation, validation, rejected output, regeneration — divided by what survived. This is the number a plan price has to cover, and it is usually several times the cost per call.</span>
+                <sc-if value="{{ econPer500Caveat }}" hint-placeholder-val="{{ true }}">
+                  <span style="padding:9px 11px;border:1px solid rgba(245,158,11,.28);background:rgba(245,158,11,.05);border-radius:3px;font-size:11.5px;line-height:1.55;color:#c99a3f">{{ econPer500Caveat }}</span>
+                </sc-if>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:0;border:1px solid #1a1a1e;border-radius:4px;overflow:hidden;max-width:860px">
+                <div style="display:grid;grid-template-columns:1fr 110px 110px 130px;gap:0;padding:11px 14px;background:#0c0c0e;border-bottom:1px solid #1a1a1e;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.1em;color:#4e4e57">
+                  <span>PROVIDER / MODEL</span><span style="text-align:right">CALLS</span><span style="text-align:right">SPEND</span><span style="text-align:right">PER 500</span>
+                </div>
+                <sc-for list="{{ econModels }}" as="mm" hint-placeholder-count="4">
+                  <div style="display:grid;grid-template-columns:1fr 110px 110px 130px;gap:0;align-items:center;padding:10px 14px;border-bottom:1px solid #131316">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#dcdce2">{{ mm.name }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#8a8a94;text-align:right">{{ mm.calls }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#8a8a94;text-align:right">{{ mm.spend }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#dcdce2;text-align:right">{{ mm.per500 }}</span>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ econModelsEmpty }}" hint-placeholder-val="{{ true }}">
+                  <div style="padding:16px 14px;font-size:12.5px;line-height:1.6;color:#7d7d87">No AI call has been costed yet. This table is empty because nothing has been measured, not because the AI is free.</div>
+                </sc-if>
+              </div>
+
+              <sc-for list="{{ econWarnings }}" as="w" hint-placeholder-count="1">
+                <div style="display:flex;gap:11px;padding:12px 14px;border:1px solid rgba(245,158,11,.28);background:rgba(245,158,11,.05);border-radius:3px;max-width:860px">
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.12em;color:#f59e0b;flex:none">WARNING</span>
+                  <span style="font-size:12px;line-height:1.6;color:#9a9aa4;text-wrap:pretty">{{ w.text }}</span>
+                </div>
+              </sc-for>
+
+              <span style="font-size:11.5px;line-height:1.65;color:#5a5a63;max-width:860px;text-wrap:pretty">{{ econFeeNote }}</span>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
       <sc-if value="{{ isRouting }}" hint-placeholder-val="{{ true }}">
         <div style="display:flex;flex-direction:column;gap:16px;max-width:1080px">
           <span style="font-size:13px;line-height:1.6;color:#9a9aa4;max-width:800px;text-wrap:pretty">Each production task routes to one evaluated candidate. The evidence column is the benchmark result the routing decision rests on — changing a score changes the routing, not the other way round.</span>
@@ -709,9 +773,18 @@ const SEV = { HIGH: '#f43f5e', MEDIUM: '#f59e0b', LOW: '#7d7d87' };
 class Component extends DCLogic {
   state = { route: 'runs', runId: '4b81d05f', filter: 'ALL', promoteRun: null,
     api: null, sort: 'overall', candId: null, track: null,
-    failCand: 'ALL', failTrack: 'ALL', failSev: 'ALL', cmpA: 0, cmpB: 1, exportFmt: 'PDF' };
+    failCand: 'ALL', failTrack: 'ALL', failSev: 'ALL', cmpA: 0, cmpB: 1, exportFmt: 'PDF',
+    econApi: null, econDaily: null, econModels: null, econPer500: null, econError: '' };
 
   componentDidMount() {
+    import('./quintek-admin-billing.js')
+      .then((econ) => {
+        if (!econ.configured) { this.setState({ econApi: null }); return; }
+        this.setState({ econApi: econ });
+        this.loadEconomics(econ);
+      })
+      .catch(() => this.setState({ econApi: null }));
+
     import('./quintek-eval-api.js')
       .then((api) => this.setState({ api, candId: api.candidates[0].candidateId }))
       .catch((e) => this.setState({ loadError: 'evaluation data: ' + (e && e.message ? e.message : String(e)) }));
@@ -918,6 +991,64 @@ class Component extends DCLogic {
         gate: 'PASSED', policy: x.policy })),
     };
   }
+  /* Each figure is loaded separately and failure is per-figure. A dashboard
+   * that blanks entirely because one endpoint is down tells an operator less
+   * than one that shows what it has and names what it is missing. */
+  loadEconomics = (econ) => {
+    const api = econ || this.state.econApi;
+    if (!api) return;
+    api.daily().then((d) => this.setState({ econDaily: d }))
+      .catch((e) => this.setState({ econError: e && e.message ? e.message : String(e) }));
+    api.perModel().then((m) => this.setState({ econModels: m.models || [] }))
+      .catch(() => this.setState({ econModels: null }));
+    api.costPer500().then((c) => this.setState({ econPer500: c }))
+      .catch(() => this.setState({ econPer500: null }));
+  };
+
+  economicsVals() {
+    const s = this.state, api = s.econApi;
+    if (!api) {
+      return { econLive: false, econTiles: [], econModels: [], econModelsEmpty: true,
+        econPer500: '—', econAcceptedLine: '', econPer500Caveat: '', econWarnings: [],
+        econFeeNote: '',
+        econUnavailable: 'No backend is configured, so there are no economics to show. '
+          + 'This screen never displays sample figures: an invented revenue number is '
+          + 'worse than a blank one.' };
+    }
+    if (s.econError || !s.econDaily) {
+      return { econLive: false, econTiles: [], econModels: [], econModelsEmpty: true,
+        econPer500: '—', econAcceptedLine: '', econPer500Caveat: '', econWarnings: [],
+        econFeeNote: '',
+        econUnavailable: s.econError
+          || 'Loading the economics report. Nothing is shown until it is in hand.' };
+    }
+
+    const d = s.econDaily;
+    const per500 = api.costPer500Row(s.econPer500 || {});
+    const models = s.econModels || [];
+
+    return {
+      econLive: true, econUnavailable: '',
+      econTiles: api.economicsTiles(d).map((t) => ({
+        label: t.label, value: t.value, note: t.note,
+        fg: t.alarming ? '#f43f5e' : '#e8e8ec' })),
+      econPer500: per500.value,
+      econAcceptedLine: per500.measured
+        ? per500.accepted + ' accepted of ' + per500.produced + ' produced · '
+          + per500.acceptanceRate + ' accepted'
+        : 'nothing measured yet',
+      econPer500Caveat: per500.caveat,
+      econModels: models.map((m) => ({
+        name: (m.provider || '?') + ' · ' + (m.model || '?'),
+        calls: api.dash(m.calls),
+        spend: api.dash(m.total_spend || m.spend_display),
+        per500: api.dash(m.cost_per_batch_display) })),
+      econModelsEmpty: models.length === 0,
+      econWarnings: (d.warnings || []).map((text) => ({ text })),
+      econFeeNote: d.fee_note || '',
+    };
+  }
+
   open = (id) => () => this.setState({ route: 'detail', runId: id });
   setFilter = (f) => () => this.setState({ filter: f });
   selectPromote = (id) => () => this.setState({ promoteRun: id });
@@ -936,6 +1067,7 @@ class Component extends DCLogic {
       compare: ['Candidate comparison', 'RANKABLE RUNS ONLY'],
       registry: ['Gate registry', 'v0.4 · READ-ONLY · a91c3f04e7'],
       deploy: ['Production deployment', 'CANDIDATE → AUTHORIZING RUN'],
+      economics: ['Unit economics', 'REVENUE · AI SPEND · COST PER 500 ACCEPTED'],
       leaderboard: ['Benchmark leaderboard', 'ALL EVALUATED CANDIDATES · Q-BENCH v0.3'],
       candidate: ['Candidate report', 'TRACKS · CRITICAL ERRORS · HISTORY'],
       track: ['Track drill-down', (s.track || 'MEDICAL QA').toUpperCase()],
@@ -961,7 +1093,8 @@ class Component extends DCLogic {
       nav: [['runs', 'Runs', '6'], ['detail', 'Scorecard', ''], ['integrity', 'Integrity', '5'],
         ['leaderboard', 'Leaderboard', '4'], ['candidate', 'Candidate report', ''], ['cmp', 'Compare', ''],
         ['failures', 'Failure analysis', '8'], ['routing', 'Model routing', ''], ['runhistory', 'Benchmark runs', '4'],
-        ['compare', 'Gate comparison', '0'], ['registry', 'Gate registry', '14'], ['deploy', 'Deployment', '']]
+        ['compare', 'Gate comparison', '0'], ['registry', 'Gate registry', '14'],
+        ['economics', 'Unit economics', ''], ['deploy', 'Deployment', '']]
         .map(([id, label, badge]) => ({ label, badge, go: this.go(id),
           bg: s.route === id ? '#141418' : 'transparent',
           fg: s.route === id ? '#e8e8ec' : '#7d7d87',
@@ -969,6 +1102,11 @@ class Component extends DCLogic {
       title: t[0], subtitle: t[1],
       hasLoadError: !!s.loadError,
       loadErrorText: s.loadError ? 'Could not load ' + s.loadError + '. No figures are shown for data that did not load.' : '',
+      /* Not gated on `loaded`: the benchmark reports and the money are
+       * different systems, and a missing benchmark run is no reason to hide
+       * what the business is spending. */
+      isEconomics: s.route === 'economics',
+      ...this.economicsVals(),
       isRuns: loaded && s.route === 'runs',
       isDetail: loaded && s.route === 'detail',
       isIntegrity: loaded && s.route === 'integrity',
