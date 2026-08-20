@@ -94,12 +94,24 @@ class RoutingDecision:
     considered: list[dict] = field(default_factory=list)
     fallback_from: str | None = None
     evidence_sufficient: bool = False
+    # What survived each layer, so "could I use it" and "should I use it" stay
+    # readable apart in the record as well as in the code.
+    layer1_eligible: list[str] = field(default_factory=list)
+    layer2_ranked: list[str] = field(default_factory=list)
+
+    @property
+    def environmental_exclusions(self) -> list[dict]:
+        """Candidates dropped for reasons that are not about the model."""
+        return [c for c in self.considered if c.get("environmental")]
 
     def as_dict(self) -> dict:
         return {"task_type": self.task_type, "mode": self.mode, "selected": self.selected,
                 "reason": self.reason, "profile": self.profile,
                 "considered": list(self.considered), "fallback_from": self.fallback_from,
-                "evidence_sufficient": self.evidence_sufficient}
+                "evidence_sufficient": self.evidence_sufficient,
+                "layer1_eligible": list(self.layer1_eligible),
+                "layer2_ranked": list(self.layer2_ranked),
+                "environmental_exclusions": [c["key"] for c in self.environmental_exclusions]}
 
 
 class QuintekRouter:
@@ -113,7 +125,13 @@ class QuintekRouter:
     def __init__(self, candidates: list[Candidate], *, performance_for=None,
                  health_for=None, capability_for=None,
                  exploration: ExplorationPolicy | None = None,
-                 required_capabilities=None):
+                 required_capabilities=None, provider_registry=None):
+        # LAYER 1's source of truth, when one is supplied: reachability,
+        # credentials, model existence and declared capability all come from
+        # the provider registry rather than being inferred from call history.
+        # A provider blocked by egress policy has no call history to infer
+        # from, which is precisely when guessing goes wrong.
+        self.provider_registry = provider_registry
         self.candidates = {c.key: c for c in candidates}
         self.performance_for = performance_for or (lambda key, task: PerformanceScore(key))
         self.health_for = health_for or (lambda key: {"usable_now": True})
@@ -124,12 +142,41 @@ class QuintekRouter:
     # ---------- the filters ----------
 
     def _capability_filter(self, task_type: str) -> tuple[list[Candidate], list[dict]]:
+        """
+        LAYER 1 -- "can I use this at all?"
+
+        Never consults quality or speed. A provider that merely works must not
+        become the preferred provider by passing this filter; that decision
+        belongs to layer 2, and keeping them apart is what stops "it is the
+        only one reachable" turning into "it is the best".
+        """
         required = set(self.required_capabilities.get(task_type, ()))
         kept, dropped = [], []
+
+        registry_status = {}
+        if self.provider_registry is not None:
+            eligible, registry_dropped = self.provider_registry.eligible(
+                required_capabilities=required)
+            allowed = {m.key for m in eligible}
+            for entry in registry_dropped:
+                registry_status[entry["key"]] = entry
+        else:
+            allowed = None
+
         for candidate in self.candidates.values():
+            if allowed is not None and candidate.key not in allowed:
+                entry = registry_status.get(candidate.key, {})
+                dropped.append({
+                    "key": candidate.key, "dropped_at": "layer1_provider", "layer": 1,
+                    "reason": entry.get("reason", "not eligible in the provider registry"),
+                    "status": entry.get("status", ""),
+                    # The flag that keeps an environmental block out of every
+                    # downstream quality judgement.
+                    "environmental": entry.get("environmental", False)})
+                continue
             missing = required - candidate.capabilities
             if missing:
-                dropped.append({"key": candidate.key, "dropped_at": "capability",
+                dropped.append({"key": candidate.key, "dropped_at": "capability", "layer": 1,
                                 "reason": f"does not claim {', '.join(sorted(missing))}"})
             else:
                 kept.append(candidate)
@@ -141,9 +188,11 @@ class QuintekRouter:
             health = self.health_for(candidate.key)
             if health.get("usable_now") is False:
                 dropped.append({
-                    "key": candidate.key, "dropped_at": "health",
+                    "key": candidate.key, "dropped_at": "health", "layer": 1,
                     "reason": health.get("circuit", {}).get("last_error")
-                              or "circuit open"})
+                              or "circuit open",
+                    "status": health.get("last_status", ""),
+                    "environmental": bool(health.get("environmental_failures"))})
             else:
                 kept.append(candidate)
         return kept, dropped
@@ -186,7 +235,7 @@ class QuintekRouter:
         eligible = [s for s in scored if s.eligible]
         for s in scored:
             if not s.eligible:
-                considered.append({"key": s.key, "dropped_at": "fitness",
+                considered.append({"key": s.key, "dropped_at": "fitness", "layer": 2,
                                    "reason": "; ".join(s.reasons) or "not eligible"})
 
         if not eligible:
@@ -220,6 +269,8 @@ class QuintekRouter:
         return RoutingDecision(
             task_type=task_type, mode=mode, selected=selected, reason=reason,
             profile=chosen_profile, considered=considered,
+            layer1_eligible=[c.key for c in candidates],
+            layer2_ranked=ranked,
             evidence_sufficient=by_key[selected].performance.evidence_sufficient)
 
     def route_with_fallback(self, task_type: str, *, mode: str = PRODUCTION,

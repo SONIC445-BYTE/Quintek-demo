@@ -287,3 +287,123 @@ class ExplorationPolicy:
                 "controlled opportunity to challenge the current leader")
 
         return ranked[0], "exploitation: current best eligible candidate for this task"
+
+# ---------------------------------------------------------------------------
+# The evaluation scheduler
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ScheduledCall:
+    """One unit of evaluation work: this candidate, this task."""
+
+    candidate: str
+    task_id: str
+    task_type: str
+    reason: str
+
+    def as_dict(self) -> dict:
+        return {"candidate": self.candidate, "task_id": self.task_id,
+                "task_type": self.task_type, "reason": self.reason}
+
+
+class EvaluationScheduler:
+    """
+    Decides what to run next so the quota matrix fills evenly.
+
+    A rotation plan says who SHOULD answer what. A scheduler is needed on top
+    because reality diverges from the plan: a provider goes down mid-run, a
+    candidate is added later, half the plan completes before an interruption.
+    Re-running the plan from the start would then re-spend calls on the cells
+    that are already full while leaving the empty ones empty.
+
+    So the scheduler works from what has actually been observed, not from what
+    was planned:
+
+        coverage so far  ->  emptiest (candidate, task_type) cell  ->  a task
+        that candidate has not already answered
+
+    Candidates whose provider is unusable are skipped rather than scheduled
+    and failed. Scheduling work for a host behind a firewall produces a queue
+    of certain failures and a coverage matrix full of zeros that look like
+    poor performance.
+    """
+
+    def __init__(self, *, quota: int = DEFAULT_QUOTA, usable=None):
+        self.quota = quota
+        # `usable(candidate) -> bool`, normally backed by the provider
+        # registry. Default assumes everything is usable, which is right for
+        # tests and wrong for production -- so production passes one.
+        self.usable = usable or (lambda candidate: True)
+
+    def plan(self, *, candidates: list[str], tasks: list[tuple[str, str]],
+             coverage: dict[str, dict[str, int]],
+             answered: dict[str, set] | None = None,
+             limit: int = 20) -> list[ScheduledCall]:
+        """
+        `coverage` is candidate -> task_type -> count (from the inference
+        ledger). `answered` is candidate -> set of task_ids already done, so
+        the same candidate is not handed the same item twice.
+        """
+        answered = answered or {}
+        task_types = sorted({t for _, t in tasks})
+        live = [c for c in candidates if self.usable(c)]
+        if not live:
+            return []
+
+        state = quota_state(coverage, candidates=live, task_types=task_types,
+                            quota=self.quota)
+        by_type: dict[str, list[str]] = defaultdict(list)
+        for task_id, task_type in tasks:
+            by_type[task_type].append(task_id)
+
+        scheduled: list[ScheduledCall] = []
+        # Work down the emptiest cells. Recomputing after each pick would be
+        # tidier but O(n^2); instead the deficit is decremented in place.
+        deficits = {(c, t): state.remaining(c, t) for c in live for t in task_types}
+        while len(scheduled) < limit:
+            candidates_by_need = sorted(
+                ((deficit, cell) for cell, deficit in deficits.items() if deficit > 0),
+                key=lambda row: (-row[0], row[1]))
+            if not candidates_by_need:
+                break
+            placed = False
+            for _, (candidate, task_type) in candidates_by_need:
+                done = answered.get(candidate, set())
+                available = [t for t in by_type.get(task_type, ()) if t not in done]
+                if not available:
+                    deficits[(candidate, task_type)] = 0   # nothing left to give it
+                    continue
+                task_id = available[0]
+                answered.setdefault(candidate, set()).add(task_id)
+                deficits[(candidate, task_type)] -= 1
+                scheduled.append(ScheduledCall(
+                    candidate, task_id, task_type,
+                    f"{candidate} has {state.observed[candidate][task_type]} of {self.quota} "
+                    f"{task_type} observations"))
+                placed = True
+                break
+            if not placed:
+                break
+        return scheduled
+
+    def progress(self, *, candidates: list[str], task_types: list[str],
+                 coverage: dict[str, dict[str, int]]) -> dict:
+        """How full the matrix is, and what is still missing."""
+        state = quota_state(coverage, candidates=candidates, task_types=task_types,
+                            quota=self.quota)
+        cells = len(candidates) * len(task_types)
+        filled = sum(1 for c in candidates for t in task_types
+                     if state.observed[c][t] >= self.quota)
+        return {
+            "quota": self.quota,
+            "cells": cells,
+            "cells_filled": filled,
+            "fraction_complete": (filled / cells) if cells else None,
+            "underfilled": [{"candidate": c, "task_type": t, "still_needed": n}
+                            for c, t, n in state.underfilled()],
+            "complete": state.complete(),
+            "note": ("" if state.complete() else
+                     f"{cells - filled} of {cells} (candidate, task type) cells are below "
+                     f"the {self.quota}-observation quota. Any ranking drawn from this "
+                     "matrix is provisional."),
+        }

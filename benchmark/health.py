@@ -193,15 +193,74 @@ class HealthRegistry:
         return self.breaker(key).refusal_reason()
 
     def observe(self, key: str, *, success: bool, latency_ms: float | None = None,
-                timeout: bool = False, error: str = "") -> None:
-        breaker = self.breaker(key)
-        if success:
-            breaker.record_success(latency_ms=latency_ms)
+                timeout: bool = False, error: str = "",
+                status: str | None = None) -> dict:
+        """
+        Record one call. Returns the verdict, so a caller can act on it.
+
+        `status` may be supplied by a caller that already classified the
+        failure; otherwise it is derived from the error text. The verdict
+        decides what happens to the circuit, because the classes demand
+        different things:
+
+          EGRESS_BLOCKED  -> open, and stay open. Retrying cannot help, so a
+                             cooldown that reopens the circuit every 60s just
+                             wastes calls learning the same thing.
+          RATE_LIMITED    -> do NOT open. The provider is healthy; we are
+                             being greedy. Opening would take a working
+                             provider out of rotation for our own mistake.
+          TIMEOUT         -> open after the threshold, with a cooldown.
+          INVALID_RESPONSE-> do not open; the host is fine, the model is not.
+
+        The uniform "three failures and open for 60 seconds" this replaces
+        treated a firewall and a burst of traffic identically.
+        """
+        from .provider_status import ProviderStatus, Verdict, assess, policy_for
+
+        if status:
+            verdict = Verdict(status=status, policy=policy_for(status), detail=error)
         else:
-            breaker.record_failure(timeout=timeout, error=error)
+            verdict = assess(error or None, latency_ms=latency_ms,
+                             slow_threshold_ms=self.policy.slow_call_ms)
+
+        # A failure must never classify as AVAILABLE. Without this, a caller
+        # reporting `success=False, timeout=True` and no error text produced a
+        # verdict of AVAILABLE, whose policy does not open circuits -- so the
+        # failure was recorded nowhere and the breaker never tripped. Silent
+        # loss of a failure signal is the worst outcome this module can have.
+        if not success and verdict.ok:
+            fallback = (ProviderStatus.TIMEOUT if timeout else ProviderStatus.UNKNOWN_ERROR)
+            verdict = Verdict(status=fallback, policy=policy_for(fallback),
+                              detail=error or ("timeout" if timeout else "unspecified error"))
+
+        breaker = self.breaker(key)
+        if success and verdict.ok:
+            breaker.record_success(latency_ms=latency_ms)
+        elif verdict.policy.open_circuit:
+            breaker.record_failure(
+                timeout=timeout or verdict.status == ProviderStatus.TIMEOUT,
+                error=verdict.detail or verdict.status)
+            if verdict.policy.circuit_seconds is None and breaker.state == OPEN:
+                # "Until an operator intervenes" -- there is no cooldown that
+                # makes a policy denial or a rejected credential succeed.
+                breaker.current_cooldown = float("inf")
+            elif verdict.policy.circuit_seconds is not None and breaker.state == OPEN:
+                breaker.current_cooldown = min(
+                    breaker.current_cooldown or verdict.policy.circuit_seconds,
+                    verdict.policy.circuit_seconds)
+        # Everything else (rate limits, invalid responses) is recorded but
+        # deliberately does not touch the circuit.
+
         with self._lock:
             self._recent[key].append(
-                {"success": success, "latency_ms": latency_ms, "timeout": timeout})
+                {"success": success, "latency_ms": latency_ms, "timeout": timeout,
+                 "status": verdict.status,
+                 "environmental": verdict.environmental})
+            if verdict.status in (ProviderStatus.EGRESS_BLOCKED,
+                                  ProviderStatus.AUTH_FAILED,
+                                  ProviderStatus.MODEL_UNAVAILABLE):
+                self._states[key] = UNAVAILABLE
+        return verdict.as_dict()
 
     def declare(self, key: str, state: str) -> None:
         """
@@ -235,6 +294,13 @@ class HealthRegistry:
         n = len(recent)
         successes = sum(1 for r in recent if r["success"])
         timeouts = sum(1 for r in recent if r["timeout"])
+        # Failures that say nothing about the model or the adapter. Counted
+        # separately so a firewall never reads as a quality signal.
+        environmental = sum(1 for r in recent if r.get("environmental"))
+        statuses: dict[str, int] = {}
+        for r in recent:
+            if r.get("status"):
+                statuses[r["status"]] = statuses.get(r["status"], 0) + 1
         latencies = sorted(r["latency_ms"] for r in recent
                            if r["success"] and r["latency_ms"] is not None)
 
@@ -257,6 +323,12 @@ class HealthRegistry:
             "key": key, "n": n,
             "success_rate": (successes / n) if n else None,
             "timeout_rate": (timeouts / n) if n else None,
+            "environmental_failures": environmental,
+            "status_counts": statuses,
+            # The rate that excludes environmental failures -- the one a
+            # quality judgement may legitimately consult.
+            "attributable_success_rate": (
+                (successes / (n - environmental)) if n - environmental > 0 else None),
             "latency_p50_ms": pct(latencies, 0.5),
             "latency_p95_ms": pct(latencies, 0.95),
             "latency_max_ms": latencies[-1] if latencies else None,

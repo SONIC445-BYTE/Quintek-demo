@@ -465,6 +465,94 @@ protocol asks for. Recorded here rather than quietly accepted.
 `meta/llama-3.3-70b-instruct` consistently exceeded even a 120-second timeout
 on this account, consistent with the seventh pass's finding.
 
+## Tenth pass: provider status, failure classes, and the two-layer router
+
+### Provider registry, as of the last probe
+
+```
+PROVIDERS
+
+nvidia        adapter: yes   mock: yes   live: yes   status: DEGRADED / SLOW
+cerebras      adapter: yes   mock: yes   live: —     status: EGRESS_BLOCKED
+openrouter    adapter: yes   mock: yes   live: —     status: EGRESS_BLOCKED
+scripted      adapter: yes   mock: yes   live: yes   status: AVAILABLE
+```
+
+| Provider | Blocked host | Reason |
+|---|---|---|
+| Cerebras | `api.cerebras.ai:443` | Organization egress policy (403 on CONNECT) |
+| OpenRouter | `openrouter.ai:443` | Organization egress policy (403 on CONNECT) |
+
+**Neither has failed.** Both adapters are written and mock-tested; neither has
+ever been reached from this environment. `live` stays `—` rather than becoming
+`failed`, because "we could not test this" is not a test result. Running the
+same code where those hosts are permitted changes the `live` column and
+nothing else.
+
+The three columns exist because collapsing them gets the answer wrong twice:
+a correct, tested adapter behind a firewall reads as a broken provider, and a
+reachable host with an untested adapter reads as a working one.
+
+    ADAPTER WORKS  ≠  PROVIDER REACHABLE  ≠  PROVIDER HEALTHY
+
+### Failure classes
+
+`benchmark/provider_status.py` classifies a failure from observable evidence
+and attaches a policy. Three failures that look identical to a `try/except`
+demand opposite responses:
+
+| Status | Retry? | Circuit | Counts against the model? |
+|---|---|---|---|
+| `EGRESS_BLOCKED` | never | opens, **no cooldown** | no |
+| `AUTH_FAILED` | never | opens, no cooldown | no |
+| `MODEL_UNAVAILABLE` | never | opens, no cooldown | no |
+| `RATE_LIMITED` | back off | **stays closed** | no |
+| `TIMEOUT` | once | opens, 60s | no |
+| `DEGRADED` | once | opens, 120s | no |
+| `INVALID_RESPONSE` | once | stays closed | **yes** |
+| `UNKNOWN_ERROR` | once | opens, 60s | no |
+
+Two of these rows are the point. A rate limit must **not** open the circuit —
+the provider is healthy and we are being greedy; taking it out of rotation
+punishes it for our request rate. An egress block must open the circuit with
+**no cooldown**, because no amount of waiting makes a firewall go away, and a
+60-second retry loop just re-learns the same fact forever.
+
+`INVALID_RESPONSE` is the only class that counts against a model's quality. A
+model is not worse because a firewall exists, a key is wrong, or a host is
+busy. `HealthRegistry.health()` reports `attributable_success_rate` separately
+from `success_rate` for exactly this reason, and returns `None` — not zero —
+when every failure was environmental.
+
+### Two-layer routing
+
+**Layer 1 — can I use this at all?** Reachability, credentials, model
+existence, declared capability. Never consults quality or speed.
+
+**Layer 2 — should I use it?** Task fit, quality history, latency, cost,
+current health, then the exploration policy.
+
+Kept apart so that a provider which merely works does not become the
+preferred provider by default. `RoutingDecision` reports `layer1_eligible` and
+`layer2_ranked` separately, and flags every candidate dropped for
+environmental reasons so a firewall never silently becomes evidence.
+
+### Evaluation scheduler
+
+`EvaluationScheduler` fills the emptiest `(candidate, task_type)` cells first,
+never hands a candidate the same item twice, and **skips candidates whose
+provider is unusable** — scheduling work for a blocked host produces a queue
+of certain failures and a coverage matrix of zeros that read as poor
+performance.
+
+### One bug this pass found
+
+Wiring classification into the breaker surfaced a silent failure loss:
+`observe(success=False, timeout=True)` with no error text classified as
+`AVAILABLE`, whose policy does not open circuits — so the failure was recorded
+nowhere and the breaker never tripped. A failure can now never classify as
+`AVAILABLE`; three regression tests hold the line.
+
 ## Not built
 
 | Component | Why |
