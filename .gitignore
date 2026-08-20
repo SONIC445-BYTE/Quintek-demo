@@ -29,3 +29,7 @@ frontend/dist/
 quintek.db
 quintek.db-*
 sources/
+
+# Generation-run artifacts: per-run captures, useful locally, not repo content.
+generation_run/
+alpha0_runs/
