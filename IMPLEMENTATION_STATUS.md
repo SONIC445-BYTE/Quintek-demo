@@ -406,9 +406,44 @@ enough to include most values of interest, and the report says so in its own
 `interpretation` field rather than leaving it to the reader.
 
 What it establishes is the claim that mattered: **generation is not
-acceptance, and on this configuration acceptance is broken.** The next
-question for the project is whether a larger or differently-prompted validator
-does better — which is now a measurement, not a discussion.
+acceptance, and on this configuration acceptance is broken.**
+
+### The 70B validator is dramatically better, and dramatically slower
+
+The obvious next measurement — does a larger validator do better? — was run
+immediately. `meta/llama-3.1-70b-instruct` as validator, same battery:
+
+**Partial result: 10/10 adversarial items caught before the run stalled.**
+
+Every defect class it reached was flagged: wrong_key 2/2, two_correct 2/2,
+ambiguous_stem 2/2, hallucinated_fact 2/2, hallucinated_reference 2/2.
+Against the 8B's 11/20 overall, that is not a marginal difference.
+
+The run did not finish. Per-item latency was 7s, 15s, 30s, 36s, 65s, 103s and
+then an indefinite stall on item 11; the process was killed. This matches the
+seventh pass's finding and the `meta/llama-3.3-70b-instruct` timeouts: the 70B
+endpoints on this account have severe, intermittent latency spikes.
+
+So the two findings are in tension, and both are real:
+
+| | llama-3.1-8b | llama-3.1-70b |
+|---|---|---|
+| Detection (adversarial) | 11/20 (55%) | 10/10 before stalling |
+| False-flag (sound controls) | 9/10 (90%) | not reached |
+| Per-item latency | 0.9–4.6s | 7–103s, then indefinite |
+
+**The validator that works is too slow to serve interactively on this
+endpoint; the validator that is fast enough does not work.** That is the
+problem the project actually has, stated in numbers. It is solvable — a
+different host, a smaller specialised validator, a cheap first-pass filter, or
+moving validation off the interactive path — but it could not be worked on
+while it was invisible.
+
+One caveat stated rather than glossed: the 70B run's false-flag rate is
+**unmeasured**, because the control arm runs after the adversarial items. So
+"the 70B is the answer" is not yet supportable — the control arm is exactly
+where a flag-everything validator gets caught, and the 8B failed precisely
+there. Completing that run is the next concrete step.
 
 **2. `No development_override` cannot pass yet, and this is structural.**
 
