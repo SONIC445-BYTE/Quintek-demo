@@ -617,11 +617,45 @@ instead of `FAIL`. Corrected: the ceiling caps positive outcomes only. FAIL, UNE
 INVALID_RUN always surface, because "this candidate is dangerous" is more important than "this run
 couldn't have been certified anyway".
 
+## What has been built since
+
+The provider adapters, the student engine, the learner app, the billing system and the compute
+budget all exist and are covered. The full inventory is in `README.md`. Two findings from that work
+belong here because they change what the numbers mean:
+
+**The validator is not fit for purpose.** Measured against the adversarial battery, the 8B validator
+caught 11 of 20 planted defects, false-flagged 9 of 10 clean items, and missed both ungrounded
+items entirely. A 70B validator caught 10 of 10 before stalling, but its latency went 7s → 103s →
+indefinite and its false-flag rate was never measured, because the control arm never completed.
+Neither result licenses a claim that Quintek can recognise a bad question.
+
+**The provider catalogue is much thinner than it looks.** Of 102 NVIDIA models probed, 27 served and
+17 returned usable JSON; 62 returned 404. OpenRouter listed 414 catalogue entries, of which 21 of 26
+probed actually served. A catalogue entry is not an available model, and the funnel in
+`benchmark/candidates.py` exists so that difference is never assumed away again.
+
+## The economics, as measured
+
+`tools_compute_budget.py` answers "given ₹X of recognised revenue, how much inference can Quintek
+consume" as a waterfall, because the deductions are the argument: GST is not revenue, annual cash is
+twelve months of obligation, unconsumed allowance is a liability denominated in compute, and
+free-tier questions come out of the same provider credit.
+
+At the shipped plan prices, the cheapest confirmed PAID pairing costs 0.291 paise per accepted
+question (₹1.46 per 500) against a Pro-plan ceiling of 6.023 paise — roughly 95% headroom. The token
+profile behind that is measured from a real run (524/137 generation, 594/89 validation). The 80%
+acceptance rate is **not** measured and is labelled as an assumption everywhere it is used.
+
+That headroom is not a result. It is the budget for buying a validator that works.
+
 ## Next steps
 
-1. Add a real provider adapter and run Phase 1 against a live model on synthetic data.
-2. Author a 50-item pilot corpus in one subject with two qualified reviewers — enough to compute a
+1. Author a 50-item pilot corpus in one subject with two qualified reviewers — enough to compute a
    real kappa and calibrate thresholds.
-3. Only then scale the corpus.
+2. Measure a validator that clears the adversarial battery on both arms: detection rate AND
+   false-flag rate, with the control completed.
+3. Measure the real production acceptance rate, so the compute budget stops resting on an assumption.
+4. Only then scale the corpus.
 
-Step 2 is the gate. Everything downstream depends on whether a second qualified reviewer exists.
+Step 1 is still the gate. Everything downstream depends on whether a second qualified reviewer
+exists.

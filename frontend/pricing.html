@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quintek — Pricing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* One palette, defined once on :root. The page commits to a single light
+     look deliberately -- it is the first thing a prospective customer sees and
+     it should match the app's own surface, not the visitor's system theme. */
+  :root {
+    --paper: #FAFAF8; --card: #ffffff; --ink: #16191A; --ink-2: #5d6467;
+    --ink-3: #7c8386; --ink-4: #9aa0a2; --line: #E6E4DE; --sunk: #EDEBE4;
+    --green: #1E7A57; --green-dark: #155F42; --amber: #B5812B; --red: #BC4C43;
+    --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+    --sans: 'Space Grotesk', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--sans); font-size: 15px; line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 48px 20px 72px; }
+  header { display: flex; flex-direction: column; gap: 12px; margin-bottom: 34px; }
+  .eyebrow {
+    font-size: 11.5px; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--ink-4);
+  }
+  h1 { font-family: var(--serif); font-size: 34px; line-height: 1.2; margin: 0; font-weight: 600; }
+  .lede { font-size: 15px; line-height: 1.65; color: var(--ink-2); max-width: 60ch; text-wrap: pretty; }
+
+  .toggle {
+    display: inline-flex; gap: 0; padding: 3px; background: var(--sunk);
+    border-radius: 8px; margin: 26px 0 22px;
+  }
+  .toggle button {
+    padding: 9px 20px; border: none; border-radius: 6px; cursor: pointer;
+    font-family: var(--sans); font-size: 13px; font-weight: 600;
+    background: transparent; color: var(--ink-3); transition: background .15s, color .15s;
+  }
+  .toggle button[aria-pressed="true"] { background: var(--card); color: var(--ink); }
+  .toggle button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); gap: 14px; }
+  .plan {
+    display: flex; flex-direction: column; gap: 13px; padding: 20px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 9px;
+  }
+  .plan.featured { border-color: var(--green); border-top-width: 2px; }
+  .plan-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .plan-name {
+    font-size: 11.5px; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--ink-4);
+  }
+  .saving { font-size: 11px; font-weight: 600; color: var(--green); }
+  .price-row { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+  .price { font-family: var(--mono); font-size: 27px; color: var(--ink); }
+  .per { font-size: 12.5px; color: var(--ink-3); }
+  .equiv { font-size: 11.5px; color: var(--ink-4); }
+  ul.limits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+  ul.limits li { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); }
+  .cta {
+    margin-top: auto; padding: 12px; min-height: 46px; border: none; border-radius: 7px;
+    background: var(--green); color: #fff; cursor: pointer;
+    font-family: var(--sans); font-size: 13.5px; font-weight: 600;
+  }
+  .cta:hover { background: var(--green-dark); }
+  .cta.quiet { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+
+  .notice {
+    padding: 15px 17px; border: 1px solid var(--line); border-left: 2px solid var(--amber);
+    border-radius: 0 7px 7px 0; background: var(--card); color: var(--ink-2);
+    font-size: 13.5px; line-height: 1.65; max-width: 70ch;
+  }
+  .notice.bad { border-left-color: var(--red); }
+  .notice strong { color: var(--ink); font-weight: 600; }
+
+  .facts { margin-top: 40px; display: flex; flex-direction: column; gap: 16px; max-width: 74ch; }
+  .facts h2 { font-family: var(--serif); font-size: 19px; margin: 0; font-weight: 600; }
+  .fact { display: flex; flex-direction: column; gap: 4px; }
+  .fact dt { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .fact dd { margin: 0; font-size: 13.5px; line-height: 1.65; color: var(--ink-2); text-wrap: pretty; }
+  footer { margin-top: 42px; font-size: 12px; color: var(--ink-4); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  @media (max-width: 520px) { h1 { font-size: 27px; } .wrap { padding: 32px 16px 56px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Quintek</span>
+    <h1>Questions written from your own notes, checked before you see them.</h1>
+    <p class="lede">Every plan runs the same engine and the same validator. What
+      differs is how many questions you can generate, not how good they are.</p>
+  </header>
+
+  <div class="toggle" role="group" aria-label="Billing interval">
+    <button type="button" id="btn-monthly" aria-pressed="true">Monthly</button>
+    <button type="button" id="btn-annual" aria-pressed="false">Annual</button>
+  </div>
+
+  <div id="status" role="status" aria-live="polite"></div>
+  <div class="grid" id="grid"></div>
+
+  <section class="facts">
+    <h2>What the numbers mean</h2>
+    <dl class="facts">
+      <div class="fact">
+        <dt>Monthly and daily are different limits</dt>
+        <dd>A plan's monthly allowance is the total for the billing period. The
+          daily cap is how much of it you can use in one day. You can have
+          thousands left for the month and still be finished for today — the
+          app always tells you which one applied.</dd>
+      </div>
+      <div class="fact">
+        <dt>Asking for more than you have left is not a refusal</dt>
+        <dd>Ask for 500 with 173 left and you are offered the 173, with the
+          reason. Nothing is generated before you agree to it.</dd>
+      </div>
+      <div class="fact">
+        <dt>Rollover</dt>
+        <dd>Unused questions carry into the next period up to half of that
+          period's normal allowance. They do not accumulate indefinitely.</dd>
+      </div>
+      <div class="fact">
+        <dt>Changing plans</dt>
+        <dd>An upgrade starts immediately and is prorated. A downgrade starts at
+          your next renewal, so you keep what you have already paid for.
+          Cancelling keeps your access to the end of the period you have paid
+          for; nothing is charged again.</dd>
+      </div>
+    </dl>
+  </section>
+
+  <footer id="source"></footer>
+</div>
+
+<script>
+/* Prices come from the backend. There is no fallback, and that is deliberate.
+ *
+ * This page is where somebody decides to pay. A hardcoded price here would
+ * eventually disagree with what the checkout charges, and the person who
+ * noticed would be right to call it a bait and switch. If the backend cannot
+ * be reached the page says so and shows nothing, which is the honest failure.
+ *
+ * Point it at a backend with ?api=https://host, or by setting
+ * window.__QUINTEK_STUDENT_API__ before this script runs.
+ */
+(function () {
+  var params = new URLSearchParams(location.search);
+  var BASE = params.get('api') || window.__QUINTEK_STUDENT_API__ || null;
+
+  var grid = document.getElementById('grid');
+  var status = document.getElementById('status');
+  var source = document.getElementById('source');
+  var interval = params.get('interval') === 'annual' ? 'annual' : 'monthly';
+  var payload = null;
+
+  function notice(text, bad) {
+    status.innerHTML = '';
+    var el = document.createElement('div');
+    el.className = 'notice' + (bad ? ' bad' : '');
+    el.innerHTML = text;
+    status.appendChild(el);
+  }
+
+  function setInterval_(next) {
+    interval = next;
+    document.getElementById('btn-monthly').setAttribute('aria-pressed', String(next === 'monthly'));
+    document.getElementById('btn-annual').setAttribute('aria-pressed', String(next === 'annual'));
+    render();
+  }
+  document.getElementById('btn-monthly').onclick = function () { setInterval_('monthly'); };
+  document.getElementById('btn-annual').onclick = function () { setInterval_('annual'); };
+
+  function text(tag, cls, value) {
+    var el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (value !== undefined) el.textContent = value;
+    return el;
+  }
+
+  function render() {
+    grid.innerHTML = '';
+    if (!payload) return;
+    var families = payload.families || [];
+
+    families.forEach(function (family) {
+      var intervals = family.intervals || {};
+      /* A family with no card for this interval is skipped rather than shown
+         with the other interval's price under the wrong heading. */
+      var plan = intervals[interval] || (family.family === 'free' ? intervals.none : null);
+      if (!plan) return;
+
+      var card = text('div', 'plan' + (family.family === 'pro' ? ' featured' : ''));
+      var head = text('div', 'plan-head');
+      head.appendChild(text('span', 'plan-name', family.name));
+      if (interval === 'annual' && family.annual_saving) {
+        head.appendChild(text('span', 'saving', family.annual_saving.label));
+      }
+      card.appendChild(head);
+
+      var row = text('div', 'price-row');
+      row.appendChild(text('span', 'price', plan.price_display));
+      row.appendChild(text('span', 'per',
+        family.family === 'free' ? '' : (interval === 'annual' ? '/year' : '/month')));
+      if (interval === 'annual' && plan.monthly_equivalent_display) {
+        row.appendChild(text('span', 'equiv', plan.monthly_equivalent_display + '/mo'));
+      }
+      card.appendChild(row);
+
+      var limits = text('ul', 'limits');
+      [
+        family.monthly_question_allowance.toLocaleString() + ' questions / month',
+        family.daily_question_limit.toLocaleString() + ' / day',
+        family.session_question_limit.toLocaleString() + ' / session',
+      ].forEach(function (line) { limits.appendChild(text('li', null, line)); });
+      card.appendChild(limits);
+
+      var cta = text('button', 'cta' + (family.family === 'free' ? ' quiet' : ''),
+        family.family === 'free' ? 'Start free' : 'Choose ' + family.name);
+      /* The page does not take payments. Checkout happens in the app, signed
+         in, against a real entitlement -- a pricing page that could start a
+         charge for an unknown account is a fraud surface. */
+      cta.onclick = function () {
+        notice('Open Quintek and choose <strong>' + family.name + '</strong> under '
+          + 'More → Billing. Payment happens signed in, against your own account.');
+        status.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      };
+      card.appendChild(cta);
+      grid.appendChild(card);
+    });
+  }
+
+  if (!BASE) {
+    notice('Prices are not available on this page because no backend is configured. '
+      + 'This page never shows sample prices: a figure here that disagreed with '
+      + 'what checkout charges would be worse than no figure at all. '
+      + 'Add <code>?api=</code> with your backend address to load them.', true);
+    source.textContent = 'No backend configured.';
+    return;
+  }
+
+  notice('Loading prices…');
+  fetch(BASE.replace(/\/+$/, '') + '/billing/pricing', { headers: { accept: 'application/json' } })
+    .then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function (data) {
+      payload = data;
+      status.innerHTML = '';
+      source.textContent = 'Prices loaded from the Quintek backend. '
+        + 'Currency: ' + (data.currency || 'INR') + '.';
+      render();
+    })
+    .catch(function (err) {
+      notice('Prices could not be loaded (' + err.message + '). Nothing is shown '
+        + 'rather than a price that might be wrong. Please try again shortly.', true);
+      source.textContent = '';
+    });
+})();
+</script>
+</body>
+</html>
