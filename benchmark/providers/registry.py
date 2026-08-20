@@ -84,6 +84,15 @@ def _scripted(spec: dict):
         accuracy=float(spec.get("accuracy", 1.0)),
         seed=int(spec.get("seed", 7)),
     )
+    # A model_id is carried through so two scripted candidates can be told
+    # apart. Judge independence is enforced by comparing candidate ids, so
+    # without this the acceptance script cannot be exercised offline -- the
+    # generator and validator would always be the same configuration and it
+    # would refuse to run, which is correct behaviour for the wrong reason.
+    if spec.get("model_id"):
+        provider.model = spec["model_id"]
+    if spec.get("model_version"):
+        provider.model_version = spec["model_version"]
     return provider
 
 
