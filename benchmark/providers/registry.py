@@ -150,6 +150,70 @@ def _openai_compatible(spec: dict):
         timeout_seconds=spec.get("timeout_seconds"))
 
 
+@register("cerebras")
+def _cerebras(spec: dict):
+    """
+    Cerebras inference. OpenAI-compatible, and interesting to Quintek for one
+    specific reason: the measured problem on this project is not model quality
+    but latency -- a validator good enough to catch defects was too slow to
+    serve interactively. A provider whose selling point is speed is a direct
+    test of whether that trade-off is inherent or is an artefact of one host.
+
+    Model ids are Cerebras's own short names (`llama3.1-8b`,
+    `llama-3.3-70b`), not the `meta/...` paths NVIDIA uses. Passing one
+    provider's id to the other is the obvious mistake and produces a 404, so
+    it is left to fail loudly rather than being silently rewritten.
+    """
+    from .nvidia import NVIDIAProvider
+
+    key_env = spec.get("api_key_env", "CEREBRAS_API_KEY")
+    if not os.environ.get(key_env):
+        raise ProviderUnavailable(
+            f"{key_env} is not set, so the Cerebras provider cannot authenticate.")
+    model_id = spec.get("model_id")
+    if not model_id:
+        raise ProviderUnavailable(
+            "the cerebras provider needs an explicit model_id, e.g. 'llama3.1-8b'")
+    return NVIDIAProvider(
+        model_id, model_version=spec.get("model_version", "unknown"),
+        api_key_env=key_env,
+        base_url=spec.get("base_url", "https://api.cerebras.ai/v1/chat/completions"),
+        system_prompt=spec.get("system_prompt", ""),
+        model_family=spec.get("model_family"),
+        timeout_seconds=spec.get("timeout_seconds"))
+
+
+@register("openrouter")
+def _openrouter(spec: dict):
+    """
+    OpenRouter. One key, many model families behind it.
+
+    That matters here beyond convenience: `docs/JUDGE_INDEPENDENCE.md` Tier 2
+    wants a judge from a DIFFERENT model family, and on the NVIDIA account
+    only two llama ids actually served, so generator and validator had to be
+    the same family. A gateway carrying several families is the cheapest route
+    to satisfying that requirement properly.
+    """
+    from .nvidia import NVIDIAProvider
+
+    key_env = spec.get("api_key_env", "OPENROUTER_API_KEY")
+    if not os.environ.get(key_env):
+        raise ProviderUnavailable(
+            f"{key_env} is not set, so the OpenRouter provider cannot authenticate.")
+    model_id = spec.get("model_id")
+    if not model_id:
+        raise ProviderUnavailable(
+            "the openrouter provider needs an explicit model_id, e.g. "
+            "'meta-llama/llama-3.3-70b-instruct'")
+    return NVIDIAProvider(
+        model_id, model_version=spec.get("model_version", "unknown"),
+        api_key_env=key_env,
+        base_url=spec.get("base_url", "https://openrouter.ai/api/v1/chat/completions"),
+        system_prompt=spec.get("system_prompt", ""),
+        model_family=spec.get("model_family"),
+        timeout_seconds=spec.get("timeout_seconds"))
+
+
 @register("local")
 def _local(spec: dict):
     """

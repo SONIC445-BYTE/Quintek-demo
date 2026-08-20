@@ -19,7 +19,30 @@ from benchmark.providers.registry import (
 
 
 def test_the_known_providers_are_named(monkeypatch):
-    assert set(available()) == {"scripted", "nvidia", "openai-compatible", "local"}
+    assert set(available()) == {"scripted", "nvidia", "openai-compatible", "local",
+                                "cerebras", "openrouter"}
+
+
+def test_cerebras_and_openrouter_need_their_own_keys(monkeypatch):
+    for provider, key_env, model in (("cerebras", "CEREBRAS_API_KEY", "llama3.1-8b"),
+                                     ("openrouter", "OPENROUTER_API_KEY", "x/y")):
+        monkeypatch.delenv(key_env, raising=False)
+        with pytest.raises(ProviderUnavailable, match=key_env):
+            build_provider({"provider": provider, "model_id": model})
+
+
+def test_each_gateway_keeps_its_own_default_endpoint(monkeypatch):
+    """
+    A model id from one provider passed to another is the obvious mistake.
+    Endpoints are per-provider so it fails loudly rather than being rewritten.
+    """
+    monkeypatch.setenv("CEREBRAS_API_KEY", "k")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    cerebras = build_provider({"provider": "cerebras", "model_id": "llama3.1-8b"})
+    openrouter = build_provider({"provider": "openrouter", "model_id": "meta-llama/x"})
+    assert "cerebras.ai" in cerebras.base_url
+    assert "openrouter.ai" in openrouter.base_url
+    assert cerebras.base_url != openrouter.base_url
 
 
 def test_a_bare_string_is_taken_as_the_provider_name():
