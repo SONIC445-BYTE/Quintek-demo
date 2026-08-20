@@ -72,7 +72,40 @@ TARGETS = {
 }
 
 # ES modules the .dc.html files import at runtime, in dependency order.
-MODULES = ["quintek-eval-api.js", "quintek-report-api.js"]
+# Which ES modules a design file pulls in is DISCOVERED, not listed.
+#
+# It used to be a hand-maintained list, and it went stale: the student engine
+# and the whole billing surface were added to the app, imported at runtime, and
+# never inlined. In the browser those imports resolve against sibling files and
+# everything works. In the single-file build and therefore in the APK they
+# cannot resolve at all -- and each import is wrapped in a `.catch()` that sets
+# the API to null, so the app came up looking merely "not configured" while
+# actually shipping without payments or generation.
+#
+# A list that has to be updated by hand every time a module is added is a list
+# that will be out of date the first time somebody forgets.
+IMPORT_RE = re.compile(r"""import\(\s*['"]\./([A-Za-z0-9._-]+\.js)['"]\s*\)""")
+
+
+class MissingModule(SystemExit):
+    """A design file imports a module that is not on disk, so the build would
+    ship an app whose import silently rejects."""
+
+
+def discover_modules(html: str, root: Path) -> list[str]:
+    """Every `import('./x.js')` in the file, in a stable order."""
+    found = []
+    for name in IMPORT_RE.findall(html):
+        if name not in found:
+            found.append(name)
+    missing = [n for n in found if not (root / n).exists()]
+    if missing:
+        raise MissingModule(
+            "design file imports modules that do not exist: "
+            + ", ".join(missing)
+            + ". The build would have produced an app whose import rejects"
+              " silently and reports itself unconfigured.")
+    return found
 
 
 class FrameError(SystemExit):
@@ -314,17 +347,27 @@ def build(key: str, *, keep_frame: bool = False) -> Path:
     # `window.Babel`, so inlining it here is enough.
     babel = (VENDOR / "babel.min.js").read_text(encoding="utf-8")
 
+    modules = discover_modules(html, FRONTEND)
     module_block = "window.__DC_MOD = {};\n" + "\n".join(
         _module_to_iife((FRONTEND / m).read_text(encoding="utf-8"), FRONTEND / m)
-        for m in MODULES
+        for m in modules
     )
 
     # Dynamic imports resolve to the pre-evaluated promises above.
-    for m in MODULES:
+    for m in modules:
         html = html.replace(f"import('./{m}')", f"window.__DC_MOD['{m}']")
         html = html.replace(f'import("./{m}")', f"window.__DC_MOD['{m}']")
 
     html = _inline_scripts(html, FRONTEND)
+
+    # Nothing may survive as a live dynamic import: a single one left behind is
+    # a feature that works in the browser and is absent from the APK.
+    leftover = IMPORT_RE.findall(html)
+    if leftover:
+        raise MissingModule(
+            "dynamic imports survived the build: " + ", ".join(sorted(set(leftover)))
+            + ". They would reject at runtime and the app would report itself"
+              " unconfigured rather than broken.")
 
     preamble = (
         _inline_js(react, "react 18.3.1 UMD")

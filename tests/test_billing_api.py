@@ -25,7 +25,11 @@ def api(tmp_path):
     conn = sqlite3.connect(tmp_path / "b.db", isolation_level=None)
     conn.row_factory = sqlite3.Row
     conn.executescript(open("billing/schema.sql").read())
-    PlanStore(conn).seed_from_config()
+    plans = PlanStore(conn)
+    plans.seed_from_config()
+    for plan in plans.all_active():
+        if plan.price_minor > 0:
+            plans.set_gateway_ref(plan.id, "razorpay", "plan_rzp_" + plan.id)
     gateway = RazorpayAdapter(key_id="rzp_test", webhook_secret=SECRET,
                               transport=lambda m, p, b, a: {"id": "sub_rzp_1"})
     return BillingAPI(conn, gateway=gateway)

@@ -29,6 +29,11 @@ def env(tmp_path):
     conn.executescript(open("billing/schema.sql").read())
     plans = PlanStore(conn)
     plans.seed_from_config()
+    # Checkout needs the GATEWAY's plan id, so a fixture that omits it is
+    # testing a deployment that would fail on its first sale.
+    for plan in plans.all_active():
+        if plan.price_minor > 0:
+            plans.set_gateway_ref(plan.id, "razorpay", "plan_rzp_" + plan.id)
     gateway = RazorpayAdapter(key_id="rzp_test", webhook_secret=SECRET,
                               transport=lambda m, p, b, a: {"id": "sub_rzp_1"})
     service = SubscriptionService(conn, gateway=gateway, plans=plans)
@@ -275,3 +280,47 @@ def test_a_superseded_entitlement_is_closed_not_deleted(env):
     rows = conn.execute("SELECT * FROM entitlements WHERE user_id='u1'").fetchall()
     assert len(rows) == 1
     assert rows[0]["effective_until"] is not None
+
+
+# ---------------------------------------------------------------------------
+# A plan the gateway has never heard of
+# ---------------------------------------------------------------------------
+
+def test_checkout_refuses_a_plan_with_no_gateway_id(tmp_path):
+    """
+    Sending Quintek's own plan id to Razorpay names nothing on its side. The
+    call fails, or worse succeeds against an unrelated record. Refusing here
+    keeps the failure at checkout -- one person seeing an error -- rather than
+    at renewal, where it is silent.
+    """
+    from billing.gateway import GatewayError
+
+    conn = sqlite3.connect(tmp_path / "unlinked.db")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(open("billing/schema.sql").read())
+    plans = PlanStore(conn)
+    plans.seed_from_config()
+    gateway = RazorpayAdapter(key_id="rzp_test", webhook_secret=SECRET,
+                              transport=lambda m, p, b, a: {"id": "sub_rzp_x"})
+    service = SubscriptionService(conn, gateway=gateway, plans=plans)
+
+    plan = plans.active("pro", "monthly")
+    with pytest.raises(GatewayError) as exc:
+        service.begin_checkout("u1", plan.id)
+    assert "gateway plan id" in str(exc.value)
+    assert "tools_razorpay_sync" in str(exc.value)
+
+
+def test_the_gateway_receives_its_own_plan_id_not_quinteks(env):
+    conn, plans, service, _ = env
+    seen = {}
+
+    def transport(method, path, body, auth):
+        seen.update(body or {})
+        return {"id": "sub_rzp_1"}
+
+    service.gateway.transport = transport
+    plan = plans.active("pro", "monthly")
+    service.begin_checkout("u1", plan.id)
+    assert seen["plan_id"] == "plan_rzp_" + plan.id
+    assert seen["plan_id"] != plan.id

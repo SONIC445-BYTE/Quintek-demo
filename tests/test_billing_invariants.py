@@ -38,6 +38,12 @@ def fresh(tmp_path, name="b.db"):
     conn.executescript(SCHEMA)
     plans = PlanStore(conn)
     plans.seed_from_config()
+    # Every paid plan is linked to a gateway plan, as it must be before a sale
+    # can happen at all. A fixture without this tests a deployment that would
+    # fail on its first checkout.
+    for plan in plans.all_active():
+        if plan.price_minor > 0:
+            plans.set_gateway_ref(plan.id, "razorpay", "plan_rzp_" + plan.id)
     return conn, plans
 
 

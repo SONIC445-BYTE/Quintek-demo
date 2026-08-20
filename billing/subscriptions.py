@@ -36,8 +36,8 @@ from datetime import datetime, timedelta, timezone
 
 from .entitlements import EntitlementEngine
 from .gateway import (ACTIVE, ALL_STATES, CANCEL_AT_PERIOD_END, CANCELLED, EXPIRED,
-                      PAST_DUE, PAYMENT_FAILED, PENDING, TRIALING, GatewayEvent,
-                      SignatureInvalid)
+                      PAST_DUE, PAYMENT_FAILED, PENDING, TRIALING, GatewayError,
+                      GatewayEvent, SignatureInvalid)
 from .plans import PlanStore, now_iso
 
 # What may follow what. A state absent from a set is a transition that will be
@@ -105,8 +105,19 @@ class SubscriptionService:
         payload = {"subscription_id": subscription_id, "plan": plan.as_dict(),
                    "status": PENDING}
         if self.gateway is not None:
+            # The GATEWAY's id for this plan, not Quintek's. Sending
+            # "pro_monthly_v1" to Razorpay names nothing on its side: the call
+            # fails, or worse succeeds against some unrelated record. Refusing
+            # here keeps the failure at checkout, where it is one person seeing
+            # an error, rather than at renewal, where it is silent.
+            gateway_name, gateway_plan_id = self.plans.gateway_ref(plan.id)
+            if not gateway_plan_id:
+                raise GatewayError(
+                    f"{plan.id} has no gateway plan id, so no subscription can be"
+                    " created for it. Run tools_razorpay_sync.py to create the"
+                    " plan on the gateway and record its id.")
             session = self.gateway.create_subscription(
-                plan_ref=plan.id, user_ref=user_id,
+                plan_ref=gateway_plan_id, user_ref=user_id,
                 total_count=1 if plan.billing_interval == "annual" else 12)
             self.conn.execute(
                 "UPDATE subscriptions SET gateway_subscription_id=?, updated_at=?"
