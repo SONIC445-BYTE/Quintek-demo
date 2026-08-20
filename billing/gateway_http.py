@@ -34,6 +34,79 @@ ENV_KEY_SECRET = "RAZORPAY_KEY_SECRET"
 ENV_WEBHOOK_SECRET = "RAZORPAY_WEBHOOK_SECRET"
 
 
+# ---------------------------------------------------------------------------
+# Failure classes
+# ---------------------------------------------------------------------------
+# A 401 from Razorpay means two entirely different things and the difference
+# decides who has to act.
+#
+#   "Authentication failed"  -- the key id or secret is wrong. A developer's
+#                              problem, fixed by copying the key again.
+#   "Unauthorized"           -- the key is CORRECT and the account is not
+#                              permitted to call this endpoint. An account
+#                              problem, fixed by enabling the product in the
+#                              Razorpay dashboard. No amount of re-copying the
+#                              key will change it.
+#
+# Reporting the second as the first sends someone hunting for a typo that does
+# not exist -- which is exactly what happened here before these constants did.
+AUTH_FAILED = "AUTH_FAILED"
+PRODUCT_NOT_ENABLED = "PRODUCT_NOT_ENABLED"
+CREDENTIALS_MISSING = "CREDENTIALS_MISSING"
+RATE_LIMITED = "RATE_LIMITED"
+BAD_REQUEST = "BAD_REQUEST"
+GATEWAY_ERROR = "GATEWAY_ERROR"
+UNREACHABLE = "UNREACHABLE"
+OK = "OK"
+
+# Endpoints every activated account can call, whatever products are enabled.
+# Used as a CONTROL: if this works and Subscriptions does not, the credentials
+# are not the problem.
+CONTROL_PATH = "/v1/orders?count=1"
+SUBSCRIPTION_PATH = "/v1/plans?count=1"
+
+
+def classify(status: int, body: str) -> str:
+    """
+    Name what a Razorpay error actually is.
+
+    Razorpay's own wording is the signal. An authenticated-but-forbidden call
+    returns a bare `{"error":"Unauthorized"}`, while a rejected key returns the
+    structured `{"error":{"description":"Authentication failed",...}}`. The
+    shapes differ because they come from different layers.
+    """
+    text = (body or "").lower()
+    if status == 401:
+        if "authentication failed" in text or "provide your api key" in text:
+            return AUTH_FAILED
+        return PRODUCT_NOT_ENABLED
+    if status == 429:
+        return RATE_LIMITED
+    if status in (400, 404, 422):
+        return BAD_REQUEST
+    if status >= 500:
+        return GATEWAY_ERROR
+    return OK if status < 400 else GATEWAY_ERROR
+
+
+REMEDIES = {
+    AUTH_FAILED: ("the key id or secret was rejected. Copy them again from the"
+                  " Razorpay dashboard -- a regenerated secret or a trailing"
+                  " newline is the usual cause."),
+    PRODUCT_NOT_ENABLED: ("the credentials are VALID but this account is not"
+                          " permitted to call this API. For Plans and"
+                          " Subscriptions this means the Subscriptions product"
+                          " has not been enabled on the account; enable it from"
+                          " the Razorpay dashboard. Re-copying the key will not"
+                          " help."),
+    CREDENTIALS_MISSING: f"set {ENV_KEY_ID} and {ENV_KEY_SECRET} on the backend.",
+    RATE_LIMITED: "too many requests; retry with backoff.",
+    BAD_REQUEST: "the request was rejected on its contents, not its credentials.",
+    GATEWAY_ERROR: "Razorpay returned a server error; retry later.",
+    UNREACHABLE: "Razorpay could not be reached from this network.",
+}
+
+
 def redact(text: str, *secrets: str) -> str:
     """Remove anything secret from text that is about to be shown to someone."""
     for secret in secrets:
@@ -60,9 +133,11 @@ class HttpTransport:
                  auth: tuple[str, str]) -> dict:
         key_id, key_secret = auth
         if not key_id or not key_secret:
-            raise GatewayError(
+            error = GatewayError(
                 "no Razorpay credentials are configured, so no call can be made."
                 f" Set {ENV_KEY_ID} and {ENV_KEY_SECRET} on the backend.")
+            error.failure_class = CREDENTIALS_MISSING
+            raise error from None
 
         url = f"{self.base}{path}"
         payload = json.dumps(body).encode("utf-8") if body is not None else None
@@ -81,19 +156,20 @@ class HttpTransport:
                 detail = exc.read().decode("utf-8")
             except Exception:                      # noqa: BLE001 -- best effort
                 detail = exc.reason or ""
-            # 401 is the one worth naming: it is almost always a rotated or
-            # mistyped key, and "Unauthorized" alone sends people hunting
-            # through their own code for a bug that is not there.
-            hint = (" -- the key id and secret were rejected by Razorpay."
-                    " Check that the secret has not been regenerated since it"
-                    " was copied." if exc.code == 401 else "")
-            raise GatewayError(
-                f"Razorpay returned HTTP {exc.code} for {method} {path}{hint}:"
-                f" {redact(detail, key_secret)[:400]}") from None
+            failure = classify(exc.code, detail)
+            error = GatewayError(
+                f"Razorpay returned HTTP {exc.code} for {method} {path}"
+                f" [{failure}] -- {REMEDIES.get(failure, '')}"
+                f" Response: {redact(detail, key_secret)[:400]}")
+            error.failure_class = failure
+            error.status_code = exc.code
+            raise error from None
         except urllib.error.URLError as exc:
-            raise GatewayError(
-                f"Razorpay could not be reached for {method} {path}:"
-                f" {redact(str(exc.reason), key_secret)}") from None
+            error = GatewayError(
+                f"Razorpay could not be reached for {method} {path}"
+                f" [{UNREACHABLE}]: {redact(str(exc.reason), key_secret)}")
+            error.failure_class = UNREACHABLE
+            raise error from None
 
         try:
             return json.loads(raw) if raw else {}
@@ -151,3 +227,42 @@ def adapter_from_env(env: dict | None = None, *, transport=None):
         key_id=key_id, key_secret=secret,
         webhook_secret=(env.get(ENV_WEBHOOK_SECRET) or "").strip(),
         transport=transport or HttpTransport())
+
+
+def diagnose(adapter) -> dict:
+    """
+    Tell a credential problem apart from an account problem, with a control.
+
+    Calls an endpoint every activated account can reach BEFORE calling the one
+    that matters. Without the control, an "Unauthorized" on /v1/plans is
+    indistinguishable from a bad key, and the wrong person spends an afternoon
+    re-copying a key that was right all along.
+    """
+    result = {"control": None, "subscriptions": None,
+              "credentials_valid": None, "subscriptions_enabled": None}
+
+    def probe(path):
+        try:
+            adapter._call("GET", path, None)
+            return OK, ""
+        except GatewayError as exc:
+            return getattr(exc, "failure_class", GATEWAY_ERROR), str(exc)
+
+    result["control"], control_detail = probe(CONTROL_PATH)
+    result["subscriptions"], subs_detail = probe(SUBSCRIPTION_PATH)
+    result["control_detail"] = control_detail
+    result["subscriptions_detail"] = subs_detail
+
+    result["credentials_valid"] = result["control"] == OK
+    result["subscriptions_enabled"] = result["subscriptions"] == OK
+
+    if result["credentials_valid"] and not result["subscriptions_enabled"]:
+        result["verdict"] = PRODUCT_NOT_ENABLED
+        result["remedy"] = REMEDIES[PRODUCT_NOT_ENABLED]
+    elif not result["credentials_valid"]:
+        result["verdict"] = result["control"]
+        result["remedy"] = REMEDIES.get(result["control"], "")
+    else:
+        result["verdict"] = OK
+        result["remedy"] = ""
+    return result

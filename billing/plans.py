@@ -253,6 +253,39 @@ class PlanStore:
             "SELECT * FROM plans WHERE active=1 ORDER BY sort_order, billing_interval")
         return [Plan.from_row(r) for r in rows]
 
+    def gateway_ref(self, plan_identifier: str) -> tuple[str, str]:
+        row = self.conn.execute(
+            "SELECT gateway, gateway_plan_id FROM plans WHERE id=?",
+            (plan_identifier,)).fetchone()
+        if row is None:
+            raise PlanError(f"no plan {plan_identifier!r}")
+        return row["gateway"], row["gateway_plan_id"]
+
+    def set_gateway_ref(self, plan_identifier: str, gateway: str,
+                        gateway_plan_id: str) -> None:
+        """
+        Record the gateway's id for a plan we already have.
+
+        Refuses to overwrite an existing id. Two gateway plans for one Quintek
+        plan means some subscribers are billed against a record nobody is
+        looking at any more, and the only way to find out is a customer
+        complaint. Clearing the reference has to be deliberate.
+        """
+        existing_gateway, existing_id = self.gateway_ref(plan_identifier)
+        if existing_id and existing_id != gateway_plan_id:
+            raise PlanError(
+                f"{plan_identifier} is already linked to {existing_gateway}"
+                f" plan {existing_id}; refusing to relink it to"
+                f" {gateway_plan_id}. Clear it deliberately if that is meant.")
+        self.conn.execute(
+            "UPDATE plans SET gateway=?, gateway_plan_id=?, updated_at=?"
+            " WHERE id=?", (gateway, gateway_plan_id, now_iso(), plan_identifier))
+
+    def unlinked(self, *, gateway: str = "") -> list[Plan]:
+        """Active paid plans with no gateway id yet -- the sync tool's work list."""
+        return [p for p in self.all_active()
+                if p.price_minor > 0 and not self.gateway_ref(p.id)[1]]
+
     def compute_weights(self) -> dict[str, int]:
         return {r["question_type"]: r["weight"]
                 for r in self.conn.execute("SELECT * FROM compute_unit_weights")}

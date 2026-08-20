@@ -188,3 +188,115 @@ def test_credentials_are_stripped_before_use() -> None:
                                transport=opener_returning({}))
     assert adapter.key_id == "rzp_test_abc"
     assert adapter.key_secret == SECRET
+
+
+# ------------------------------------------------------------ failure classes
+
+def test_a_rejected_key_and_a_disabled_product_are_different_failures() -> None:
+    """
+    Razorpay returns 401 for both, in two different shapes, and the difference
+    decides who has to act. This distinction cost an afternoon of hunting for a
+    typo in a key that was correct all along.
+    """
+    from billing.gateway_http import AUTH_FAILED, PRODUCT_NOT_ENABLED, classify
+
+    assert classify(401, '{"error":{"code":"BAD_REQUEST_ERROR",'
+                         '"description":"Authentication failed"}}') == AUTH_FAILED
+    assert classify(401, '{"error":{"description":"Please provide your api key '
+                         'for authentication purposes"}}') == AUTH_FAILED
+    assert classify(401, '{"error":"Unauthorized"}') == PRODUCT_NOT_ENABLED
+
+
+def test_other_statuses_get_their_own_classes() -> None:
+    from billing.gateway_http import (BAD_REQUEST, GATEWAY_ERROR, OK,
+                                      RATE_LIMITED, classify)
+    assert classify(429, "") == RATE_LIMITED
+    assert classify(400, "") == BAD_REQUEST
+    assert classify(503, "") == GATEWAY_ERROR
+    assert classify(200, "") == OK
+
+
+def test_the_failure_class_travels_on_the_exception() -> None:
+    from billing.gateway_http import PRODUCT_NOT_ENABLED
+
+    error = urllib.error.HTTPError(
+        "https://api.razorpay.com/v1/plans", 401, "Unauthorized", {},
+        io.BytesIO(b'{"error":"Unauthorized"}'))
+    with pytest.raises(GatewayError) as exc:
+        HttpTransport(opener=opener_raising(error))(
+            "GET", "/v1/plans", None, ("rzp_test_x", SECRET))
+    assert exc.value.failure_class == PRODUCT_NOT_ENABLED
+    assert "will not help" in str(exc.value)
+
+
+# ------------------------------------------------------------ the diagnosis
+
+class FakeAdapter:
+    """Answers per path, so a control and a target can differ."""
+
+    def __init__(self, responses):
+        self.responses = responses
+        self.calls = []
+
+    def _call(self, method, path, body):
+        self.calls.append(path)
+        outcome = self.responses[path]
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+def _http_error(code, body):
+    error = urllib.error.HTTPError("https://api.razorpay.com", code, "", {},
+                                   io.BytesIO(body))
+    transport = HttpTransport(opener=opener_raising(error))
+    try:
+        transport("GET", "/x", None, ("id", "secret"))
+    except GatewayError as exc:
+        return exc
+    raise AssertionError("expected a GatewayError")
+
+
+def test_diagnose_separates_a_bad_key_from_a_disabled_product() -> None:
+    from billing.gateway_http import (CONTROL_PATH, PRODUCT_NOT_ENABLED,
+                                      SUBSCRIPTION_PATH, diagnose)
+
+    adapter = FakeAdapter({
+        CONTROL_PATH: {"entity": "collection", "items": []},
+        SUBSCRIPTION_PATH: _http_error(401, b'{"error":"Unauthorized"}'),
+    })
+    result = diagnose(adapter)
+    assert result["credentials_valid"] is True
+    assert result["subscriptions_enabled"] is False
+    assert result["verdict"] == PRODUCT_NOT_ENABLED
+    assert "enable it" in result["remedy"].lower()
+
+
+def test_diagnose_blames_the_key_when_even_the_control_fails() -> None:
+    from billing.gateway_http import (AUTH_FAILED, CONTROL_PATH,
+                                      SUBSCRIPTION_PATH, diagnose)
+
+    rejected = _http_error(401, b'{"error":{"description":"Authentication failed"}}')
+    adapter = FakeAdapter({CONTROL_PATH: rejected, SUBSCRIPTION_PATH: rejected})
+    result = diagnose(adapter)
+    assert result["credentials_valid"] is False
+    assert result["verdict"] == AUTH_FAILED
+    assert "copy them again" in result["remedy"].lower()
+
+
+def test_diagnose_reports_ok_when_both_work() -> None:
+    from billing.gateway_http import CONTROL_PATH, OK, SUBSCRIPTION_PATH, diagnose
+
+    adapter = FakeAdapter({CONTROL_PATH: {"items": []}, SUBSCRIPTION_PATH: {"items": []}})
+    result = diagnose(adapter)
+    assert result["verdict"] == OK
+    assert result["subscriptions_enabled"] is True
+
+
+def test_diagnose_always_calls_the_control_first() -> None:
+    """Without the control there is no way to tell the two 401s apart."""
+    from billing.gateway_http import CONTROL_PATH, SUBSCRIPTION_PATH, diagnose
+
+    adapter = FakeAdapter({CONTROL_PATH: {"items": []}, SUBSCRIPTION_PATH: {"items": []}})
+    diagnose(adapter)
+    assert adapter.calls[0] == CONTROL_PATH
