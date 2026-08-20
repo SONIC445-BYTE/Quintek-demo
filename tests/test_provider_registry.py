@@ -154,3 +154,67 @@ def test_every_registered_builder_is_callable_with_a_spec():
     """A builder that cannot be called is a name that lies about existing."""
     for name, builder in BUILDERS.items():
         assert callable(builder), name
+
+
+# ---------------------------------------------------------------------------
+# The scripted double now answers the app's own JSON shapes
+# ---------------------------------------------------------------------------
+# It was taught to reply with questions, concepts and validation checks so the
+# whole app runs end to end with no key and no spend. That makes it more useful
+# and more dangerous: a scripted run now LOOKS like a working product.
+
+def test_the_scripted_provider_still_says_it_is_not_a_model() -> None:
+    from benchmark.providers.registry import describe
+
+    report = describe({"provider": "scripted"})
+    assert report["is_real_model"] is False
+    assert "scripted" in report["provider"]
+
+
+def test_scripted_output_is_assembled_from_the_prompt_not_reasoned() -> None:
+    """
+    The stems are the passage's own sentences. That is deliberate -- it keeps a
+    scripted run on the real grounded-validation path instead of exercising the
+    rejection path by accident -- and it is also why nothing it produces is
+    evidence about a model's medical knowledge.
+    """
+    from benchmark.providers.base import GenerationRequest
+    from benchmark.providers.scripted import ScriptedProvider
+
+    fact = ("Transferrin saturation below twenty per cent supports absolute "
+            "iron deficiency in this patient.")
+    prompt = ('Write 2 questions. Reply with {"questions": [{"stem": "..."}]}\n\n'
+              f"SOURCE PASSAGES: {fact}")
+    reply = ScriptedProvider().generate(GenerationRequest(item_id="q", prompt=prompt))
+    stems = " ".join(q["stem"] for q in reply.parsed["questions"])
+    assert fact.rstrip(".") in stems
+
+
+def test_the_scripted_validator_answers_every_check_the_prompt_lists() -> None:
+    """
+    Answering only the checks shown in the reply EXAMPLE leaves the rest
+    defaulting to false, so the double flags every question -- which looks like
+    a validator doing its job and is really a double answering the wrong
+    question.
+    """
+    from benchmark.providers.base import GenerationRequest
+    from benchmark.providers.scripted import ScriptedProvider
+    from student.validation import CHECKS
+
+    listed = "\n".join(f'- "{key}": {text}' for key, text in CHECKS)
+    prompt = ("Judge each check as true or false:\n" + listed
+              + '\n\nReply with {"checks": {"factually_correct": true, ...},'
+                ' "verdict": "approved" | "flagged"}')
+    reply = ScriptedProvider().generate(GenerationRequest(item_id="v", prompt=prompt))
+    answered = set(reply.parsed["checks"])
+    assert answered == {key for key, _ in CHECKS}
+
+
+def test_a_prompt_with_no_known_shape_falls_back_to_the_answer_form() -> None:
+    from benchmark.providers.base import GenerationRequest
+    from benchmark.providers.scripted import ScriptedProvider
+
+    reply = ScriptedProvider().generate(
+        GenerationRequest(item_id="a", prompt="Which option is correct?"))
+    assert "answer" in reply.parsed
+    assert "questions" not in reply.parsed

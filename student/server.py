@@ -48,7 +48,9 @@ def build_cost_sink(billing_mount):
         return None, None
     from billing.recorder import CostRecorder
 
-    recorder = CostRecorder(billing_mount._conn())
+    # The FACTORY, not a connection: the server is threaded, and a connection
+    # made here cannot be used on a request thread. `_conn` is thread-local.
+    recorder = CostRecorder(billing_mount._conn)
     return recorder, recorder
 
 

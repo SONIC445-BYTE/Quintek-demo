@@ -64,13 +64,45 @@ class CostRecorder:
     Deliberately a callback rather than an import: `student/` does not depend
     on `billing/`, so the learning engine can be run, tested and reasoned about
     without a billing database in the picture.
+
+    Accepts a connection FACTORY as well as a connection, because the server is
+    threaded and sqlite refuses a connection used off its creating thread. With
+    a single shared connection every recording attempt raised, and the
+    swallow-everything rule below turned that into an empty ledger and no
+    symptom whatsoever -- which is exactly the failure this class exists to
+    end. The swallow stays; the cause is fixed.
     """
 
-    def __init__(self, conn: sqlite3.Connection, *, ledger: CostLedger | None = None,
+    def __init__(self, conn, *, ledger: CostLedger | None = None,
                  prices: str | Path | None = DEFAULT_PRICES):
-        self.conn = conn
-        self.ledger = ledger or CostLedger(conn)
-        self.priced_models = load_prices(self.ledger, prices) if prices else 0
+        # NOT `callable(conn)`: a sqlite3.Connection is itself callable (it
+        # compiles a statement), so that test takes the factory branch for a
+        # plain connection and every recording raises TypeError.
+        self._factory = ((lambda: conn) if isinstance(conn, sqlite3.Connection)
+                         else conn)
+        self._ledger = ledger
+        self._prices_path = prices
+        # Prices live on the recorder, not on a per-thread ledger, so every
+        # thread costs a call the same way.
+        self.prices: dict[str, ModelPrice] = {}
+        self.priced_models = 0
+        if prices:
+            probe = CostLedger(self._factory())
+            self.priced_models = load_prices(probe, prices)
+            self.prices = dict(probe._prices)
+
+    @property
+    def conn(self) -> sqlite3.Connection:
+        return self._factory()
+
+    @property
+    def ledger(self) -> CostLedger:
+        """A ledger bound to THIS thread's connection."""
+        if self._ledger is not None:
+            return self._ledger
+        ledger = CostLedger(self._factory())
+        ledger._prices = self.prices
+        return ledger
 
     # ---------- the hook ----------
 
