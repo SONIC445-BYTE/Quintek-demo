@@ -22,6 +22,19 @@ from .api import StudentAPI
 from .db import Database
 
 
+def build_billing(db_path: str | Path | None = None, *, env=None):
+    """
+    Attach the billing surface, or `None` if it cannot be built.
+
+    Billing runs on its own database and its own connection: usage and money
+    are the records that must survive a bad deployment of the learning engine,
+    and nothing about a notebook belongs in the same file as a subscription.
+    """
+    from billing.mount import BillingMount
+    path = db_path or os.environ.get("QUINTEK_BILLING_DB", "billing.db")
+    return BillingMount.from_env(path, env=env)
+
+
 def build_api(db_path: str | Path | None = None, *, with_ai: bool = True) -> StudentAPI:
     """
     Assemble the engine.
@@ -85,7 +98,7 @@ def build_api(db_path: str | Path | None = None, *, with_ai: bool = True) -> Stu
                       notifier=NotificationService(db))
 
 
-def make_handler(api: StudentAPI):
+def make_handler(api: StudentAPI, billing=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "Quintek/0.4"
 
@@ -107,12 +120,27 @@ def make_handler(api: StudentAPI):
         def _dispatch(self, method: str) -> None:
             parsed = urlparse(self.path)
             params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
-            body = {}
+
+            # Read the raw bytes ONCE, before anything parses them. The
+            # webhook signature is over exactly these bytes, and a body that
+            # has been round-tripped through json is a different string.
+            raw = b""
             if method in {"POST", "PUT"}:
+                length = int(self.headers.get("Content-Length") or 0)
+                raw = self.rfile.read(length) if length else b""
+
+            if billing is not None and billing.owns(parsed.path):
+                # Identity comes from the session, never from the request body.
+                user = api.db.user_for_token(self._token())
+                status, payload = billing.handle(method, parsed.path, params, raw,
+                                                 self.headers, user)
+                self._send(status, payload)
+                return
+
+            body = {}
+            if raw:
                 try:
-                    length = int(self.headers.get("Content-Length") or 0)
-                    raw = self.rfile.read(length) if length else b""
-                    body = json.loads(raw) if raw else {}
+                    body = json.loads(raw)
                 except (ValueError, json.JSONDecodeError) as exc:
                     self._send(400, {"error": f"malformed JSON body: {exc}"})
                     return
@@ -138,10 +166,29 @@ def make_handler(api: StudentAPI):
 
 
 def serve(*, host: str = "127.0.0.1", port: int = 8500,
-          db_path: str | Path | None = None, with_ai: bool = True) -> None:
+          db_path: str | Path | None = None, with_ai: bool = True,
+          with_billing: bool = True, billing_db: str | Path | None = None) -> None:
     api = build_api(db_path, with_ai=with_ai)
-    server = ThreadingHTTPServer((host, port), make_handler(api))
+    billing = build_billing(billing_db) if with_billing else None
+    server = ThreadingHTTPServer((host, port), make_handler(api, billing))
     print(f"Quintek student API on http://{host}:{port}  (Ctrl+C to stop)")
+    if billing is None:
+        print("  billing: not mounted")
+    else:
+        from billing.gateway_http import credentials_from_env
+        from billing.mount import PREFIX
+
+        creds = credentials_from_env()
+        gateway = f"razorpay({creds['mode']})" if billing.gateway else "NONE"
+        print(f"  billing: http://{host}:{port}{PREFIX}   gateway={gateway}")
+        if billing.gateway is None:
+            # Say it at startup, not at checkout. A payment surface that is
+            # armed but cannot authenticate fails in front of a customer.
+            print("    no gateway credentials configured -- checkout will refuse,"
+                  " everything else works")
+        elif not creds["webhook_secret_present"]:
+            print("    WARNING: no webhook secret -- incoming webhooks will be"
+                  " refused as unverifiable")
     if api.generator is None:
         print("  note: no AI services attached — ingestion and generation will report 503")
     else:

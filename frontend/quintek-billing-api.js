@@ -17,7 +17,13 @@
  * the server thinks otherwise will hit a refusal they cannot explain.
  */
 
-const BASE = (typeof window !== 'undefined' && window.__QUINTEK_STUDENT_API__) || null;
+/* Billing is served by the same origin as the learner API, under its own
+ * prefix. The prefix is not cosmetic: `/me` is the learner's profile and
+ * `/me/usage` is billing, and letting those two share a router is how a
+ * profile change ends up touching a subscription. */
+const PREFIX = '/billing';
+const ORIGIN = (typeof window !== 'undefined' && window.__QUINTEK_STUDENT_API__) || null;
+const BASE = ORIGIN === null ? null : ORIGIN.replace(/\/+$/, '') + PREFIX;
 
 export const configured = BASE !== null;
 

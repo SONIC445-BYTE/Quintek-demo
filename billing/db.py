@@ -26,6 +26,10 @@ def connect(path: str | Path = "billing.db") -> sqlite3.Connection:
     conn = sqlite3.connect(path, isolation_level=None)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # WAL so a reader thread does not block behind a writer. Several request
+    # threads read entitlements while one commits usage; without it they
+    # serialise behind each other and a batch reservation stalls the UI.
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA busy_timeout = 30000")
     conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
     apply_migrations(conn)

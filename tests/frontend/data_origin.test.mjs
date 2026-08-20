@@ -216,6 +216,33 @@ try { await m.usage(); } catch (e) { billingThrew = e; }
 check('billing: an unreachable backend is an outage, not a fabricated balance',
   billingThrew !== null && /could not be reached/.test(billingThrew.message));
 
+// Billing lives under its own prefix on the shared origin. `/me` is the
+// learner's profile and `/me/usage` is billing; a router that serves both from
+// the same namespace is one rename away from a profile edit touching a
+// subscription.
+let requestedUrl = null;
+m = await load(BILLING, () => {
+  globalThis.window = { __QUINTEK_STUDENT_API__: 'http://live' };
+  globalThis.fetch = async (url) => {
+    requestedUrl = url;
+    return { ok: true, status: 200, text: async () => '{}' };
+  };
+});
+await m.usage();
+check('billing: requests go to the /billing prefix, not the bare origin',
+  requestedUrl === 'http://live/billing/me/usage');
+
+m = await load(BILLING, () => {
+  globalThis.window = { __QUINTEK_STUDENT_API__: 'http://live/' };
+  globalThis.fetch = async (url) => {
+    requestedUrl = url;
+    return { ok: true, status: 200, text: async () => '{}' };
+  };
+});
+await m.pricing();
+check('billing: a trailing slash on the configured origin does not double up',
+  requestedUrl === 'http://live/billing/pricing');
+
 // The formatting helpers must not invent numbers of their own.
 m = await load(BILLING, () => { globalThis.window = {}; });
 const bars = m.usageBars({

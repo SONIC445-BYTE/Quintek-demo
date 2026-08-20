@@ -24,6 +24,7 @@ import sqlite3
 from typing import Any
 
 from .costs import CostLedger
+from .gateway import GatewayError, SignatureInvalid
 from .economics import EconomicsService
 from .entitlements import EntitlementEngine
 from .plans import PlanStore
@@ -68,6 +69,17 @@ class BillingAPI:
             return 402, {"error": str(exc), "available": exc.available,
                          "requested": exc.requested,
                          "actions": ["upgrade", "view_usage"]}
+        except SignatureInvalid as exc:
+            # 400, and deliberately nothing else. A gateway sending a bad
+            # signature is either misconfigured or not the gateway; either way
+            # the response must not distinguish the two, and it must not be an
+            # unhandled exception that drops the connection -- a dropped
+            # connection reads as an outage and the gateway retries forever.
+            return 400, {"error": str(exc), "status": "REJECTED"}
+        except GatewayError as exc:
+            # The gateway is configured but unusable: no secret, no transport,
+            # no credentials. That is Quintek's fault, not the caller's.
+            return 503, {"error": str(exc)}
         except (ReservationError, ValueError) as exc:
             return 400, {"error": str(exc)}
 
