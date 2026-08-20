@@ -1,4 +1,4 @@
-"""
+r"""
 Reserving capacity before spending it, and recording what was spent.
 
 THE CONCURRENCY PROBLEM THIS SOLVES
