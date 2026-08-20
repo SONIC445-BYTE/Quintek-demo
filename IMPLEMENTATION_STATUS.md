@@ -331,6 +331,105 @@ record rather than buried in a config file, which is the point.
    Added an explicit additive-migration list in `student/db.py`, verified against a hand-built
    old-shape database.
 
+## Ninth pass: REAL_MODEL_ALPHA — the first run against an actual model
+
+An API key was supplied, so for the first time in this repository the pipeline
+was driven end to end by a real model rather than a scripted double.
+`tools_alpha0.py` records the run; `alpha0_runs/` holds the artifacts.
+
+**Configuration.** Generator `meta/llama-3.1-70b-instruct`, validator
+`meta/llama-3.1-8b-instruct`, both NVIDIA NIM. The script refuses to run when
+generator and validator are the same configuration.
+
+### What worked
+
+| Stage | Result |
+|---|---|
+| Ingestion | A 1,477-character passage on screening chunked and processed, 1/1 chunks |
+| Concept extraction | **9 concepts**, all correct and correctly described: Sensitivity, Specificity, Predictive Value, Prevalence, True/False Positive, True/False Negative, Cut-off Value |
+| Relationship extraction | 8 typed edges, e.g. `Cut-off Value --[causes]--> Sensitivity`, `Sensitivity --[measured_by]--> False Negative` |
+| Generation | A grounded, correct PG-entry MCQ with a 132-character rationale |
+| Persistence | Stored with source_id, chunk_id and generating candidate |
+| Artifact capture | 11 artifacts including the unmodified 1,223-character raw reply |
+| API → UI | `GET /questions` served the stored question |
+
+The generated question was: *"A test with a high sensitivity is likely to have
+which of the following characteristics?"* keyed to *"A low number of false
+negatives"* — correct, answerable from the supplied passage, and testing the
+concept it claims to test.
+
+**9 of 11 acceptance criteria met.**
+
+### The two failures, which are the valuable part
+
+**1. The validator approved a question that was deliberately false.**
+
+The run offers the validator a question asserting that sensitivity rises with
+prevalence — which the supplied passage explicitly contradicts. The validator
+returned all eight checks `true`, `issues: []`, `verdict: approved`, in 89
+completion tokens.
+
+This is the single most important measured finding in this repository. Every
+claim the product makes about questions being checked before a learner sees
+them rests on the validator, and on this item, with this model, it did not
+check. It is exactly what the adversarial battery exists to quantify, and it
+was found by running the thing rather than by reading it.
+
+`tools_adversarial_run.py` then ran the full 20-item, 10-defect-class battery
+against the same validator, with a 10-item sound control arm. The result:
+
+| Figure | Value |
+|---|---|
+| Detection rate | **11/20 (55%)** |
+| Caught citing a check matching the planted defect | **4/11** |
+| False-flag rate on sound questions | **9/10 (90%)** |
+
+Per defect class (n=2 each): hallucinated_fact 2/2, out_of_syllabus 2/2,
+wrong_key 1/2, two_correct 1/2, ambiguous_stem 1/2, hallucinated_reference
+1/2, poor_reasoning 1/2, giveaway 1/2, trivial 1/2, **ungrounded 0/2**.
+
+**`meta/llama-3.1-8b-instruct` is not fit to serve as Quintek's validator.**
+It rejects nine out of ten sound questions while letting nearly half the
+broken ones through, and only four of its eleven catches cite a check
+corresponding to the actual defect — so most of the remainder are consistent
+with guessing. A learner on this configuration would lose most of their good
+questions and still be shown false ones.
+
+The `ungrounded 0/2` line deserves its own sentence. Quintek's central promise
+is that questions come from the learner's own source. This validator did not
+once notice a question that could not be answered from the passage it was
+given.
+
+None of this is a defect in the harness — it is the harness working. The
+figures are indicative, not gate-grade: n=2 per class carries an interval wide
+enough to include most values of interest, and the report says so in its own
+`interpretation` field rather than leaving it to the reader.
+
+What it establishes is the claim that mattered: **generation is not
+acceptance, and on this configuration acceptance is broken.** The next
+question for the project is whether a larger or differently-prompted validator
+does better — which is now a measurement, not a discussion.
+
+**2. `No development_override` cannot pass yet, and this is structural.**
+
+Every call in the run is stamped `development_override` because no candidate
+has a passing benchmark run to be promoted from. That needs the expert corpus.
+The criterion is left failing rather than redefined, because the promotion
+gate refusing to promote an unbenchmarked model is the gate working.
+
+### Judge independence is only partially satisfied on this account
+
+`docs/JUDGE_INDEPENDENCE.md` Tier 2 asks for a judge from a **different model
+family**. Of 102 models the account lists, only `meta/llama-3.1-8b-instruct`
+and `meta/llama-3.1-70b-instruct` actually served `/v1/chat/completions`;
+everything else tested returned 404, including `writer/palmyra-med-70b` and
+every Mistral and Nemotron id. So generator and validator are different
+models but the **same family**, and the independence claim is weaker than the
+protocol asks for. Recorded here rather than quietly accepted.
+
+`meta/llama-3.3-70b-instruct` consistently exceeded even a 120-second timeout
+on this account, consistent with the seventh pass's finding.
+
 ## Not built
 
 | Component | Why |
