@@ -1,0 +1,75 @@
+{
+  "_note": [
+    "Inputs to the compute-budget calculation, separated by whether they were",
+    "MEASURED or ASSUMED. Every assumption carries `measured: false` so that a",
+    "forecast built on guesses cannot be mistaken for one built on evidence.",
+    "Refresh the measured block by running a real generation and reading the",
+    "usage counters out of generation_run/raw_model_output.json."
+  ],
+
+  "fx": {
+    "usd_to_inr_paise": 8500,
+    "measured": false,
+    "note": "paise per dollar. A rate baked into code is a cost model that drifts."
+  },
+
+  "token_profile": {
+    "measured": true,
+    "source": "alpha0_runs/alpha0-20260820T023005Z/generation_run",
+    "observed_at": "2026-08-20T02:34:24Z",
+    "questions_per_call": 1,
+    "generation": {
+      "model_observed": "meta/llama-3.1-70b-instruct",
+      "input_tokens": 524,
+      "output_tokens": 137
+    },
+    "validation": {
+      "model_observed": "meta/llama-3.1-8b-instruct",
+      "input_tokens": 594,
+      "output_tokens": 89
+    },
+    "note": [
+      "Measured at ONE question per call, which is the pessimistic case: the",
+      "prompt is not amortised across a batch. A 10-question batch would spend",
+      "far fewer input tokens per question. Budgeting on the pessimistic figure",
+      "is deliberate."
+    ]
+  },
+
+  "acceptance": {
+    "measured": false,
+    "accepted_per_100_produced": 80,
+    "note": [
+      "Production acceptance has NOT been measured. The adversarial battery",
+      "measured the validator's detection rate on planted defects, which is a",
+      "different quantity. 80 is a placeholder and is flagged as one.",
+      "Regenerations are deliberately NOT a separate multiplier here: a",
+      "regenerated question is a PRODUCED question, already counted by this",
+      "ratio. Adding both would double-count the same work."
+    ]
+  },
+
+  "fixed_costs_minor_per_month": 0,
+
+  "policy": {
+    "gst_bps": 1800,
+    "price_includes_gst": true,
+    "gateway_percent_bps": 200,
+    "gateway_gst_on_fee_bps": 1800,
+    "refund_reserve_bps": 100,
+    "target_contribution_bps": 2500,
+    "target_contribution_minor": 0,
+    "cover_free_tier": true
+  },
+
+  "free_tier": {
+    "measured": false,
+    "assumed_free_users_per_paying_user": 10,
+    "assumed_questions_consumed_per_free_user": 60,
+    "note": [
+      "Free questions come out of the same provider credit as paid ones and",
+      "have no revenue line of their own. Ignoring them is the single most",
+      "common way a free tier bankrupts the product that offers it."
+    ]
+  }
+}
