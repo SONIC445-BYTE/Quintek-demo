@@ -463,16 +463,24 @@ class StudentAPI:
         if not 1 <= count <= 500:
             raise ApiError(400, "count must be between 1 and 500")
 
+        # Everything this request spends is filed under the reservation the
+        # client already took. The reservation id is the natural batch id: it
+        # is the thing billing created to authorise the work, so spend and
+        # entitlement end up describing the same unit of work.
+        batch_id = str(body.get("batch_id") or body.get("reservation_id") or "")
+        attribution = self._attribute(batch_id, uid)
+
         from .generation import GenerationFailed
         try:
-            ids = self.generator.generate(
-                notebook_id=notebook_id, count=count,
-                concept_ids=body.get("concept_ids") or [],
-                source_id=body.get("source_id"),
-                demo_ids=body.get("demo_ids") or [],
-                family=body.get("family", ""), difficulty=body.get("difficulty", ""),
-                reasoning_depth=body.get("reasoning_depth", ""),
-                constraints=body.get("constraints", ""))
+            with attribution:
+                ids = self.generator.generate(
+                    notebook_id=notebook_id, count=count,
+                    concept_ids=body.get("concept_ids") or [],
+                    source_id=body.get("source_id"),
+                    demo_ids=body.get("demo_ids") or [],
+                    family=body.get("family", ""), difficulty=body.get("difficulty", ""),
+                    reasoning_depth=body.get("reasoning_depth", ""),
+                    constraints=body.get("constraints", ""))
         except GenerationFailed as exc:
             raise ApiError(422, str(exc))
         except Exception as exc:
@@ -482,14 +490,56 @@ class StudentAPI:
         if self.validator is not None and body.get("validate", True):
             from .validation import ValidationSkipped
             try:
-                validation = self.validator.validate_pending(notebook_id=notebook_id,
-                                                             limit=len(ids))
+                with self._attribute(batch_id, uid, validator=True):
+                    validation = self.validator.validate_pending(
+                        notebook_id=notebook_id, limit=len(ids))
             except ValidationSkipped as exc:
                 validation = {"skipped": len(ids), "reason": str(exc)}
             except Exception as exc:
                 validation = {"error": str(exc)}
 
-        return {"question_ids": ids, "count": len(ids), "validation": validation}
+        self._record_batch_outcome(batch_id, uid, produced=len(ids), validation=validation)
+        return {"question_ids": ids, "count": len(ids), "validation": validation,
+                "batch_id": batch_id}
+
+    # ---------- cost attribution ----------
+
+    def _attribute(self, batch_id: str, uid: str, *, validator: bool = False):
+        """
+        Name who this batch's provider spend belongs to, for both engines.
+
+        A null context when no engine is attached, so the generation path does
+        not have to know whether costing is switched on.
+        """
+        import contextlib
+
+        engine = getattr(self.validator, "ai", None) if validator \
+            else getattr(self.generator, "ai", None)
+        if engine is None or not hasattr(engine, "attribute"):
+            return contextlib.nullcontext()
+        return engine.attribute(batch_id=batch_id, user_id=uid)
+
+    def _record_batch_outcome(self, batch_id: str, uid: str, *, produced: int,
+                              validation) -> None:
+        """
+        Attach what the batch YIELDED to what it cost.
+
+        Without this the ledger knows the spend and not the yield, and cost per
+        ACCEPTED question -- the only cost figure a plan price has to cover --
+        cannot be computed at all.
+        """
+        sink = getattr(getattr(self.generator, "ai", None), "cost_sink", None)
+        recorder = getattr(sink, "record_outcome", None)
+        if recorder is None or not batch_id:
+            return
+        approved = 0
+        if isinstance(validation, dict):
+            approved = int(validation.get("approved") or 0)
+        try:
+            recorder(batch_id, produced=produced, accepted=approved,
+                     rejected=max(0, produced - approved), user_id=uid)
+        except Exception:
+            pass
 
     def question_bank(self, uid: str, *, notebook_id: str | None = None,
                       concept_id: str | None = None, status: str | None = None) -> list[dict]:

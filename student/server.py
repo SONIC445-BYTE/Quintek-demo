@@ -35,7 +35,25 @@ def build_billing(db_path: str | Path | None = None, *, env=None):
     return BillingMount.from_env(path, env=env)
 
 
-def build_api(db_path: str | Path | None = None, *, with_ai: bool = True) -> StudentAPI:
+def build_cost_sink(billing_mount):
+    """
+    The join between the two financial systems, or `None`.
+
+    Customers pay Quintek through the gateway; Quintek separately funds
+    provider accounts. Nothing links the two on its own, and without this hook
+    `cost_ledger` stays empty -- every economics figure reads "unmeasured"
+    while real money is being spent on inference.
+    """
+    if billing_mount is None:
+        return None, None
+    from billing.recorder import CostRecorder
+
+    recorder = CostRecorder(billing_mount._conn())
+    return recorder, recorder
+
+
+def build_api(db_path: str | Path | None = None, *, with_ai: bool = True,
+              cost_sink=None) -> StudentAPI:
     """
     Assemble the engine.
 
@@ -84,9 +102,13 @@ def build_api(db_path: str | Path | None = None, *, with_ai: bool = True) -> Stu
         return build_provider(spec)
 
     ai = AIEngine(db, registry=registry, archive=archive,
-                  provider_factory=provider_factory)
+                  provider_factory=provider_factory, cost_sink=cost_sink)
     validator_ai = AIEngine(
         db, registry=registry, archive=archive, provider_factory=provider_factory,
+        # Validation spend is the other half of cost-per-ACCEPTED. Costing
+        # generation alone would understate it by however much validation
+        # costs, which on a cheap generator is most of the bill.
+        cost_sink=cost_sink,
         # A different configuration for validation, so independence holds even
         # in a development deployment. Same rule as the benchmark's judge tiers.
         development_candidate=os.environ.get("QUINTEK_DEV_VALIDATOR_CANDIDATE"))
@@ -168,8 +190,9 @@ def make_handler(api: StudentAPI, billing=None):
 def serve(*, host: str = "127.0.0.1", port: int = 8500,
           db_path: str | Path | None = None, with_ai: bool = True,
           with_billing: bool = True, billing_db: str | Path | None = None) -> None:
-    api = build_api(db_path, with_ai=with_ai)
     billing = build_billing(billing_db) if with_billing else None
+    recorder, cost_sink = build_cost_sink(billing)
+    api = build_api(db_path, with_ai=with_ai, cost_sink=cost_sink)
     server = ThreadingHTTPServer((host, port), make_handler(api, billing))
     print(f"Quintek student API on http://{host}:{port}  (Ctrl+C to stop)")
     if billing is None:
@@ -189,6 +212,14 @@ def serve(*, host: str = "127.0.0.1", port: int = 8500,
         elif not creds["webhook_secret_present"]:
             print("    WARNING: no webhook secret -- incoming webhooks will be"
                   " refused as unverifiable")
+        if recorder is not None:
+            print(f"  cost ledger: recording, {recorder.priced_models} model"
+                  " price(s) configured")
+            if recorder.priced_models == 0:
+                # Every call would be logged as unpriced. Worth saying at
+                # startup rather than discovering it on the economics screen.
+                print("    WARNING: no model prices configured, so every call"
+                      " will be recorded as UNPRICED (not as free)")
     if api.generator is None:
         print("  note: no AI services attached — ingestion and generation will report 503")
     else:

@@ -1,0 +1,39 @@
+{
+  "_note": [
+    "Provider prices, in USD per million tokens, as OBSERVED from each",
+    "provider's catalogue during the discovery pass. They are configuration",
+    "and not code because a provider changes them without asking, and a price",
+    "baked into a module is a cost model that drifts from what is being",
+    "charged. A model absent from this file is recorded as UNPRICED, never as",
+    "free -- see billing/recorder.py.",
+    "",
+    "Refresh from discovery/shortlists.json after a discovery run."
+  ],
+  "usd_to_inr_paise": 8500,
+  "observed_at": "2026-08-20",
+  "prices": [
+    {"provider": "openrouter", "model": "inclusionai/ling-2.6-flash",
+     "usd_in_per_million": 0.01, "usd_out_per_million": 0.03},
+    {"provider": "openrouter", "model": "inclusionai/ling-3.0-flash",
+     "usd_in_per_million": 0.021, "usd_out_per_million": 0.063},
+    {"provider": "openrouter", "model": "ibm-granite/granite-4.0-h-micro",
+     "usd_in_per_million": 0.017, "usd_out_per_million": 0.112},
+    {"provider": "openrouter", "model": "mistralai/mistral-nemo",
+     "usd_in_per_million": 0.019, "usd_out_per_million": 0.03},
+    {"provider": "openrouter", "model": "qwen/qwen3.7-flash",
+     "usd_in_per_million": 0.03, "usd_out_per_million": 0.13},
+    {"provider": "openrouter", "model": "upstage/solar-pro4",
+     "usd_in_per_million": 0.03, "usd_out_per_million": 0.12},
+    {"provider": "openrouter", "model": "nex-agi/nex-n2-mini",
+     "usd_in_per_million": 0.025, "usd_out_per_million": 0.1},
+    {"provider": "openrouter", "model": "meta-llama/llama-4-scout",
+     "usd_in_per_million": 0.1, "usd_out_per_million": 0.3},
+    {"provider": "openrouter", "model": "mistralai/mistral-small-3.2-24b-instruct",
+     "usd_in_per_million": 0.09375, "usd_out_per_million": 0.25},
+
+    {"provider": "nvidia", "model": "meta/llama-3.1-8b-instruct",
+     "usd_in_per_million": 0.0, "usd_out_per_million": 0.0},
+    {"provider": "nvidia", "model": "meta/llama-3.1-70b-instruct",
+     "usd_in_per_million": 0.0, "usd_out_per_million": 0.0}
+  ]
+}

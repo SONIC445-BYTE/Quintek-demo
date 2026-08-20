@@ -199,7 +199,18 @@ class CostLedger:
             f" COALESCE(SUM(questions_rejected),0) AS rejected,"
             f" COALESCE(SUM(regenerations),0) AS regens,"
             f" COUNT(*) AS calls,"
-            f" SUM(CASE WHEN price_in_micro IS NULL THEN 1 ELSE 0 END) AS unpriced"
+            # Rows that actually reached a model. The denominator for the
+            # unpriced caveat has to match its numerator, or "1 of 2" counts a
+            # settlement row as a call nobody could have priced.
+            f" SUM(CASE WHEN input_tokens > 0 OR output_tokens > 0"
+            f"     THEN 1 ELSE 0 END) AS model_calls,"
+            # Only calls that actually consumed tokens can be "unpriced". A
+            # settlement row carries the yield of a batch and no tokens at
+            # all; counting it here would make every batch look partly
+            # uncosted and put a false caveat on a correct figure.
+            f" SUM(CASE WHEN price_in_micro IS NULL"
+            f"          AND (input_tokens > 0 OR output_tokens > 0)"
+            f"     THEN 1 ELSE 0 END) AS unpriced"
             f" FROM cost_ledger {where}", params).fetchone()
 
         accepted = row["accepted"]
@@ -235,7 +246,7 @@ class CostLedger:
             "cost_per_batch_display": micro_to_money(batch_micro).format(),
             "unpriced_calls": unpriced,
             # Said plainly rather than left to be inferred from a small number.
-            "note": (f"{unpriced} of {row['calls']} calls had no configured price and "
+            "note": (f"{unpriced} of {row['model_calls']} calls had no configured price and "
                      "contributed nothing to this figure, so the real cost is higher."
                      if unpriced else ""),
         }

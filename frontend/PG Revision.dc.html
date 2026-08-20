@@ -2085,7 +2085,11 @@ class Component extends DCLogic {
         'Your allowance was not consumed.' });
       return Promise.resolve();
     }
-    return api.generateQuestions(notebookId, count, {}).then((result) => {
+    /* The reservation id doubles as the batch id, so what this request spends
+     * on inference is filed against the entitlement that authorised it. */
+    const reservationId = this.state.makeReservation;
+    return api.generateQuestions(notebookId, count, { batch_id: reservationId })
+      .then((result) => {
       const produced = result.count || 0;
       const reservationId = this.state.makeReservation;
       /* Settle for what was PRODUCED. The engine can return fewer than were

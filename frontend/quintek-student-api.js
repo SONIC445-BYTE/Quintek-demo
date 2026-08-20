@@ -93,6 +93,11 @@ export async function generateQuestions(notebookId, count, opts) {
     family: options.family || '',
     difficulty: options.difficulty || '',
     reasoning_depth: options.reasoningDepth || '',
+    /* The billing reservation's id, passed through so what this generation
+     * spends on inference is filed against the entitlement that authorised
+     * it. Blank when nothing reserved -- the server records the spend against
+     * nobody rather than guessing an owner. */
+    batch_id: options.batch_id || options.batchId || '',
   });
 
   const ids = result.question_ids || [];

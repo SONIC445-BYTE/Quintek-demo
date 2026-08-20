@@ -69,11 +69,21 @@ class AIEngine:
     """
 
     def __init__(self, db: Database, *, registry=None, archive=None,
-                 provider_factory=None, development_candidate: str | None = None):
+                 provider_factory=None, development_candidate: str | None = None,
+                 cost_sink=None):
         self.db = db
         self.registry = registry
         self.archive = archive
         self.provider_factory = provider_factory
+        # Optional. Without one the engine works exactly as before and the
+        # cost ledger stays empty, which is honest: nothing was measured.
+        self.cost_sink = cost_sink
+        # Attribution context for the ledger, set by whatever is running a
+        # batch. Left blank rather than invented -- a cost row attributed to
+        # the wrong user is worse than one attributed to nobody.
+        self.batch_id = ""
+        self.user_id = ""
+        self.plan_family = ""
         # Explicit opt-in only. Never inferred, never defaulted to "the first
         # registered candidate" -- that is how an unevaluated model ends up
         # serving production without anyone deciding to let it.
@@ -137,6 +147,7 @@ class AIEngine:
 
         self._record(execution_id, task_type, candidate_id, source, provider,
                      response, prompt_version)
+        self._record_cost(task_type, provider, response)
 
         if not response.ok:
             raise AICallFailed(
@@ -149,6 +160,63 @@ class AIEngine:
             source=source, latency_ms=response.latency_ms, attempts=response.attempts,
             execution_id=execution_id,
         )
+
+    def _record_cost(self, task_type, provider, response) -> None:
+        """
+        Hand the call's facts to whatever is costing them, if anything is.
+
+        A CALLBACK, not an import. `student/` does not depend on `billing/`:
+        the learning engine has to be runnable and testable without a billing
+        database in the picture, and a cost ledger is not a precondition for
+        generating a question.
+
+        No question counts are passed. At this point nobody knows how many
+        questions survived parsing, let alone validation, and a guess here
+        would make every cost-per-accepted figure downstream a guess too.
+        """
+        if self.cost_sink is None:
+            return
+        try:
+            self.cost_sink({
+                "operation": task_type,
+                "provider": getattr(provider, "name", ""),
+                "model": getattr(provider, "model", ""),
+                "input_tokens": response.input_tokens,
+                "output_tokens": response.output_tokens,
+                "latency_ms": response.latency_ms,
+                "batch_id": self.batch_id,
+                "user_id": self.user_id,
+                "plan_family": self.plan_family,
+                "ok": response.ok,
+            })
+        except Exception:
+            # Telemetry must never take down the call it was measuring. A
+            # learner losing their questions because a cost row would not
+            # insert is a worse outcome than an incomplete ledger.
+            pass
+
+    def attribute(self, *, batch_id: str = "", user_id: str = "", plan_family: str = ""):
+        """
+        Context manager setting who this batch's spend belongs to.
+
+        Restores the previous values on exit, including when the batch raises,
+        so a failed generation cannot leave the next one's costs filed under
+        the wrong learner.
+        """
+        engine = self
+
+        class _Attribution:
+            def __enter__(self):
+                self.previous = (engine.batch_id, engine.user_id, engine.plan_family)
+                engine.batch_id, engine.user_id, engine.plan_family = (
+                    batch_id, user_id, plan_family)
+                return engine
+
+            def __exit__(self, *exc):
+                engine.batch_id, engine.user_id, engine.plan_family = self.previous
+                return False
+
+        return _Attribution()
 
     def _record(self, execution_id, task_type, candidate_id, source, provider,
                 response, prompt_version) -> None:
@@ -254,3 +322,4 @@ def extract_json(text: str) -> dict | None:
                 except json.JSONDecodeError:
                     start = None
     return None
+

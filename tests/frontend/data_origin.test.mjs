@@ -178,6 +178,32 @@ check('student: provenance travels with each question',
   generated.questions[0].validationStatus === 'approved' &&
   /llama/.test(generated.questions[0].generatedBy) &&
   generated.questions[0].chunkId === 'c1');
+/* The reservation id travels with the generation request, so provider spend
+ * lands on the same unit of work the entitlement authorised. */
+{
+  let sentBody = null;
+  const mod = await load(STUDENT, () => {
+    globalThis.window = { __QUINTEK_STUDENT_API__: 'http://live' };
+    globalThis.fetch = async (url, init) => {
+      if (init && init.body) sentBody = JSON.parse(init.body);
+      return { ok: true, status: 200, text: async () => JSON.stringify(
+        url.indexOf('/questions?') >= 0 ? { questions: [] } : { question_ids: [], count: 0 }) };
+    };
+  });
+  await mod.generateQuestions('nb1', 5, { batch_id: 'res_42' });
+  check('student: the reservation id travels with the generation request',
+    sentBody && sentBody.batch_id === 'res_42');
+
+  await mod.generateQuestions('nb1', 5, {});
+  check('student: with no reservation the batch id is blank, not invented',
+    sentBody && sentBody.batch_id === '');
+}
+
+m = await load(STUDENT, () => {
+  globalThis.window = { __QUINTEK_STUDENT_API__: 'http://live' };
+  globalThis.fetch = async (url, init) => LIVE_FETCH(url, init);
+});
+
 check('student: the validation summary is carried through',
   generated.validation && generated.validation.approved === 1);
 
