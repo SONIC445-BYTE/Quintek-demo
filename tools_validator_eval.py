@@ -7,14 +7,14 @@ Run a validator against a labelled set and report what it actually did.
         validator could possibly do if every layer were flawless. Costs nothing
         and is never valid for the gate.
 
-    python3 tools_validator_eval.py run --provider <name> [--judge <name>]
-        Run the design against real providers from the provider registry.
+    python3 tools_validator_eval.py run --candidate <spec> --judge <spec>
+        Run the design once against real models.
 
     python3 tools_validator_eval.py layers
         Run each layer alone and in combination against oracles, so the
         contribution of each is visible instead of inferred. Still a ceiling.
 
-    python3 tools_validator_eval.py experiments --provider <name> --judge <name>
+    python3 tools_validator_eval.py experiments --candidate <spec> --judge <spec>
         The three measurements that separate "can the validator work" from
         "which model should do it", run in order and recorded:
 
@@ -26,6 +26,20 @@ Run a validator against a labelled set and report what it actually did.
         quote their evidence. Experiment 1 is not "the deterministic layers",
         it is "the validator without the layer whose failure mode is
         agreeing with itself".
+
+VOCABULARY
+----------
+    --candidate   the model under evaluation. It occupies the grounding and
+                  conformance layers.
+    --judge       the independent model brought in to answer the item itself
+                  and disagree with the key. A different model, enforced.
+    --endpoint    where the requests go. Recorded, never a credential.
+
+There is deliberately no --provider. "Provider" is the adapter that builds a
+model, and using the same word for "the model being evaluated" makes every run
+record ambiguous about the one thing it exists to say. Passing --provider is an
+error naming its replacement rather than a silent alias, because a silent alias
+in a permanent record is worse than a break.
 
 Every mode prints the confusion matrix, the two-armed gate, and the error
 analysis. A run that used an oracle prints INVALID FOR GATING at the top and
@@ -193,14 +207,20 @@ def run_real(args):
                                  conformance_provider=conform, config=config)
     used_oracle = bool(getattr(ground, "is_oracle", False)
                        or getattr(judge_provider, "is_oracle", False))
-    print(render(f"RUN: {ground.model} + judge {judge_provider.model}",
+    print(render(f"RUN: candidate {ground.model} | judge {judge_provider.model}",
                  devset.cases, verdicts, outages, oracle_used=used_oracle, config=config))
     kind = runs.KIND_CEILING if used_oracle else (
         runs.KIND_HOLDOUT if "holdout" in str(devset.root) else runs.KIND_DEVELOPMENT)
     path = _record(devset, verdicts, outages, config,
-                   [runs.describe_provider("grounding", ground),
-                    runs.describe_provider("judge", judge_provider),
-                    runs.describe_provider("conformance", conform)],
+                   [runs.describe_provider("grounding", ground,
+                                            seat=runs.SEAT_CANDIDATE,
+                                            endpoint=args.endpoint),
+                    runs.describe_provider("judge", judge_provider,
+                                           seat=runs.SEAT_JUDGE,
+                                           endpoint=args.endpoint),
+                    runs.describe_provider("conformance", conform,
+                                           seat=runs.SEAT_CANDIDATE,
+                                           endpoint=args.endpoint)],
                    kind=kind, note=args.note)
     print(f"recorded as a {kind.upper()} run in {path}")
     _write(args, devset, verdicts, outages, config, oracle_used=used_oracle)
@@ -270,24 +290,27 @@ def run_experiments(args):
     from validator.holdout import corpus_hash
 
     devset = load(args.corpus)
-    ground = build_provider(args.provider)
-    judge_provider = build_provider(args.judge or args.provider)
+    ground = build_provider(parse_seat(args.candidate, endpoint=args.endpoint))
+    judge_provider = build_provider(parse_seat(args.judge, endpoint=args.endpoint))
     if getattr(ground, "model", None) == getattr(judge_provider, "model", None):
-        print("refusing to run: the judge is the same model as the grounding layer. "
-              "A second opinion from the same weights is the first opinion again.",
-              file=sys.stderr)
+        print("refusing to run: the candidate and the judge are the same model. Layer C "
+              "exists to supply a judgement the candidate did not produce, and a second "
+              "opinion from the same weights is the first opinion again.", file=sys.stderr)
         return 2
     conform = ground
-    provider_records = [runs.describe_provider("grounding", ground),
-                        runs.describe_provider("judge", judge_provider),
-                        runs.describe_provider("conformance", conform)]
+    seats = {"grounding": (ground, runs.SEAT_CANDIDATE),
+             "judge": (judge_provider, runs.SEAT_JUDGE),
+             "conformance": (conform, runs.SEAT_CANDIDATE)}
+    provider_records = [runs.describe_provider(role, prov, seat=seat,
+                                               endpoint=args.endpoint)
+                        for role, (prov, seat) in seats.items()]
 
     current = freeze_mod.build(
         corpus=str(devset.root), corpus_hash=corpus_hash(devset.root),
-        models=[freeze_mod.describe_model(role, prov, endpoint=args.endpoint,
+        models=[freeze_mod.describe_model(role, prov, seat=seat,
+                                          endpoint=args.endpoint,
                                           temperature=args.temperature)
-                for role, prov in (("grounding", ground), ("judge", judge_provider),
-                                   ("conformance", conform))],
+                for role, (prov, seat) in seats.items()],
         experiments=[{"name": title, "layers": layers, "config": flags}
                      for title, layers, flags in EXPERIMENTS],
         sampling={"temperature": args.temperature},
@@ -334,7 +357,9 @@ def run_experiments(args):
                      oracle_used=used_fake, config=config))
         print()
 
-    data = ablation.report(arms, model=str(getattr(judge_provider, "model", "")))
+    data = ablation.report(arms,
+                           judge_model=str(getattr(judge_provider, "model", "")),
+                           candidate_model=str(getattr(ground, "model", "")))
     print("=" * 78)
     print(ablation.render(data))
     if args.out:
@@ -344,6 +369,56 @@ def run_experiments(args):
             encoding="utf-8")
         print(f"\nwritten to {args.out}")
     return 0
+
+
+def parse_seat(spec: str, *, endpoint: str = "") -> dict:
+    """
+    Turn `provider:model_id` into a provider spec.
+
+    The two seats are usually different models from the SAME provider -- 8B in
+    the candidate seat, 70B as judge, both on one endpoint -- and a bare
+    provider name cannot express that. Splitting on the first colon only, so a
+    model id containing slashes or further colons survives intact.
+
+    Never carries a credential: the NVIDIA builder reads its key from the
+    environment by name, which is why the key can stay out of the spec, out of
+    the freeze manifest and out of the run record.
+    """
+    spec = (spec or "").strip()
+    if not spec:
+        raise ValueError("a seat needs a provider, optionally with a model id")
+    provider, _, model_id = spec.partition(":")
+    out: dict = {"provider": provider.strip()}
+    if model_id.strip():
+        out["model_id"] = model_id.strip()
+    if endpoint:
+        out["base_url"] = endpoint
+    return out
+
+
+def _seats(sub_parser):
+    """The two experimental roles, plus the endpoint. Never --provider."""
+    sub_parser.add_argument("--candidate", required=True,
+                            help="the model under evaluation, as provider:model_id; "
+                                 "occupies the grounding and conformance layers")
+    sub_parser.add_argument("--judge", required=True,
+                            help="the independent model for Layer C, as "
+                                 "provider:model_id; must differ from the candidate")
+    sub_parser.add_argument("--endpoint", default="",
+                            help="recorded in the run record and the freeze manifest; "
+                                 "never a credential")
+    sub_parser.add_argument("--provider", default=None, help=argparse.SUPPRESS)
+
+
+def _reject_provider(args):
+    if getattr(args, "provider", None) is not None:
+        print("--provider has been removed. 'Provider' is the adapter that builds a "
+              "model; using it to mean 'the model under evaluation' makes every run "
+              "record ambiguous about the one thing it exists to say. Pass --candidate "
+              "for the model being evaluated and --judge for the independent model.",
+              file=sys.stderr)
+        return True
+    return False
 
 
 def main(argv=None):
@@ -362,21 +437,19 @@ def main(argv=None):
     layers = sub.add_parser("layers")
     layers.add_argument("--spend-a-look", default="")
     real = sub.add_parser("run")
-    real.add_argument("--provider", required=True)
-    real.add_argument("--judge", default="")
+    _seats(real)
     real.add_argument("--note", default="")
 
     experiments = sub.add_parser("experiments")
-    experiments.add_argument("--provider", required=True)
-    experiments.add_argument("--judge", default="")
+    _seats(experiments)
     experiments.add_argument("--note", default="")
-    experiments.add_argument("--endpoint", default="",
-                             help="recorded in the freeze manifest; never a credential")
     experiments.add_argument("--temperature", type=float, default=0.0)
     experiments.add_argument("--refreeze", action="store_true",
                              help="start a new experiment set, discarding the frozen "
                                   "configuration; requires --note")
     args = parser.parse_args(argv)
+    if _reject_provider(args):
+        return 2
     return {"ceiling": run_ceiling, "layers": run_layers, "run": run_real,
             "experiments": run_experiments}[args.mode](args)
 

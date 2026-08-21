@@ -845,8 +845,13 @@ should do the validating**. Establish the first while minimising dependence on t
    validator without the layer whose failure mode is agreeing with itself), C alone (the judge's
    contribution), and A+B+C+D. "Every layer earns its place" was asserted from a ceiling; this is
    where it is confirmed or withdrawn.
-2. Run the same fixed development set against both model classes — the 8B that is fast and
-   currently unacceptable, and the 70B that was better and stalled — and compare sensitivity,
+   The first set is `--candidate nvidia:meta/llama-3.1-8b-instruct --judge
+   nvidia:meta/llama-3.1-70b-instruct`. Not two 8B checkpoints: Layer C exists to supply a
+   judgement the candidate did not produce, and "different checkpoint, same family" is not that.
+   The 70B may stall as it did before; that is recorded as INCOMPLETE and excluded from every
+   delta, and it is not retried selectively.
+
+2. Run the same fixed development set against the alternative pairing, and compare sensitivity,
    specificity, FP, FN, latency, cost and edge calibration before promoting either. The
    development corpus tolerates zero false positives against a 90% threshold, so read the error
    analysis rather than the headline rate.

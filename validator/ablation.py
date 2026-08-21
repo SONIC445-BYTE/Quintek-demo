@@ -105,7 +105,8 @@ def contribution(with_layer: Arm, without_layer: Arm, *, layer: str) -> dict:
     }
 
 
-def report(arms: list[Arm], *, model: str = "") -> dict:
+def report(arms: list[Arm], *, judge_model: str = "",
+           candidate_model: str = "") -> dict:
     by_layers = {a.layers: a for a in arms}
     full, no_judge, judge_only = (by_layers.get("ABCD"), by_layers.get("ABD"),
                                   by_layers.get("C"))
@@ -142,13 +143,16 @@ def report(arms: list[Arm], *, model: str = "") -> dict:
             "not determined: " + judge_contribution["why"])
 
     return {
-        "model": model,
+        "candidate_model": candidate_model,
+        "judge_model": judge_model,
         "arms": [a.as_dict() for a in arms],
         "judge_contribution": judge_contribution,
         "judge_alone": judge_only.as_dict() if judge_only else None,
         "experiment_conclusion": experiment,
         "model_conclusion": {
-            "question": f"is {model or 'this model'} fit to serve as the judge?",
+            "question": f"is {judge_model or 'this model'} fit to serve as the "
+                        f"independent judge for candidate "
+                        f"{candidate_model or 'under evaluation'}?",
             "answer": "DEFERRED",
             "why": "one model measured against one development corpus does not settle "
                    "model selection. That needs the same frozen configuration run against "
@@ -162,7 +166,8 @@ def report(arms: list[Arm], *, model: str = "") -> dict:
 
 
 def render(data: dict) -> str:
-    lines = [f"ABLATION  {data['model'] or 'unnamed model'}", ""]
+    lines = [f"ABLATION  candidate {data.get('candidate_model') or 'unnamed'}"
+             f"  |  judge {data.get('judge_model') or 'unnamed'}", ""]
     lines.append(f"{'experiment':<24}{'sens':>8}{'spec':>8}{'FP':>5}{'FN':>5}"
                  f"{'abst':>6}{'out':>5}  {'status'}")
     for arm in data["arms"]:

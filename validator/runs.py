@@ -38,19 +38,37 @@ KIND_HOLDOUT = "holdout"
 
 NOT_RUN = "NOT_RUN"
 
+# WHICH MODEL, as opposed to WHICH LAYER. Two different axes, and collapsing
+# them is how a run record stops being readable a month later.
+#
+#   seat   the experimental role: the model under evaluation, or the
+#          independent judge brought in to disagree with it
+#   role   the layer the provider was called for: grounding, judge, conformance
+#
+# The candidate occupies the grounding and conformance layers; the judge
+# occupies exactly one. "provider" is neither of these -- it is the adapter
+# that builds a model, and using it to mean "the model being evaluated" is the
+# ambiguity this vocabulary exists to remove.
+SEAT_CANDIDATE = "candidate"
+SEAT_JUDGE = "judge"
+SEATS = (SEAT_CANDIDATE, SEAT_JUDGE)
+
 
 @dataclass
 class ProviderRecord:
-    role: str
-    provider: str
+    role: str                       # the layer this provider was called for
+    provider: str                   # the adapter that built the model
     model: str
     model_family: str = ""
     is_oracle: bool = False
     is_model: bool = True
+    seat: str = SEAT_CANDIDATE      # the experimental role
+    endpoint: str = ""
 
     def as_dict(self) -> dict:
-        return {"role": self.role, "provider": self.provider, "model": self.model,
-                "model_family": self.model_family, "is_oracle": self.is_oracle,
+        return {"seat": self.seat, "role": self.role, "provider": self.provider,
+                "model": self.model, "model_family": self.model_family,
+                "endpoint": self.endpoint, "is_oracle": self.is_oracle,
                 "is_model": self.is_model}
 
 
@@ -112,8 +130,12 @@ class Run:
                 "items_decided": self.items_decided}
 
 
-def describe_provider(role: str, provider) -> ProviderRecord:
+def describe_provider(role: str, provider, *, seat: str = SEAT_CANDIDATE,
+                      endpoint: str = "") -> ProviderRecord:
+    if seat not in SEATS:
+        raise ValueError(f"{seat!r} is not one of {', '.join(SEATS)}")
     return ProviderRecord(
+        seat=seat, endpoint=endpoint,
         role=role, provider=str(getattr(provider, "name", "unknown")),
         model=str(getattr(provider, "model", "unknown")),
         model_family=str(getattr(provider, "model_family", "") or ""),
@@ -180,6 +202,10 @@ def development_metrics(runs_dir: str | Path = RUNS_DIR) -> dict:
     latest = max(runs, key=lambda r: r.at)
     counts = latest.counts or {}
     return {"status": "RUN", "at": latest.at, "config": latest.config,
+            "candidate_model": next((p.model for p in latest.providers
+                                     if p.seat == SEAT_CANDIDATE), ""),
+            "judge_model": next((p.model for p in latest.providers
+                                 if p.seat == SEAT_JUDGE), ""),
             "models": [p.as_dict() for p in latest.providers],
             "sensitivity": latest.sensitivity, "specificity": latest.specificity,
             "fp": counts.get("false_positive"), "fn": counts.get("false_negative"),

@@ -860,7 +860,7 @@ def _arm(name, layers, tp, fn, tn, fp, outages=0, expected=80):
 def test_the_ablation_reports_what_the_judge_contributed():
     data = ablation.report([_arm("1", "ABD", 29, 11, 40, 0),
                             _arm("2", "C", 12, 28, 40, 0),
-                            _arm("3", "ABCD", 34, 6, 38, 2)], model="m")
+                            _arm("3", "ABCD", 34, 6, 38, 2)], judge_model="m")
     contrib = data["judge_contribution"]
     assert contrib["status"] == ablation.COMPLETE
     assert contrib["delta_sensitivity"] == pytest.approx(0.125)
@@ -871,14 +871,14 @@ def test_the_ablation_reports_what_the_judge_contributed():
 def test_a_judge_that_changes_nothing_is_reported_as_cost_without_contribution():
     data = ablation.report([_arm("1", "ABD", 29, 11, 40, 0),
                             _arm("2", "C", 12, 28, 40, 0),
-                            _arm("3", "ABCD", 29, 11, 40, 0)], model="m")
+                            _arm("3", "ABCD", 29, 11, 40, 0)], judge_model="m")
     assert "cost without contribution" in data["experiment_conclusion"]["answer"]
 
 
 def test_an_incomplete_run_is_never_subtracted_from_a_complete_one():
     data = ablation.report([_arm("1", "ABD", 29, 11, 40, 0),
                             _arm("2", "C", 12, 28, 40, 0),
-                            _arm("3", "ABCD", 20, 4, 30, 1, outages=25)], model="m")
+                            _arm("3", "ABCD", 20, 4, 30, 1, outages=25)], judge_model="m")
     assert data["judge_contribution"]["status"] == ablation.NOT_COMPARABLE
     assert data["comparable"] is False
     assert "not determined" in data["experiment_conclusion"]["answer"]
@@ -887,8 +887,10 @@ def test_an_incomplete_run_is_never_subtracted_from_a_complete_one():
 def test_the_model_conclusion_is_deferred_rather_than_omitted():
     data = ablation.report([_arm("1", "ABD", 29, 11, 40, 0),
                             _arm("2", "C", 12, 28, 40, 0),
-                            _arm("3", "ABCD", 34, 6, 38, 2)], model="llama-8b")
+                            _arm("3", "ABCD", 34, 6, 38, 2)], judge_model="llama-70b",
+                           candidate_model="llama-8b")
     assert data["model_conclusion"]["answer"] == "DEFERRED"
+    assert "llama-70b" in data["model_conclusion"]["question"]
     assert "llama-8b" in data["model_conclusion"]["question"]
     assert "does not by itself disqualify" in data["model_conclusion"]["why"]
 
@@ -899,12 +901,13 @@ def test_the_experiment_set_runs_end_to_end_and_records_a_frozen_configuration(
     import benchmark.providers.registry as registry
     ground, judge_provider, conform = scripted.oracle(dev.cases)
     by_name = {"g": ground, "j": judge_provider}
-    monkeypatch.setattr(registry, "build_provider", lambda spec: by_name[spec])
+    monkeypatch.setattr(registry, "build_provider",
+                        lambda spec: by_name[spec["provider"]])
 
     code = eval_tool.main([
         "--runs-dir", str(tmp_path / "runs"), "--freeze-dir", str(tmp_path),
         "--out", str(tmp_path / "ablation.json"),
-        "experiments", "--provider", "g", "--judge", "j", "--note", "smoke"])
+        "experiments", "--candidate", "g", "--judge", "j", "--note", "smoke"])
     assert code == 0
 
     recorded = runs.load_all(tmp_path / "runs")
@@ -924,8 +927,44 @@ def test_the_experiment_set_runs_end_to_end_and_records_a_frozen_configuration(
 def test_the_runner_refuses_a_judge_that_is_the_same_model(tmp_path, monkeypatch, dev):
     import benchmark.providers.registry as registry
     ground, _, _ = scripted.oracle(dev.cases)
-    monkeypatch.setattr(registry, "build_provider", lambda spec: ground)
+    monkeypatch.setattr(registry, "build_provider", lambda spec: ground)  # same model both seats
     code = eval_tool.main(["--runs-dir", str(tmp_path / "runs"), "--freeze-dir",
-                           str(tmp_path), "experiments", "--provider", "g",
+                           str(tmp_path), "experiments", "--candidate", "g",
                            "--judge", "g"])
     assert code == 2
+
+
+def test_a_seat_names_a_provider_and_a_model():
+    assert eval_tool.parse_seat("nvidia:meta/llama-3.1-8b-instruct") == {
+        "provider": "nvidia", "model_id": "meta/llama-3.1-8b-instruct"}
+    assert eval_tool.parse_seat("scripted") == {"provider": "scripted"}
+    assert eval_tool.parse_seat("nvidia:a:b")["model_id"] == "a:b", \
+        "a model id containing a colon must survive intact"
+    assert eval_tool.parse_seat("nvidia:m", endpoint="https://h/v1")["base_url"] \
+        == "https://h/v1"
+    with pytest.raises(ValueError):
+        eval_tool.parse_seat("  ")
+
+
+def test_a_seat_spec_never_carries_a_credential():
+    """The key is read from the environment by name, so it has nowhere to leak."""
+    spec = eval_tool.parse_seat("nvidia:meta/llama-3.1-70b-instruct",
+                                endpoint="https://integrate.api.nvidia.com/v1")
+    assert set(spec) <= {"provider", "model_id", "base_url"}
+
+
+def test_provider_is_rejected_by_name_rather_than_silently_aliased(tmp_path, capsys):
+    code = eval_tool.main(["--runs-dir", str(tmp_path), "experiments",
+                           "--candidate", "a", "--judge", "b", "--provider", "a"])
+    assert code == 2
+    assert "--provider has been removed" in capsys.readouterr().err
+
+
+def test_a_run_record_distinguishes_the_seat_from_the_layer():
+    records = [runs.describe_provider("grounding", object(), seat=runs.SEAT_CANDIDATE),
+               runs.describe_provider("judge", object(), seat=runs.SEAT_JUDGE),
+               runs.describe_provider("conformance", object(), seat=runs.SEAT_CANDIDATE)]
+    assert [r.as_dict()["seat"] for r in records] == ["candidate", "judge", "candidate"]
+    assert [r.as_dict()["role"] for r in records] == ["grounding", "judge", "conformance"]
+    with pytest.raises(ValueError):
+        runs.describe_provider("grounding", object(), seat="whatever")

@@ -214,6 +214,30 @@ answer written twice. It fired on a real item in `corpus/development.jsonl`.
 Operators are now preserved in option comparison; word-internal hyphens are
 still ignored.
 
+## Seats, layers, and the word that was removed
+
+A run record has to answer "which model was being evaluated" without ambiguity,
+so two axes are recorded separately:
+
+| | means |
+|---|---|
+| **seat** | the experimental role — `candidate` (the model under evaluation) or `judge` (the independent model brought in to disagree with it) |
+| **role** | the layer the provider was called for — `grounding`, `judge`, `conformance` |
+| **provider** | the adapter that builds a model, and *only* that |
+
+The candidate occupies the grounding and conformance layers; the judge occupies
+one. Both appear in `ProviderRecord` and in the freeze manifest.
+
+There is deliberately no `--provider` flag. Using the word for both "the adapter"
+and "the model under evaluation" makes every record ambiguous about the thing it
+exists to say. Passing `--provider` is an **error naming its replacement**, not a
+silent alias — a silent alias in a permanent record is worse than a break.
+
+Seats are written `provider:model_id`, because the usual case is two different
+models on one endpoint. The credential is not part of a seat spec: the NVIDIA
+builder reads its key from the environment by name, so the key stays out of the
+spec, out of the manifest and out of the run record.
+
 ## The frozen experiment set
 
 An ablation compares three runs, so anything that changes between them
@@ -276,8 +300,12 @@ omitted conclusion is one the reader supplies.
 python3 tools_track_d_status.py --text                      # the state, derived
 python3 tools_validator_eval.py ceiling                     # the design's ceiling, free
 python3 tools_validator_eval.py layers                      # per-layer, still a ceiling
-python3 tools_validator_eval.py experiments --provider X --judge Y
-python3 tools_validator_eval.py run --provider X --judge Y  # a single real measurement
+python3 tools_validator_eval.py experiments \
+  --candidate 'nvidia:meta/llama-3.1-8b-instruct' \
+  --judge     'nvidia:meta/llama-3.1-70b-instruct' \
+  --endpoint  https://integrate.api.nvidia.com/v1 \
+  --note "first development experiment set"
+python3 tools_validator_eval.py run --candidate ... --judge ...   # one measurement
 python3 tools_validator_review.py sheet --reviewer "Dr A" --out a.jsonl
 python3 tools_validator_review.py merge --a a.jsonl --b b.jsonl
 ```
@@ -305,8 +333,16 @@ while minimising dependence on the second.
    place" was asserted from a ceiling; this is where it is confirmed or
    withdrawn.
 
-2. **The same fixed development set against both model classes.** The 8B is
-   fast and currently unacceptable; the 70B was better and stalled. Measure
+   **The first set is 8B candidate, 70B judge.** Not two 8B checkpoints: Layer
+   C exists to supply a judgement the candidate did not produce, and "different
+   checkpoint, same family" is not that. The 70B may stall again — it did last
+   time, before its control arm finished. That is an acceptable outcome, and it
+   is the reason the `INCOMPLETE — NOT COMPARABLE` machinery exists. A stalled
+   arm is recorded with its numbers and excluded from every delta, and it is
+   **not** retried selectively, because a retry that changes only the arm that
+   failed turns a stall into a score.
+
+2. **The same fixed development set against the alternative pairing.** Measure
    sensitivity, specificity, FP, FN, latency, cost and edge calibration for
    each before promoting either. The development corpus tolerates **zero**
    false positives against a 90% threshold, so read the error analysis, not the

@@ -111,9 +111,18 @@ def _scrub(value):
     return value
 
 
-def describe_model(role: str, provider, *, endpoint: str = "",
-                   temperature: float = 0.0) -> dict:
+def describe_model(role: str, provider, *, seat: str = "candidate",
+                   endpoint: str = "", temperature: float = 0.0) -> dict:
+    """
+    One model in the manifest, identified by its seat as well as its layer.
+
+    `seat` is the experimental role -- the model under evaluation, or the
+    independent judge. `role` is the layer it was called for. A manifest that
+    records only the layer cannot answer "which model was being evaluated",
+    which is the first question anyone asks of a benchmark record.
+    """
     return _scrub({
+        "seat": seat,
         "role": role,
         "provider": str(getattr(provider, "name", "unknown")),
         "model": str(getattr(provider, "model", "unknown")),
