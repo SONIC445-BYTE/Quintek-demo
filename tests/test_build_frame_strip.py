@@ -162,3 +162,35 @@ def test_the_billing_surface_reaches_the_android_asset() -> None:
         "the Android asset differs from the build output; rebuild before running"
         " the emulator")
     assert "__DC_MOD['quintek-billing-api.js']" in asset.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# The Android WebView must inject every backend global the bundle reads
+# ---------------------------------------------------------------------------
+# Real bug: the injector set only `window.__QUINTEK_API__`. The learner engine
+# and billing clients read `window.__QUINTEK_STUDENT_API__` instead, so on
+# Android the student screen's notebooks, generation and billing were
+# permanently "not configured" -- with a correct backend URL saved in
+# Settings -- and only the AI-transparency screen ever connected.
+
+def test_every_backend_global_the_bundle_reads_is_injected_by_android() -> None:
+    from pathlib import Path
+
+    kotlin = Path(
+        "android/app/src/main/java/com/quintek/app/WebScreenActivity.kt"
+    ).read_text(encoding="utf-8")
+
+    # Only the backend-ORIGIN globals belong here. The token globals
+    # (__QUINTEK_STUDENT_TOKEN__, __QUINTEK_ADMIN_TOKEN__) are set by the
+    # app's own login flow at runtime, after a user signs in inside the
+    # WebView -- there is nothing for the native host to inject before the
+    # page has even loaded.
+    for js_file in Path("frontend").glob("*.js"):
+        text = js_file.read_text(encoding="utf-8")
+        for m in re.finditer(r"window\.(__QUINTEK_\w*API__)", text):
+            name = m.group(1)
+            assert f"window.{name} = " in kotlin, (
+                f"{js_file.name} reads window.{name}, but "
+                "WebScreenActivity.kt never injects it -- on Android that "
+                "module will report itself unconfigured even when a backend "
+                "URL is saved in Settings")

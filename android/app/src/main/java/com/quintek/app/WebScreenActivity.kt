@@ -111,7 +111,20 @@ abstract class WebScreenActivity : AppCompatActivity() {
                     val stream = if (backend.isNullOrBlank()) {
                         asset
                     } else {
-                        val prefix = """<script>window.__QUINTEK_API__ = ${quote(backend)};</script>"""
+                        // Every JS module the bundles ship reads its own global
+                        // name for the backend origin -- __QUINTEK_API__ for
+                        // the benchmark/eval client, __QUINTEK_STUDENT_API__
+                        // for the learner engine and billing clients. Both
+                        // point at the SAME server: student/server.py serves
+                        // /ai/*, the learner API and /billing/* on one port.
+                        // Setting only one left the student screen's
+                        // notebooks, generation and billing permanently
+                        // "not configured" even with a correct URL saved --
+                        // only the AI-transparency screen ever connected.
+                        val prefix = """<script>
+                            window.__QUINTEK_API__ = ${quote(backend)};
+                            window.__QUINTEK_STUDENT_API__ = ${quote(backend)};
+                        </script>""".trimIndent()
                         SequenceInputStream(
                             Collections.enumeration(
                                 listOf(ByteArrayInputStream(prefix.toByteArray()), asset)
