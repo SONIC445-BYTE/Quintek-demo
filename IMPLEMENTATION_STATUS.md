@@ -749,14 +749,71 @@ acceptance rate is **not** measured and is labelled as an assumption everywhere 
 
 That headroom is not a result. It is the budget for buying a validator that works.
 
+## Track D: the apparatus for measuring a validator
+
+Full detail in `docs/VALIDATOR.md`. In summary:
+
+**A 100-case development corpus and a 93-case holdout now exist.** 40 clean / 40 controlled
+defects / 20 ambiguous-edge in development; 53 / 30 / 10 in the holdout. All ten defect classes
+are exercised in both. The two sets share no id, no stem and no source passage, and
+`devset.assert_disjoint` refuses if they ever do.
+
+**Defects are derived, not written.** Each defective item is one clean item with one edit;
+`mutate.apply` computes which fields actually changed and refuses when the edit exceeds what the
+mutation declared. Only the `ungrounded` operation may touch the source passage, because the
+passage is what "correct" means. That gives matched pairs — and `analysis.matched_pairs` reports
+the statistic that separates discrimination from flagging everything.
+
+**The validator is four layers, and every flag names the layer that raised it.** Structural
+(deterministic, free), grounding (is the key supported by the supplied passage), an independent
+judge (which refuses to run when the judge wrote the item, or shares its family), and conformance
+(is this the question that was asked for). An outage in a configured layer raises; it is never
+converted into a PASS.
+
+**The design's ceiling was measured before any inference was bought.** Against ground-truth
+oracles, v0.1 — structural, grounding, judge — topped out at **60% sensitivity**, because four of
+the ten defect classes are invisible to every one of those layers: nothing about an off-concept,
+under-difficulty, giveaway or circular-explanation item is wrong in isolation. The missing input
+was the generation request. Layer D takes it, and the ceiling is now 100/100 with every layer
+earning its place. A design whose ceiling sits below the pass threshold cannot be rescued by a
+better model, and finding that out from a model bill is the expensive way.
+
+**Two findings from building it.** A deterministic giveaway check was built, measured at 5 false
+positives per 40 clean items against 2 of 4 catches, and removed rather than tuned. And Layer A's
+"no false-flag rate" claim was untrue: the option normaliser reduced `Na - (Cl + HCO3)` and
+`(Na + Cl) - HCO3` to the same string and reported a real item as having duplicate options.
+
+**A consequence of judging the lower bound that changes what the corpus must be.** Thirty clean
+items, every one correctly passed, give a 95% lower bound of 88% — which does not establish 90% at
+any level of performance. That is INSUFFICIENT_EVIDENCE, not FAIL, and `metrics.min_items_for` now
+reports the number that would settle it: 35 clean items for a perfect run, **53 to tolerate a
+single false positive**, 69 for two. The holdout was sized to 53 for that reason. The development
+set's 40 tolerates zero, which is one more reason it is not the gate.
+
+### What Track D has NOT established
+
+- **No validator has been scored against the holdout.** Its ledger has zero `score` entries.
+- **No real model has been run through the pipeline.** Only ground-truth oracles, which measure
+  the design and are reported as invalid for gating.
+- **Nobody has reviewed the corpus.** Every item is `model_authored`, `gold_standard: false`,
+  `label_status: unreviewed`. `tools_validator_review.py` is the protocol; two named clinicians
+  are what it needs.
+- **One bit has already leaked from the holdout**, and is recorded in its ledger as an
+  `inspection`: a ceiling run showed the locator check missing a planted `hallucinated_reference`
+  because the pattern lacks the word "clause". The pattern was deliberately **not** widened.
+
 ## Next steps
 
-1. Author a 50-item pilot corpus in one subject with two qualified reviewers — enough to compute a
-   real kappa and calibrate thresholds.
-2. Measure a validator that clears the adversarial battery on both arms: detection rate AND
-   false-flag rate, with the control completed.
-3. Measure the real production acceptance rate, so the compute budget stops resting on an assumption.
-4. Only then scale the corpus.
+1. Run a real provider pair through `tools_validator_eval.py run` on the **development** set, and
+   read the error analysis rather than the headline rate.
+2. Iterate the prompts against development only, until both arms clear with room to spare.
+3. Score **once** against the holdout, with a note saying what changed. Five runs exist, ever.
+4. Author a pilot corpus in one subject with two qualified reviewers — enough to compute a real
+   kappa. `tools_validator_review.py` computes it and refuses to settle labels while anything is
+   disputed.
+5. Measure the real production acceptance rate, so the compute budget stops resting on an
+   assumption.
+6. Only then freeze a benchmark corpus and start the 355-model funnel.
 
-Step 1 is still the gate. Everything downstream depends on whether a second qualified reviewer
-exists.
+Step 4 is still the gate on any claim that rests on these labels. Everything downstream depends on
+whether a second qualified reviewer exists.
