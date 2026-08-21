@@ -46,10 +46,12 @@ class ProviderRecord:
     model: str
     model_family: str = ""
     is_oracle: bool = False
+    is_model: bool = True
 
     def as_dict(self) -> dict:
         return {"role": self.role, "provider": self.provider, "model": self.model,
-                "model_family": self.model_family, "is_oracle": self.is_oracle}
+                "model_family": self.model_family, "is_oracle": self.is_oracle,
+                "is_model": self.is_model}
 
 
 @dataclass
@@ -68,6 +70,10 @@ class Run:
     outages: int = 0
     analysis: dict = field(default_factory=dict)
     note: str = ""
+    freeze: str = ""
+    completeness: str = ""
+    items_expected: int = 0
+    items_decided: int = 0
     path: str = ""
 
     @property
@@ -75,19 +81,35 @@ class Run:
         return any(p.is_oracle for p in self.providers)
 
     @property
+    def used_a_test_double(self) -> bool:
+        return any(not p.is_model for p in self.providers)
+
+    @property
     def is_real(self) -> bool:
-        """A run that measures a validator rather than a design."""
-        return bool(self.providers) and not self.used_an_oracle
+        """
+        A run that measures a validator rather than a design.
+
+        Both exclusions are needed and they are different. An oracle answers
+        from ground truth; a replay provider answers from a fixture. Neither
+        was asked anything, and a record that counted either would say a
+        validator had been evaluated when no model had seen an item.
+        """
+        return (bool(self.providers) and not self.used_an_oracle
+                and not self.used_a_test_double)
 
     def as_dict(self) -> dict:
         return {"at": self.at, "kind": self.kind, "corpus": self.corpus,
                 "corpus_hash": self.corpus_hash,
                 "validator_version": self.validator_version, "config": self.config,
                 "providers": [p.as_dict() for p in self.providers],
-                "used_an_oracle": self.used_an_oracle, "is_real": self.is_real,
+                "used_an_oracle": self.used_an_oracle,
+                "used_a_test_double": self.used_a_test_double, "is_real": self.is_real,
                 "counts": self.counts, "sensitivity": self.sensitivity,
                 "specificity": self.specificity, "gate": self.gate,
-                "outages": self.outages, "analysis": self.analysis, "note": self.note}
+                "outages": self.outages, "analysis": self.analysis, "note": self.note,
+                "freeze": self.freeze, "completeness": self.completeness,
+                "items_expected": self.items_expected,
+                "items_decided": self.items_decided}
 
 
 def describe_provider(role: str, provider) -> ProviderRecord:
@@ -95,7 +117,8 @@ def describe_provider(role: str, provider) -> ProviderRecord:
         role=role, provider=str(getattr(provider, "name", "unknown")),
         model=str(getattr(provider, "model", "unknown")),
         model_family=str(getattr(provider, "model_family", "") or ""),
-        is_oracle=bool(getattr(provider, "is_oracle", False)))
+        is_oracle=bool(getattr(provider, "is_oracle", False)),
+        is_model=bool(getattr(provider, "is_model", True)))
 
 
 def record(run: Run, *, runs_dir: str | Path = RUNS_DIR) -> Path:
@@ -129,7 +152,10 @@ def load_all(runs_dir: str | Path = RUNS_DIR) -> list[Run]:
             counts=raw.get("counts") or {}, sensitivity=raw.get("sensitivity"),
             specificity=raw.get("specificity"), gate=raw.get("gate", ""),
             outages=int(raw.get("outages") or 0), analysis=raw.get("analysis") or {},
-            note=raw.get("note", ""), path=str(path)))
+            note=raw.get("note", ""), freeze=raw.get("freeze", ""),
+            completeness=raw.get("completeness", ""),
+            items_expected=int(raw.get("items_expected") or 0),
+            items_decided=int(raw.get("items_decided") or 0), path=str(path)))
     return out
 
 
@@ -148,9 +174,9 @@ def development_metrics(runs_dir: str | Path = RUNS_DIR) -> dict:
     runs = real_runs(KIND_DEVELOPMENT, runs_dir)
     if not runs:
         return {"status": NOT_RUN,
-                "why": "no development run using real models has been recorded; only "
-                       "ceiling runs against ground-truth oracles exist, and those measure "
-                       "the design rather than a validator"}
+                "why": "no development run using real models has been recorded; the runs on "
+                       "disk used ground-truth oracles or scripted fixtures, and neither "
+                       "asked a model anything"}
     latest = max(runs, key=lambda r: r.at)
     counts = latest.counts or {}
     return {"status": "RUN", "at": latest.at, "config": latest.config,

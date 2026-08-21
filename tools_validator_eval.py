@@ -41,7 +41,7 @@ import json
 import sys
 from pathlib import Path
 
-from validator import analysis, metrics, pipeline, runs, scripted
+from validator import ablation, analysis, freeze as freeze_mod, metrics, pipeline, runs, scripted
 from validator.devset import CLEAN, DEFECTIVE, load
 from validator.conformance import ConformanceUnavailable
 from validator.grounding import GroundingUnavailable
@@ -207,11 +207,14 @@ def run_real(args):
     return 0
 
 
-def _record(devset, verdicts, outages, config, providers, *, kind, note=""):
+def _record(devset, verdicts, outages, config, providers, *, kind, note="", freeze="",
+            runs_dir=None):
     """Write the run to the record. A ceiling and a measurement are different kinds."""
     from validator.holdout import corpus_hash
     matrix = score(devset.cases, verdicts)
     gate = metrics.gate(matrix)
+    expected = len(devset.arms)
+    decided = matrix.total
     run = runs.Run(
         at=runs.now(), kind=kind, corpus=str(devset.root),
         corpus_hash=corpus_hash(devset.root),
@@ -219,8 +222,11 @@ def _record(devset, verdicts, outages, config, providers, *, kind, note=""):
         providers=providers, counts=matrix.as_dict()["counts"],
         sensitivity=matrix.sensitivity, specificity=matrix.specificity,
         gate=("withheld (oracle run)" if kind == runs.KIND_CEILING else gate.outcome),
-        outages=len(outages), analysis=analysis.report(devset.cases, verdicts), note=note)
-    return runs.record(run)
+        outages=len(outages), analysis=analysis.report(devset.cases, verdicts), note=note,
+        freeze=freeze, items_expected=expected, items_decided=decided,
+        completeness=(ablation.COMPLETE if not outages and decided >= expected
+                      else ablation.INCOMPLETE))
+    return runs.record(run, runs_dir=runs_dir or runs.RUNS_DIR)
 
 
 def _write(args, devset, verdicts, outages, config, *, oracle_used):
@@ -243,24 +249,26 @@ def _write(args, devset, verdicts, outages, config, *, oracle_used):
 
 
 EXPERIMENTS = (
-    ("1  A+B+D  everything except the free-answer judge",
+    ("1  A+B+D  validator without the judge", "ABD",
      dict(structural=True, grounding=True, judge=False, conformance=True)),
-    ("2  C      the judge alone",
+    ("2  C      the independent judge alone", "C",
      dict(structural=False, grounding=False, judge=True, conformance=False)),
-    ("3  ABCD   the whole validator",
+    ("3  ABCD   the whole validator", "ABCD",
      dict(structural=True, grounding=True, judge=True, conformance=True)),
 )
 
 
 def run_experiments(args):
     """
-    The three measurements, in order, against real providers.
+    The three measurements, in order, against one frozen configuration.
 
     Run together and recorded together because the number that matters is the
     difference between them. "Every layer earns its place" was asserted from a
-    ceiling; this is where it is either confirmed or withdrawn.
+    ceiling; this is where it is confirmed or withdrawn.
     """
     from benchmark.providers.registry import build_provider
+    from validator.holdout import corpus_hash
+
     devset = load(args.corpus)
     ground = build_provider(args.provider)
     judge_provider = build_provider(args.judge or args.provider)
@@ -270,37 +278,71 @@ def run_experiments(args):
               file=sys.stderr)
         return 2
     conform = ground
-    records = [runs.describe_provider("grounding", ground),
-               runs.describe_provider("judge", judge_provider),
-               runs.describe_provider("conformance", conform)]
+    provider_records = [runs.describe_provider("grounding", ground),
+                        runs.describe_provider("judge", judge_provider),
+                        runs.describe_provider("conformance", conform)]
 
-    rows = []
-    for title, flags in EXPERIMENTS:
+    current = freeze_mod.build(
+        corpus=str(devset.root), corpus_hash=corpus_hash(devset.root),
+        models=[freeze_mod.describe_model(role, prov, endpoint=args.endpoint,
+                                          temperature=args.temperature)
+                for role, prov in (("grounding", ground), ("judge", judge_provider),
+                                   ("conformance", conform))],
+        experiments=[{"name": title, "layers": layers, "config": flags}
+                     for title, layers, flags in EXPERIMENTS],
+        sampling={"temperature": args.temperature},
+        note=args.note, created_at=runs.now())
+    freeze_path = freeze_mod.path_for(str(devset.root),
+                                      args.freeze_dir or freeze_mod.FREEZE_DIR)
+
+    if args.refreeze:
+        if not args.note.strip():
+            print("refusing to refreeze without --note saying what changed and why",
+                  file=sys.stderr)
+            return 2
+        Path(freeze_path).unlink(missing_ok=True)
+    try:
+        in_force = freeze_mod.assert_unchanged(current, freeze_path)
+    except freeze_mod.FreezeViolation as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    if not Path(freeze_path).exists():
+        freeze_mod.write(current, freeze_path)
+        print(f"configuration frozen as {in_force.digest()[:12]} in {freeze_path}\n")
+    else:
+        print(f"running under frozen configuration {in_force.digest()[:12]}\n")
+
+    arms = []
+    for title, layers, flags in EXPERIMENTS:
         config = pipeline.Config(**flags)
         verdicts, outages = evaluate(devset.cases, grounding_provider=ground,
                                      judge_provider=judge_provider,
                                      conformance_provider=conform, config=config)
         matrix = score(devset.cases, verdicts)
-        gate = metrics.gate(matrix)
-        pairs = analysis.matched_pairs(devset.cases, verdicts)
-        _record(devset, verdicts, outages, config, records,
-                kind=(runs.KIND_CEILING if any(p.is_oracle for p in records)
-                      else runs.KIND_DEVELOPMENT),
-                note=f"experiment {title.split()[0]}: {args.note}".strip())
-        rows.append((title, matrix, gate, pairs, outages))
+        edge = analysis.edge_behaviour(devset.cases, verdicts)
+        used_fake = any(p.is_oracle or not p.is_model for p in provider_records)
+        _record(devset, verdicts, outages, config, provider_records,
+                kind=(runs.KIND_CEILING if used_fake else runs.KIND_DEVELOPMENT),
+                note=f"{title}; {args.note}".strip("; "),
+                freeze=in_force.digest(), runs_dir=args.runs_dir or runs.RUNS_DIR)
+        arms.append(ablation.Arm(
+            name=title, layers=layers, matrix=matrix, outages=len(outages),
+            items_expected=len(devset.arms), items_decided=matrix.total,
+            edge_abstention=edge["abstention_rate"],
+            analysis=analysis.report(devset.cases, verdicts)))
         print(render(title, devset.cases, verdicts, outages,
-                     oracle_used=any(p.is_oracle for p in records), config=config))
+                     oracle_used=used_fake, config=config))
         print()
 
-    print("=" * 72)
-    print(f"{'experiment':<46}{'sens':>8}{'spec':>8}{'gate':>10}")
-    for title, matrix, gate, _pairs, _out in rows:
-        print(f"{title:<46}{_pct(matrix.sensitivity):>8}{_pct(matrix.specificity):>8}"
-              f"{gate.outcome:>10}")
-    print()
-    print("The claim to check here is the third row against the first two. If A+B+D "
-          "alone reaches the gate, the judge is cost without contribution; if C alone "
-          "reaches it, the other three are. Neither is known until this has run.")
+    data = ablation.report(arms, model=str(getattr(judge_provider, "model", "")))
+    print("=" * 78)
+    print(ablation.render(data))
+    if args.out:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.out).write_text(json.dumps(
+            {"freeze": in_force.as_dict(), "ablation": data}, indent=2, default=str),
+            encoding="utf-8")
+        print(f"\nwritten to {args.out}")
     return 0
 
 
@@ -309,6 +351,10 @@ def main(argv=None):
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--corpus", default="corpus/validator_dev")
     parser.add_argument("--out", default="")
+    parser.add_argument("--runs-dir", default="",
+                        help="where run records are written; a separate directory keeps "
+                             "an experiment set isolated from earlier ones")
+    parser.add_argument("--freeze-dir", default="")
     sub = parser.add_subparsers(dest="mode", required=True)
     ceiling = sub.add_parser("ceiling")
     ceiling.add_argument("--spend-a-look", default="",
@@ -324,6 +370,12 @@ def main(argv=None):
     experiments.add_argument("--provider", required=True)
     experiments.add_argument("--judge", default="")
     experiments.add_argument("--note", default="")
+    experiments.add_argument("--endpoint", default="",
+                             help="recorded in the freeze manifest; never a credential")
+    experiments.add_argument("--temperature", type=float, default=0.0)
+    experiments.add_argument("--refreeze", action="store_true",
+                             help="start a new experiment set, discarding the frozen "
+                                  "configuration; requires --note")
     args = parser.parse_args(argv)
     return {"ceiling": run_ceiling, "layers": run_layers, "run": run_real,
             "experiments": run_experiments}[args.mode](args)

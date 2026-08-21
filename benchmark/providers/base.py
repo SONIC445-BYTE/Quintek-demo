@@ -84,6 +84,13 @@ class BaseProvider:
     model = "unset"
     model_version = "unset"
     model_family = "unset"
+    # Whether this provider talks to a model. Test doubles and oracles set it
+    # False, and the evaluation record refuses to count their runs as
+    # measurements. Defaulting to True is deliberate: a new real adapter is
+    # counted without anyone remembering to opt in, and a new fake has to say
+    # so, which is the direction that fails safe.
+    is_model = True
+    is_oracle = False
     retry_policy: RetryPolicy = RetryPolicy()
 
     def generate(self, request: GenerationRequest) -> GenerationResponse:

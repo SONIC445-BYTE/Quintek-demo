@@ -214,6 +214,62 @@ answer written twice. It fired on a real item in `corpus/development.jsonl`.
 Operators are now preserved in option comparison; word-internal hyphens are
 still ignored.
 
+## The frozen experiment set
+
+An ablation compares three runs, so anything that changes between them
+contaminates the comparison — and the contamination is invisible afterwards:
+
+```
+A+B+D    -> v0.4
+C        -> v0.4.1
+A+B+C+D  -> v0.4.2
+```
+
+Nothing in the numbers says that happened. So `experiments` captures the
+configuration before the first run, hashes it, stamps the digest onto all three
+records, and refuses to run under a changed one — naming the field that moved,
+because "the configuration changed" is not actionable and "the judge prompt went
+from `judge/0.1.0` to `judge/0.2.0`" is. Starting a new set needs `--refreeze`
+and a `--note`.
+
+Pinned: the validator source fingerprint, the corpus content hash, all three
+prompt versions, the gate thresholds, the judge's confidence floor, model ids
+and families, endpoint, sampling parameters, and the experiment definitions.
+Not pinned: the clock and the note. **A credential has no field to live in** —
+`freeze.build` refuses a configuration containing one, because a manifest is a
+committed artifact.
+
+## Complete and incomplete runs are not comparable
+
+A run with outages, or one that did not reach every item, is recorded
+`INCOMPLETE`, and every delta that would involve it reports `INCOMPLETE — NOT
+COMPARABLE` instead of a number. Subtracting a partial run from a complete one
+gives a difference that is mostly the missing items.
+
+This is not hypothetical: the 70B stalled before its control arm finished last
+time. That run's numbers are still recorded and still readable — the runner
+records outages rather than smoothing them — but they cannot be differenced
+against a complete 8B run, and the report says so rather than leaving it to the
+reader.
+
+## Two conclusions from one ablation
+
+`validator/ablation.py` returns them as separate keys and prints them under
+separate headings:
+
+**Experiment conclusion** — does the independent judge add information the
+other layers do not already have? Answered by A+B+C+D minus A+B+D.
+
+**Model conclusion** — is this model fit to be the judge? `DEFERRED`, always,
+from a single run. It needs the same frozen configuration against the
+alternative, compared on sensitivity, specificity, FP, FN, latency, cost and
+edge calibration. And a poor absolute score does not disqualify a model whose
+*contribution* was positive: a judge that adds 12 points of sensitivity has
+answered the experiment question yes regardless of how it scores alone.
+
+The model conclusion is stated as deferred rather than omitted, because an
+omitted conclusion is one the reader supplies.
+
 ## Running it
 
 ```bash
@@ -232,8 +288,10 @@ Two questions are tangled together and must be separated: **can the validator
 work**, and **which model should do the validating**. The first is established
 while minimising dependence on the second.
 
-1. **`experiments`, against the development set.** Three configurations in one
-   command, each recorded:
+1. **`experiments`, against the development set, with 8B first.** Three
+   configurations in one command, under one frozen configuration, each
+   recorded. 8B first because this experiment asks what each layer contributes,
+   not whether 8B is a good judge — and it is cheap and completes:
 
    | | layers | what it isolates |
    |---|---|---|

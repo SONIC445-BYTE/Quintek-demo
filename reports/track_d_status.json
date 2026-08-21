@@ -1,6 +1,6 @@
 {
   "track": "D",
-  "generated_at": "2026-08-21T22:35:01Z",
+  "generated_at": "2026-08-21T22:44:39Z",
   "validator_version": "0.2.0",
   "validator_config": "v0.2.0[ABCD]",
   "implementation": "COMPLETE",
@@ -92,7 +92,7 @@
   },
   "dev_metrics": {
     "status": "NOT_RUN",
-    "why": "no development run using real models has been recorded; only ceiling runs against ground-truth oracles exist, and those measure the design rather than a validator"
+    "why": "no development run using real models has been recorded; the runs on disk used ground-truth oracles or scripted fixtures, and neither asked a model anything"
   },
   "holdout_status": {
     "status": "NOT_RUN",
@@ -115,7 +115,7 @@
   "real_model_eval": {
     "status": "NOT_RUN",
     "real_runs": 0,
-    "ceiling_runs": 1,
+    "ceiling_runs": 2,
     "why": "every recorded run used ground-truth oracles; an oracle run measures the design and can never be counted here"
   },
   "validator_production_status": {

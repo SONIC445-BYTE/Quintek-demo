@@ -55,6 +55,10 @@ class ReplayProvider(BaseProvider):
     model_version = "v0.1"
     model_family = "none"
     is_oracle = False
+    # A canned reply is not a model reply. Without this, a replay run would be
+    # recorded as a real measurement, and the record would say a validator had
+    # been evaluated when nothing had been asked anything.
+    is_model = False
 
     def __init__(self, replies: dict[str, dict | str] | None = None, *,
                  errors: set[str] | None = None, garbage: set[str] | None = None,

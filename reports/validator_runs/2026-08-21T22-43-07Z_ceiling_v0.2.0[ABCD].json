@@ -1,0 +1,453 @@
+{
+  "at": "2026-08-21T22:43:07Z",
+  "kind": "ceiling",
+  "corpus": "corpus/validator_dev",
+  "corpus_hash": "4da47a68fce97b8dd9a74f4386c45be967cd27823e383282748bd18eb32bf057",
+  "validator_version": "0.2.0",
+  "config": "v0.2.0[ABCD]",
+  "providers": [
+    {
+      "role": "grounding",
+      "provider": "validator-oracle",
+      "model": "oracle-grounding",
+      "model_family": "none",
+      "is_oracle": true,
+      "is_model": false
+    },
+    {
+      "role": "judge",
+      "provider": "validator-oracle",
+      "model": "oracle-judge",
+      "model_family": "none",
+      "is_oracle": true,
+      "is_model": false
+    },
+    {
+      "role": "conformance",
+      "provider": "validator-oracle",
+      "model": "oracle-conformance",
+      "model_family": "none",
+      "is_oracle": true,
+      "is_model": false
+    }
+  ],
+  "used_an_oracle": true,
+  "used_a_test_double": true,
+  "is_real": false,
+  "counts": {
+    "true_positive": 40,
+    "false_negative": 0,
+    "true_negative": 40,
+    "false_positive": 0,
+    "abstained_defective": 0,
+    "abstained_clean": 0
+  },
+  "sensitivity": 1.0,
+  "specificity": 1.0,
+  "gate": "withheld (oracle run)",
+  "outages": 0,
+  "analysis": {
+    "false_positives": {
+      "count": 0,
+      "by_check": [],
+      "worst_check": "",
+      "concentrated": false
+    },
+    "false_negatives": {
+      "count": 0,
+      "by_defect_class": [],
+      "classes_never_caught": []
+    },
+    "abstentions": {
+      "by_label": {},
+      "by_check": {}
+    },
+    "edge_behaviour": {
+      "total": 20,
+      "by_verdict": {
+        "FLAGGED": 1,
+        "PASSED": 19
+      },
+      "abstention_rate": 0.0,
+      "decided_without_hesitation": 20,
+      "items": [
+        {
+          "id": "vd-edge-001",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "Negatively phrased stem. Item-writing guidance discourages 'NOT' stems because candidates misread them under time pressure, but the item is factually correct and has one defensible answer. A validator applying style rules flags it; one applying correctness rules passes it."
+        },
+        {
+          "id": "vd-edge-002",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "The keyed answer is correct only relative to the guideline supplied. Other major guidelines name a calcium channel blocker or an ACE inhibitor first for the same patient. The item is grounded in its passage but a validator judging against general medical knowledge will reasonably dispute the key."
+        },
+        {
+          "id": "vd-edge-003",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "The passage supports the key by inference rather than by restatement: it never uses the word prevalence. A grounding check that demands an explicit supporting sentence flags this; one that permits a single deductive step passes it."
+        },
+        {
+          "id": "vd-edge-004",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "Exactly-on-the-threshold values. The passage says 'greater than', so the key follows literally, but clinicians routinely treat borderline values as indeterminate and repeat them. Two reviewers can defensibly disagree."
+        },
+        {
+          "id": "vd-edge-005",
+          "verdict": "FLAGGED",
+          "checks": [
+            "structural/all_of_the_above"
+          ],
+          "why_edge": "'None of the above' is the correct key. A structural rule that rejects degenerate options flags this item automatically, yet the option is doing real clinical work here. Tests whether a validator's style rule can override a correct item."
+        },
+        {
+          "id": "vd-edge-006",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "The key is by far the longest option because the correct answer is a three-part protocol. A length-tell heuristic fires; the length is justified by the content. Tests whether the validator distinguishes a cue from a fact."
+        },
+        {
+          "id": "vd-edge-007",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "Nationally and temporally specific. The key is correct for the programme quoted and wrong elsewhere, and national protocols are revised. A validator with a general medical prior will often dispute it."
+        },
+        {
+          "id": "vd-edge-008",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "Two options are on the same causal chain: increased sympathetic outflow causes the increased heart rate. 'First' resolves it in favour of the key, but a reviewer may call the pair insufficiently distinct."
+        },
+        {
+          "id": "vd-edge-009",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "Three options rather than four. The structural minimum permits three, but a house style requiring four options would reject it. Also tests whether the validator notices that the passage itself acknowledges an alternative formula."
+        },
+        {
+          "id": "vd-edge-010",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "The assertion-reason format deliberately contains a non-explanatory true reason. A validator checking 'does the explanation support the key' may read the non-sequitur as the defect 'poor_reasoning' when it is the format working as intended."
+        },
+        {
+          "id": "vd-edge-011",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "The explanation is a four-word clause. It is not wrong and the key is correct, but it explains nothing. Whether a thin explanation constitutes a defect is a policy question, not a factual one."
+        },
+        {
+          "id": "vd-edge-012",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "The reference given for this item names a standard textbook at book level with no edition, page or chapter. That is not a fabricated citation, but it is not a checkable one either. Whether an uncheckable reference is a defect is a policy question."
+        },
+        {
+          "id": "vd-edge-013",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "The vignette omits vital signs, weight and past history. The answer is nonetheless determined by the features given. A validator that requires a complete data set in a vignette flags it as under-specified; one that asks only whether the answer follows passes it."
+        },
+        {
+          "id": "vd-edge-014",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "Arithmetic that a validator must actually perform to check. Layer A cannot do it and a judge that estimates rather than calculates will often get it wrong in either direction. Included to measure where numerical checking fails, not to be scored."
+        },
+        {
+          "id": "vd-edge-015",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "The item uses the international non-proprietary spelling 'meticillin' while most Indian textbooks and candidates use 'methicillin'. A validator matching against a term list may treat the spelling as an error; it is not one."
+        },
+        {
+          "id": "vd-edge-016",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "The key is a limit age and a distractor, 15 months, falls inside the normal range given in the passage. Ranges that overlap options make the key defensible rather than uniquely correct."
+        },
+        {
+          "id": "vd-edge-017",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "Screening intervals differ between national programmes and change as programmes migrate to HPV primary testing. The key is grounded in the passage and contradicted by other real programmes."
+        },
+        {
+          "id": "vd-edge-018",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "The passage contains a unit error in its final sentence: pressure is not measured per litre. The key does not depend on that sentence. Whether a flaw in the evidence that does not affect the answer makes the item defective is a policy question."
+        },
+        {
+          "id": "vd-edge-019",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "Pure recall of a classification, but the item is declared at foundation difficulty, where recall is the intended level. Included to check that a validator's 'trivial' rule reads the declared difficulty rather than firing on recall alone."
+        },
+        {
+          "id": "vd-edge-020",
+          "verdict": "PASSED",
+          "checks": [],
+          "why_edge": "The ranking depends on the dataset, the period and whether indirect causes are counted. The passage supports the key; published sources for other populations and periods support the second option. Reviewers with different sources will key it differently."
+        }
+      ]
+    },
+    "matched_pairs": {
+      "pairs": 40,
+      "by_outcome": {
+        "discriminated": 40
+      },
+      "discrimination_rate": 1.0,
+      "items": [
+        {
+          "defective": "vd-def-001",
+          "clean": "vd-clean-001",
+          "defect_class": "wrong_key",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-013",
+          "clean": "vd-clean-013",
+          "defect_class": "wrong_key",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-020",
+          "clean": "vd-clean-020",
+          "defect_class": "wrong_key",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-031",
+          "clean": "vd-clean-031",
+          "defect_class": "wrong_key",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-002",
+          "clean": "vd-clean-002",
+          "defect_class": "two_correct",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-012",
+          "clean": "vd-clean-012",
+          "defect_class": "two_correct",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-021",
+          "clean": "vd-clean-021",
+          "defect_class": "two_correct",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-037",
+          "clean": "vd-clean-037",
+          "defect_class": "two_correct",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-003",
+          "clean": "vd-clean-003",
+          "defect_class": "ambiguous_stem",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-016",
+          "clean": "vd-clean-016",
+          "defect_class": "ambiguous_stem",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-023",
+          "clean": "vd-clean-023",
+          "defect_class": "ambiguous_stem",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-033",
+          "clean": "vd-clean-033",
+          "defect_class": "ambiguous_stem",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-004",
+          "clean": "vd-clean-004",
+          "defect_class": "hallucinated_fact",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-014",
+          "clean": "vd-clean-014",
+          "defect_class": "hallucinated_fact",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-024",
+          "clean": "vd-clean-024",
+          "defect_class": "hallucinated_fact",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-032",
+          "clean": "vd-clean-032",
+          "defect_class": "hallucinated_fact",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-005",
+          "clean": "vd-clean-005",
+          "defect_class": "hallucinated_reference",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-015",
+          "clean": "vd-clean-015",
+          "defect_class": "hallucinated_reference",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-025",
+          "clean": "vd-clean-025",
+          "defect_class": "hallucinated_reference",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-035",
+          "clean": "vd-clean-035",
+          "defect_class": "hallucinated_reference",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-006",
+          "clean": "vd-clean-006",
+          "defect_class": "out_of_syllabus",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-017",
+          "clean": "vd-clean-017",
+          "defect_class": "out_of_syllabus",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-026",
+          "clean": "vd-clean-026",
+          "defect_class": "out_of_syllabus",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-038",
+          "clean": "vd-clean-038",
+          "defect_class": "out_of_syllabus",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-007",
+          "clean": "vd-clean-007",
+          "defect_class": "poor_reasoning",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-027",
+          "clean": "vd-clean-027",
+          "defect_class": "poor_reasoning",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-036",
+          "clean": "vd-clean-036",
+          "defect_class": "poor_reasoning",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-039",
+          "clean": "vd-clean-039",
+          "defect_class": "poor_reasoning",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-008",
+          "clean": "vd-clean-008",
+          "defect_class": "ungrounded",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-018",
+          "clean": "vd-clean-018",
+          "defect_class": "ungrounded",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-028",
+          "clean": "vd-clean-028",
+          "defect_class": "ungrounded",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-040",
+          "clean": "vd-clean-040",
+          "defect_class": "ungrounded",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-009",
+          "clean": "vd-clean-009",
+          "defect_class": "giveaway",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-019",
+          "clean": "vd-clean-019",
+          "defect_class": "giveaway",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-029",
+          "clean": "vd-clean-029",
+          "defect_class": "giveaway",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-030",
+          "clean": "vd-clean-030",
+          "defect_class": "giveaway",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-010",
+          "clean": "vd-clean-010",
+          "defect_class": "trivial",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-011",
+          "clean": "vd-clean-011",
+          "defect_class": "trivial",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-022",
+          "clean": "vd-clean-022",
+          "defect_class": "trivial",
+          "outcome": "discriminated"
+        },
+        {
+          "defective": "vd-def-034",
+          "clean": "vd-clean-034",
+          "defect_class": "trivial",
+          "outcome": "discriminated"
+        }
+      ]
+    }
+  },
+  "note": "ground-truth oracles; measures the design, not a validator",
+  "freeze": "",
+  "completeness": "COMPLETE",
+  "items_expected": 80,
+  "items_decided": 80
+}

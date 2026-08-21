@@ -808,3 +808,124 @@ def test_the_committed_status_report_has_not_drifted_from_the_repository():
     assert (committed["validator_production_status"]["status"]
             == fresh["validator_production_status"]["status"])
     assert committed["design_ceiling"]["is_a_measurement"] is False
+
+
+# ------------------------------------- the frozen experiment set and its report
+
+from validator import ablation, freeze as freeze_mod  # noqa: E402
+
+eval_tool = importlib.import_module("tools_validator_eval")
+
+
+def _freeze(**over):
+    base = dict(corpus="corpus/validator_dev", corpus_hash="hash",
+                models=[{"role": "judge", "model": "m"}],
+                experiments=[{"name": "1", "layers": "ABD"}])
+    base.update(over)
+    return freeze_mod.build(**base)
+
+
+def test_a_manifest_refuses_to_carry_a_credential():
+    for key in ("api_key", "Authorization", "SECRET"):
+        with pytest.raises(freeze_mod.FreezeViolation, match="refusing to freeze"):
+            _freeze(models=[{"role": "judge", key: "value"}])
+
+
+def test_the_digest_moves_when_anything_that_changes_an_answer_moves():
+    first = _freeze().digest()
+    assert _freeze(corpus_hash="different").digest() != first
+    assert _freeze(models=[{"role": "judge", "model": "other"}]).digest() != first
+    assert _freeze(sampling={"temperature": 0.7}).digest() != first
+
+
+def test_the_digest_ignores_the_clock_and_the_note():
+    assert _freeze(note="a", created_at="2020").digest() == \
+        _freeze(note="b", created_at="2026").digest()
+
+
+def test_a_configuration_that_moved_mid_set_is_refused_by_name(tmp_path):
+    path = tmp_path / "freeze.json"
+    freeze_mod.write(_freeze(), path)
+    assert freeze_mod.assert_unchanged(_freeze(), path).digest() == _freeze().digest()
+    with pytest.raises(freeze_mod.FreezeViolation, match="corpus_hash"):
+        freeze_mod.assert_unchanged(_freeze(corpus_hash="moved"), path)
+
+
+def _arm(name, layers, tp, fn, tn, fp, outages=0, expected=80):
+    matrix = metrics.ConfusionMatrix(tp, fn, tn, fp)
+    return ablation.Arm(name=name, layers=layers, matrix=matrix, outages=outages,
+                        items_expected=expected, items_decided=matrix.total)
+
+
+def test_the_ablation_reports_what_the_judge_contributed():
+    data = ablation.report([_arm("1", "ABD", 29, 11, 40, 0),
+                            _arm("2", "C", 12, 28, 40, 0),
+                            _arm("3", "ABCD", 34, 6, 38, 2)], model="m")
+    contrib = data["judge_contribution"]
+    assert contrib["status"] == ablation.COMPLETE
+    assert contrib["delta_sensitivity"] == pytest.approx(0.125)
+    assert contrib["delta_false_positive"] == 2
+    assert "more of the planted defects" in data["experiment_conclusion"]["answer"]
+
+
+def test_a_judge_that_changes_nothing_is_reported_as_cost_without_contribution():
+    data = ablation.report([_arm("1", "ABD", 29, 11, 40, 0),
+                            _arm("2", "C", 12, 28, 40, 0),
+                            _arm("3", "ABCD", 29, 11, 40, 0)], model="m")
+    assert "cost without contribution" in data["experiment_conclusion"]["answer"]
+
+
+def test_an_incomplete_run_is_never_subtracted_from_a_complete_one():
+    data = ablation.report([_arm("1", "ABD", 29, 11, 40, 0),
+                            _arm("2", "C", 12, 28, 40, 0),
+                            _arm("3", "ABCD", 20, 4, 30, 1, outages=25)], model="m")
+    assert data["judge_contribution"]["status"] == ablation.NOT_COMPARABLE
+    assert data["comparable"] is False
+    assert "not determined" in data["experiment_conclusion"]["answer"]
+
+
+def test_the_model_conclusion_is_deferred_rather_than_omitted():
+    data = ablation.report([_arm("1", "ABD", 29, 11, 40, 0),
+                            _arm("2", "C", 12, 28, 40, 0),
+                            _arm("3", "ABCD", 34, 6, 38, 2)], model="llama-8b")
+    assert data["model_conclusion"]["answer"] == "DEFERRED"
+    assert "llama-8b" in data["model_conclusion"]["question"]
+    assert "does not by itself disqualify" in data["model_conclusion"]["why"]
+
+
+def test_the_experiment_set_runs_end_to_end_and_records_a_frozen_configuration(
+        tmp_path, monkeypatch, dev, capsys):
+    """Drives the real runner with oracles, which must be recorded as ceilings."""
+    import benchmark.providers.registry as registry
+    ground, judge_provider, conform = scripted.oracle(dev.cases)
+    by_name = {"g": ground, "j": judge_provider}
+    monkeypatch.setattr(registry, "build_provider", lambda spec: by_name[spec])
+
+    code = eval_tool.main([
+        "--runs-dir", str(tmp_path / "runs"), "--freeze-dir", str(tmp_path),
+        "--out", str(tmp_path / "ablation.json"),
+        "experiments", "--provider", "g", "--judge", "j", "--note", "smoke"])
+    assert code == 0
+
+    recorded = runs.load_all(tmp_path / "runs")
+    assert len(recorded) == 3
+    assert {r.config for r in recorded} == {"v0.2.0[ABD]", "v0.2.0[C]", "v0.2.0[ABCD]"}
+    assert all(r.kind == runs.KIND_CEILING for r in recorded), \
+        "an oracle run must never be filed as a development measurement"
+    assert len({r.freeze for r in recorded}) == 1, \
+        "the three arms must share one frozen configuration"
+    assert runs.real_runs(runs_dir=tmp_path / "runs") == []
+
+    payload = json.loads((tmp_path / "ablation.json").read_text())
+    assert payload["freeze"]["prompt_versions"]["judge"]
+    assert payload["ablation"]["model_conclusion"]["answer"] == "DEFERRED"
+
+
+def test_the_runner_refuses_a_judge_that_is_the_same_model(tmp_path, monkeypatch, dev):
+    import benchmark.providers.registry as registry
+    ground, _, _ = scripted.oracle(dev.cases)
+    monkeypatch.setattr(registry, "build_provider", lambda spec: ground)
+    code = eval_tool.main(["--runs-dir", str(tmp_path / "runs"), "--freeze-dir",
+                           str(tmp_path), "experiments", "--provider", "g",
+                           "--judge", "g"])
+    assert code == 2

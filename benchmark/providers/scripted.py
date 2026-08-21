@@ -23,6 +23,7 @@ class ScriptedProvider(BaseProvider):
     model = "scripted"
     model_version = "v0.4-test"
     model_family = "none"
+    is_model = False
 
     def __init__(self, answers: dict[str, str] | None = None,
                  accuracy: float = 1.0, seed: int = 7,
