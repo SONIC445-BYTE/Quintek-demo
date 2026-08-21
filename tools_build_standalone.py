@@ -46,6 +46,7 @@ Output lands in `frontend/dist/`.
 from __future__ import annotations
 
 import base64
+import json
 import re
 import sys
 from pathlib import Path
@@ -85,6 +86,32 @@ TARGETS = {
 # A list that has to be updated by hand every time a module is added is a list
 # that will be out of date the first time somebody forgets.
 IMPORT_RE = re.compile(r"""import\(\s*['"]\./([A-Za-z0-9._-]+\.js)['"]\s*\)""")
+
+
+def build_id() -> str:
+    """
+    A short, sortable id for this build: UTC minute plus the commit it came
+    from. Derived rather than stored, so it cannot go stale on its own.
+    """
+    import subprocess
+    from datetime import datetime, timezone
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M")
+    try:
+        sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                             capture_output=True, text=True, timeout=5).stdout.strip()
+    except Exception:                                   # noqa: BLE001
+        sha = ""
+    dirty = ""
+    try:
+        changed = subprocess.run(["git", "status", "--porcelain"],
+                                 capture_output=True, text=True, timeout=5).stdout.strip()
+        # Uncommitted work is worth flagging: a stamp that matches the commit
+        # while the working tree has moved on is its own kind of lie.
+        dirty = "+" if changed else ""
+    except Exception:                                   # noqa: BLE001
+        pass
+    return f"{stamp}-{sha}{dirty}" if sha else stamp
 
 
 class MissingModule(SystemExit):
@@ -369,8 +396,16 @@ def build(key: str, *, keep_frame: bool = False) -> Path:
             + ". They would reject at runtime and the app would report itself"
               " unconfigured rather than broken.")
 
+    # A stamp the running app can show.
+    #
+    # "Did the emulator pick up my rebuild?" has cost more time on this project
+    # than any real bug, and the answer was always a guess: the screen looked
+    # the same either way. The stamp turns it into something a person can read
+    # off the device and compare with what the build printed.
     preamble = (
-        _inline_js(react, "react 18.3.1 UMD")
+        _inline_js(f"window.__QUINTEK_BUILD__ = {json.dumps(build_id())};",
+                   "build stamp")
+        + _inline_js(react, "react 18.3.1 UMD")
         + _inline_js(react_dom, "react-dom 18.3.1 UMD")
         + _inline_js(babel, "@babel/standalone 7.29.0")
         + _inline_js(module_block, "quintek API modules")
@@ -405,6 +440,8 @@ def build(key: str, *, keep_frame: bool = False) -> Path:
 
 
 def main() -> None:
+    print(f"build {build_id()}")
+
     args = sys.argv[1:]
     # The design files are previews of a phone sitting on a dark backdrop.
     # Builds strip that chrome by default, because every consumer here -- the

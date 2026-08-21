@@ -2100,6 +2100,24 @@ class Component extends DCLogic {
     return { linkStats: rows, ingestBusy: '', ingestFailed: '', ingestIllustrative: '' };
   }
 
+  buildId = () => (typeof window !== 'undefined' && window.__QUINTEK_BUILD__)
+    || 'not stamped (design file)';
+
+  /* Whether a backend is configured, and which. Reported without the URL's
+   * credentials, and named plainly: "none" is the answer that explains most
+   * of the screens that look empty. */
+  backendLabel = () => {
+    const origin = (typeof window !== 'undefined')
+      && (window.__QUINTEK_STUDENT_API__ || window.__QUINTEK_API__);
+    if (!origin) return 'none configured';
+    try {
+      const url = new URL(origin);
+      return url.host;
+    } catch (e) {
+      return String(origin).slice(0, 40);
+    }
+  };
+
   noopPick = () => {};
 
   goAddSource = () => {
@@ -3421,7 +3439,14 @@ class Component extends DCLogic {
       testNotif: this.sendTest, testLabel: s.tested ? 'Sent' : 'Send test',
       settingsNotebooks: NOTEBOOKS.map((n) => ({ title: n.title, open: this.openNotebook(n.id),
         meta: n.sources + ' sources · ' + n.concepts + ' concepts · ' + n.questions + ' questions' })),
-      accountRows: [{ label: 'Signed in as', value: 'r.menon@nhs.net', fg: '#16191A' },
+      /* Which build is actually running, readable off the device.
+       *
+       * "Did the emulator pick up my rebuild?" was always a guess, because a
+       * stale bundle and a fresh one look identical. `tools_build_standalone.py`
+       * prints this same id, so the two can simply be compared. */
+      accountRows: [{ label: 'Build', value: this.buildId(), fg: '#7c8386' },
+        { label: 'Backend', value: this.backendLabel(), fg: '#7c8386' },
+        { label: 'Signed in as', value: 'r.menon@nhs.net', fg: '#16191A' },
         { label: 'Exam target', value: 'NEET-PG 2027', fg: '#16191A' },
         { label: 'Export my data', value: 'JSON', fg: '#16191A' },
         { label: 'Delete account', value: '', fg: '#BC4C43' }],

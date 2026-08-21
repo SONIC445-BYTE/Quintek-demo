@@ -430,3 +430,50 @@ def test_the_optional_controls_do_not_block_generation(browser) -> None:
     page.get_by_text("Clinical vignette", exact=True).first.click(timeout=8_000)
     page.wait_for_timeout(400)
     page.close()
+
+
+# ------------------------------------------------------------- build stamp
+
+def test_the_running_build_identifies_itself(browser) -> None:
+    """
+    "Did the emulator pick up my rebuild?" has cost more time on this project
+    than any real bug, because a stale bundle and a fresh one look identical.
+    The stamp turns the question into something a person can read off the
+    device and compare with what the build printed.
+    """
+    page = open_app(browser)
+    stamp = page.evaluate("() => window.__QUINTEK_BUILD__")
+    assert stamp, "the bundle carries no build stamp"
+
+    tap(page, "More")
+    page.get_by_text("Settings", exact=True).first.click(timeout=8_000)
+    page.wait_for_timeout(600)
+
+    body = page.inner_text("body")
+    assert stamp in body, "the build stamp is not readable in the app"
+    assert "Backend" in body
+    page.close()
+
+
+def test_the_stamp_names_the_backend_when_there_is_one(browser, backend) -> None:
+    """
+    "none configured" explains most of the screens that look empty, so it is
+    reported next to the build rather than left to be inferred.
+    """
+    page = open_app(browser, backend)
+    tap(page, "More")
+    page.get_by_text("Settings", exact=True).first.click(timeout=8_000)
+    page.wait_for_timeout(600)
+
+    from urllib.parse import urlparse
+    assert urlparse(backend).netloc in page.inner_text("body")
+    page.close()
+
+
+def test_with_no_backend_the_app_says_so_rather_than_looking_broken(browser) -> None:
+    page = open_app(browser)
+    tap(page, "More")
+    page.get_by_text("Settings", exact=True).first.click(timeout=8_000)
+    page.wait_for_timeout(600)
+    assert "none configured" in page.inner_text("body")
+    page.close()
