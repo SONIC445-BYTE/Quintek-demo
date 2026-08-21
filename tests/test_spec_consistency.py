@@ -98,6 +98,34 @@ def test_no_private_use_area_characters():
 # DEFECT CLASS 2 — duplicated thresholds that drift
 # ---------------------------------------------------------------------------
 
+# Words that turn a number into a claim about how many items a track needs.
+# A number without one of these nearby is a number about something else.
+_SAMPLE_SIZE_WORDS = (
+    "min_n", "minimum", "at least", "sample size", "sample of", "per track",
+    "items required", "required items", "n =", "n=", "items have been",
+    "items before", "requires", "threshold of",
+)
+
+# How far from the number the vocabulary has to be. One clause, not one page.
+_WINDOW = 48
+
+
+def restatements(text: str, n: int) -> list[str]:
+    """
+    Every place `text` uses `n` as a sample-size requirement.
+
+    Returns the surrounding text rather than a boolean so a failure names the
+    sentence to fix instead of the file to argue about.
+    """
+    found = []
+    for match in re.finditer(rf"\b{n}\b", text):
+        start = max(0, match.start() - _WINDOW)
+        window = text[start:match.end() + _WINDOW].lower()
+        if any(word in window for word in _SAMPLE_SIZE_WORDS):
+            found.append(text[start:match.end() + _WINDOW].strip())
+    return found
+
+
 def test_registry_is_sole_source_of_thresholds():
     """
     v0.3 REGRESSION.
@@ -112,7 +140,20 @@ def test_registry_is_sole_source_of_thresholds():
     drift again at the next revision.
 
     This test asserts that prose documents do not restate registered min_n
-    values as bare integers.
+    values AS SAMPLE-SIZE CLAIMS.
+
+    It used to assert something blunter -- that the bare integer must not appear
+    at all -- and that fired on `docs/VALIDATOR.md` for the sentence "a 100-case
+    development corpus", where 100 is the size of a different corpus that
+    happens to collide with a registered min_n. Widening the exemption list
+    would have retired the guard one file at a time, and renaming the corpus to
+    avoid the collision would have been changing a fact to satisfy a test. So
+    the match is now scoped: a number counts as a restatement only when it
+    appears near the vocabulary of a sample-size requirement.
+
+    `test_the_threshold_guard_still_catches_a_real_restatement` below is the
+    positive control. Loosening this rule without it would be indistinguishable
+    from deleting the rule.
     """
     reg = _registry()
     registered_n = set()
@@ -140,11 +181,42 @@ def test_registry_is_sole_source_of_thresholds():
             continue
         s = p.read_text(encoding="utf-8")
         for n in registered_n:
-            if re.search(rf"\b{n}\b", s):
-                offenders.append(f"{p.relative_to(ROOT)} restates n={n}")
+            for where in restatements(s, n):
+                offenders.append(f"{p.relative_to(ROOT)} restates n={n}: {where!r}")
     assert not offenders, (
         "thresholds/min_n must live only in the gate registry: " + "; ".join(offenders)
     )
+
+
+def test_the_threshold_guard_still_catches_a_real_restatement():
+    """
+    The positive control for the scoping above.
+
+    Each string here is the v0.3 regression written the way it was actually
+    written. If a future edit to `restatements` lets any of them through, the
+    guard has been retired rather than tightened.
+    """
+    reg = _registry()
+    registered = {int(spec[key]) for spec in reg["tracks"].values()
+                  for key in ("min_n", "min_n_concepts", "min_n_base_items")
+                  if key in spec}
+    n = sorted(registered)[0]
+    for phrasing in (
+        f"The minimum sample size for this track is {n} items.",
+        f"Each track requires n = {n} before a score is reported.",
+        f"min_n: {n}",
+        f"A track is scored once {n} items have been reviewed.",
+        f"Sample size: {n}",
+    ):
+        assert restatements(phrasing, n), f"guard no longer catches {phrasing!r}"
+
+    for innocent in (
+        f"a {n}-case development corpus",
+        f"the ceiling was {n}/{n}",
+        f"specificity {n}%",
+        f"{n} per cent of clean items were passed",
+    ):
+        assert not restatements(innocent, n), f"guard falsely flags {innocent!r}"
 
 
 # ---------------------------------------------------------------------------

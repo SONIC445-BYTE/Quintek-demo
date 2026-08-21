@@ -1,5 +1,25 @@
 # Validator v0.2 — what exists, what it measures, what it has not shown
 
+## State
+
+```
+Implementation          COMPLETE
+Development testing     PASS
+Development evidence    NOT_RUN
+Holdout evaluation      NOT_RUN
+Human validation        NOT_RUN
+Real-model validation   NOT_RUN
+Production readiness    NOT_ESTABLISHED
+```
+
+Generated, not written: `python3 tools_track_d_status.py --text`. Every field is
+computed from the corpora on disk, the holdout ledger and the recorded runs, and
+`validator_production_status` has one code path — `_production_status()` — whose
+input is four preconditions. There is no way to write a better answer into it.
+
+**Track D is built. It is not validated.** Those are different claims and this
+repository is arranged so that the second cannot be made by summarising.
+
 ## The problem this is for
 
 A measured single-model validator (an 8B checkpoint, one prompt, "is this
@@ -111,12 +131,34 @@ Two consequences that are easy to miss and expensive to find late:
    development set's clean arm is 40, which tolerates zero false positives —
    it is not the gate, and this is why.
 
+## Two benchmarks, and this corpus supports one of them
+
+**Synthetic** — can the system detect deliberately planted defects? That is what
+these corpora measure, and the ground truth is sound because the defects were
+constructed rather than judged.
+
+**Human** — does the system agree with qualified reviewers about the quality of
+real questions? That needs reviewers. Nothing here supports it yet, and passing
+the synthetic benchmark would not answer it.
+
+Reporting a synthetic pass as "the validator works" answers a question nobody
+asked. `human_review` in the status report stays `NOT_RUN` until `label_status`
+on the corpus itself says otherwise.
+
 ## What has been measured
 
 **The design's ceiling**, from `tools_validator_eval.py ceiling`. Ground-truth
 oracles stand in for the models, so this says what the design could do if every
-layer were flawless. It is not a result and the runner withholds the gate
-outcome on such a run.
+layer were flawless. It is not a result: the runner withholds the gate outcome
+on such a run, records it as `kind: ceiling`, and `runs.real_runs()` excludes
+it permanently.
+
+**Read the 100/100 carefully.** It means the architecture now carries enough
+information to detect all ten planted defect classes. It does not mean the
+validator detects them. v0.1 reached 60% because four classes were invisible to
+every layer it had — the fix was giving Layer D the generation request, which
+changed what information exists in the pipeline, not how well anything reads
+it.
 
 | layers | sensitivity | specificity | matched pairs |
 |---|---|---|---|
@@ -175,21 +217,55 @@ still ignored.
 ## Running it
 
 ```bash
-python3 tools_validator_eval.py ceiling                    # the design's ceiling, free
-python3 tools_validator_eval.py layers                     # per-layer contribution
-python3 tools_validator_eval.py run --provider X --judge Y  # a real measurement
+python3 tools_track_d_status.py --text                      # the state, derived
+python3 tools_validator_eval.py ceiling                     # the design's ceiling, free
+python3 tools_validator_eval.py layers                      # per-layer, still a ceiling
+python3 tools_validator_eval.py experiments --provider X --judge Y
+python3 tools_validator_eval.py run --provider X --judge Y  # a single real measurement
 python3 tools_validator_review.py sheet --reviewer "Dr A" --out a.jsonl
 python3 tools_validator_review.py merge --a a.jsonl --b b.jsonl
 ```
 
 ## Next, in order
 
-1. Run a real provider pair through `run` on the development set, and read the
-   error analysis rather than the headline rate.
-2. Iterate the prompts against the **development** set only, until the
-   development numbers clear both arms with room to spare.
-3. Score **once** against the holdout, with a note saying what changed. Five
+Two questions are tangled together and must be separated: **can the validator
+work**, and **which model should do the validating**. The first is established
+while minimising dependence on the second.
+
+1. **`experiments`, against the development set.** Three configurations in one
+   command, each recorded:
+
+   | | layers | what it isolates |
+   |---|---|---|
+   | 1 | A+B+D | the validator without the layer whose failure mode is agreeing with itself |
+   | 2 | C | what the free-answer judge contributes alone |
+   | 3 | A+B+C+D | the whole validator |
+
+   Only Layer A is deterministic — B and D are model calls constrained to quote
+   their evidence — so experiment 1 is not "the deterministic layers". The
+   number that matters is row 3 against rows 1 and 2. "Every layer earns its
+   place" was asserted from a ceiling; this is where it is confirmed or
+   withdrawn.
+
+2. **The same fixed development set against both model classes.** The 8B is
+   fast and currently unacceptable; the 70B was better and stalled. Measure
+   sensitivity, specificity, FP, FN, latency, cost and edge calibration for
+   each before promoting either. The development corpus tolerates **zero**
+   false positives against a 90% threshold, so read the error analysis, not the
+   headline rate.
+
+3. **Freeze the configuration.** No prompt edits after this point, and in
+   particular none in response to anything the holdout shows. The locator gap
+   recorded in the holdout ledger is the worked example of the rule.
+
+4. **Score once against the holdout.** With a note saying what changed. Five
    scoring runs exist, ever.
-4. Two clinicians through `tools_validator_review.py`, and report the kappa
-   before quoting any validator number that rests on these labels.
-5. Only then freeze a benchmark corpus and start the 355-model funnel.
+
+5. **Qualified human review**, through `tools_validator_review.py`, and report
+   the kappa before quoting any validator number that rests on these labels.
+   Until this happens the ground truth is model-authored questions with
+   injected defects — sound for the synthetic benchmark, silent about medical
+   judgement.
+
+6. **Only then** freeze a benchmark corpus and start the 355-model funnel.
+   Discovery work can continue in parallel; it is no longer the critical path.

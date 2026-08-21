@@ -16,7 +16,8 @@ import pytest
 
 from benchmark.corpus import QUESTION_TYPES
 from validator import (analysis, conformance, grounding, holdout, judge,
-                       metrics, mutate, pipeline, review, scripted, structural)
+                       metrics, mutate, pipeline, review, runs, scripted,
+                       structural)
 from validator.devset import (ADJUDICATED, AGREED, CLEAN, DEFECTIVE, DISPUTED,
                               DevsetError, EDGE, assert_disjoint, load)
 
@@ -698,3 +699,112 @@ def test_a_perfect_run_on_the_holdout_now_passes_the_gate(tmp_path, hold):
                                     ledger_path=tmp_path / "ledger.jsonl")
     assert matrix.specificity == 1.0 and matrix.sensitivity == 1.0
     assert gate.outcome == metrics.PASS
+
+
+# ------------------------------- the status report, and what it refuses to say
+
+import importlib
+import pathlib
+
+track_d = importlib.import_module("tools_track_d_status")
+
+
+def _run(kind, *, oracle, sensitivity=1.0, specificity=1.0, gate=metrics.PASS):
+    return runs.Run(
+        at="2026-01-01T00:00:00Z", kind=kind, corpus="corpus/validator_dev",
+        corpus_hash="x", validator_version="0.2.0", config="v0.2.0[ABCD]",
+        providers=[runs.ProviderRecord("grounding", "p", "m", "f", oracle),
+                   runs.ProviderRecord("judge", "p", "m2", "f2", oracle)],
+        counts={"false_positive": 0, "false_negative": 0},
+        sensitivity=sensitivity, specificity=specificity, gate=gate)
+
+
+def test_a_ceiling_run_can_never_be_counted_as_a_measurement(tmp_path):
+    runs.record(_run(runs.KIND_CEILING, oracle=True), runs_dir=tmp_path)
+    assert runs.real_runs(runs_dir=tmp_path) == []
+    assert runs.development_metrics(tmp_path)["status"] == runs.NOT_RUN
+
+
+def test_a_run_with_real_providers_is_a_measurement(tmp_path):
+    runs.record(_run(runs.KIND_DEVELOPMENT, oracle=False), runs_dir=tmp_path)
+    result = runs.development_metrics(tmp_path)
+    assert result["status"] == "RUN"
+    assert result["sensitivity"] == 1.0
+
+
+def test_development_metrics_reports_the_latest_run_not_the_best(tmp_path):
+    poor = _run(runs.KIND_DEVELOPMENT, oracle=False, sensitivity=0.4, gate=metrics.FAIL)
+    good = _run(runs.KIND_DEVELOPMENT, oracle=False, sensitivity=0.99)
+    good.at = "2025-01-01T00:00:00Z"      # earlier, and better
+    poor.at = "2026-06-01T00:00:00Z"      # later, and worse
+    runs.record(good, runs_dir=tmp_path)
+    runs.record(poor, runs_dir=tmp_path)
+    assert runs.development_metrics(tmp_path)["sensitivity"] == 0.4
+
+
+def test_production_readiness_is_derived_and_cannot_be_asserted():
+    not_run = {"status": runs.NOT_RUN}
+    verdict = track_d._production_status(not_run, not_run, not_run, not_run)
+    assert verdict["status"] == track_d.NOT_ESTABLISHED
+    assert len(verdict["blocking"]) == 4
+
+    everything = track_d._production_status(
+        {"status": "RUN", "gate": metrics.PASS},
+        {"status": "RUN", "latest": {"outcome": metrics.PASS}},
+        {"status": track_d.COMPLETE},
+        {"status": "RUN"})
+    assert everything["status"] == track_d.ESTABLISHED
+    assert everything["blocking"] == []
+
+
+def test_a_passing_development_run_alone_does_not_establish_readiness():
+    verdict = track_d._production_status(
+        {"status": "RUN", "gate": metrics.PASS},
+        {"status": runs.NOT_RUN},
+        {"status": runs.NOT_RUN},
+        {"status": "RUN"})
+    assert verdict["status"] == track_d.NOT_ESTABLISHED
+    assert any("holdout has never been scored" in r for r in verdict["blocking"])
+    assert any("qualified reviewer" in r for r in verdict["blocking"])
+
+
+def test_the_status_report_separates_the_ceiling_from_the_measurement():
+    report = track_d.build()
+    assert report["design_ceiling"]["is_a_measurement"] is False
+    assert report["design_ceiling"]["sensitivity"] == 1.0
+    assert report["dev_metrics"]["status"] == runs.NOT_RUN
+    assert report["validator_production_status"]["status"] == track_d.NOT_ESTABLISHED
+
+
+def test_the_status_report_reads_human_review_off_the_corpus():
+    report = track_d.build()
+    assert report["human_review"]["status"] == runs.NOT_RUN
+    assert report["human_review"]["items_reviewed"] == 0
+    assert report["human_review"]["items_total"] == 193
+
+
+def test_the_status_report_carries_the_corpus_counts_it_claims():
+    report = track_d.build()
+    assert (report["dev_n"], report["dev_clean"], report["dev_defect"],
+            report["dev_edge"]) == (100, 40, 40, 20)
+    assert (report["holdout_n"], report["holdout_clean"], report["holdout_defect"],
+            report["holdout_edge"]) == (93, 53, 30, 10)
+
+
+def test_the_committed_status_report_has_not_drifted_from_the_repository():
+    """
+    A generated report committed to the repository goes stale silently, which
+    would reintroduce exactly the problem it was built to prevent. Regenerate
+    with `python3 tools_track_d_status.py --out reports/track_d_status.json`.
+    """
+    path = pathlib.Path("reports/track_d_status.json")
+    assert path.exists(), "the committed status report is missing"
+    committed = json.loads(path.read_text(encoding="utf-8"))
+    fresh = track_d.build()
+    for key in ("validator_version", "dev_n", "dev_clean", "dev_defect", "dev_edge",
+                "holdout_n", "holdout_clean", "holdout_defect", "holdout_edge",
+                "implementation", "gate_thresholds"):
+        assert committed[key] == fresh[key], f"{key} has drifted"
+    assert (committed["validator_production_status"]["status"]
+            == fresh["validator_production_status"]["status"])
+    assert committed["design_ceiling"]["is_a_measurement"] is False

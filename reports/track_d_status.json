@@ -1,0 +1,134 @@
+{
+  "track": "D",
+  "generated_at": "2026-08-21T22:35:01Z",
+  "validator_version": "0.2.0",
+  "validator_config": "v0.2.0[ABCD]",
+  "implementation": "COMPLETE",
+  "development_testing": "PASS",
+  "gate_thresholds": {
+    "min_sensitivity": 0.8,
+    "min_specificity": 0.9,
+    "judged_on": "lower bound of the 95% Wilson interval",
+    "arm_size_for_specificity": {
+      "perfect_run": 35,
+      "one_mistake": 53
+    },
+    "arm_size_for_sensitivity": {
+      "perfect_run": 16,
+      "one_mistake": 25
+    }
+  },
+  "dev_n": 100,
+  "dev_clean": 40,
+  "dev_defect": 40,
+  "dev_edge": 20,
+  "holdout_n": 93,
+  "holdout_clean": 53,
+  "holdout_defect": 30,
+  "holdout_edge": 10,
+  "corpora": {
+    "development": {
+      "root": "corpus/validator_dev",
+      "n": 100,
+      "clean": 40,
+      "defect": 40,
+      "edge": 20,
+      "defect_classes": {
+        "ambiguous_stem": 4,
+        "giveaway": 4,
+        "hallucinated_fact": 4,
+        "hallucinated_reference": 4,
+        "out_of_syllabus": 4,
+        "poor_reasoning": 4,
+        "trivial": 4,
+        "two_correct": 4,
+        "ungrounded": 4,
+        "wrong_key": 4
+      },
+      "arm_capacity": {
+        "clean_false_positives_tolerated": 0,
+        "defect_misses_tolerated": 3,
+        "note": "-1 means the arm cannot establish its threshold even with a flawless run, so no result from it can be a PASS"
+      }
+    },
+    "holdout": {
+      "root": "corpus/validator_holdout",
+      "n": 93,
+      "clean": 53,
+      "defect": 30,
+      "edge": 10,
+      "defect_classes": {
+        "ambiguous_stem": 3,
+        "giveaway": 3,
+        "hallucinated_fact": 3,
+        "hallucinated_reference": 3,
+        "out_of_syllabus": 3,
+        "poor_reasoning": 3,
+        "trivial": 3,
+        "two_correct": 3,
+        "ungrounded": 3,
+        "wrong_key": 3
+      },
+      "arm_capacity": {
+        "clean_false_positives_tolerated": 1,
+        "defect_misses_tolerated": 1,
+        "note": "-1 means the arm cannot establish its threshold even with a flawless run, so no result from it can be a PASS"
+      }
+    }
+  },
+  "design_ceiling": {
+    "is_a_measurement": false,
+    "what_it_means": "the fraction of planted defects the architecture carries enough information to detect, if every layer were flawless",
+    "what_it_does_not_mean": "that the validator detects them",
+    "sensitivity": 1.0,
+    "specificity": 1.0,
+    "defect_classes_with_no_check": [],
+    "v0_1_had_no_check_for": [
+      "out_of_syllabus",
+      "poor_reasoning",
+      "giveaway",
+      "trivial"
+    ]
+  },
+  "dev_metrics": {
+    "status": "NOT_RUN",
+    "why": "no development run using real models has been recorded; only ceiling runs against ground-truth oracles exist, and those measure the design rather than a validator"
+  },
+  "holdout_status": {
+    "status": "NOT_RUN",
+    "scoring_runs": 0,
+    "budget": 5,
+    "remaining": 5,
+    "inspections": 1,
+    "inspection_notes": [
+      "Ceiling run against the holdout during Track D construction, before the guard above existed. It showed the design missing 1 of 3 hallucinated_reference items, because the deterministic locator pattern does not include the word 'clause'. The pattern was NOT changed in response: a check widened to catch an item the holdout revealed is a check tuned on the holdout, and the gap is recorded here instead. It should be closed from development evidence or from production, not from this."
+    ],
+    "why": "the holdout ledger contains no scoring entries"
+  },
+  "human_review": {
+    "status": "NOT_RUN",
+    "items_reviewed": 0,
+    "items_total": 193,
+    "reviewers": [],
+    "why": "every item is label_status 'unreviewed'; ground truth here is model-authored questions with programmatically injected defects, which supports a synthetic benchmark and not a claim about agreement with medical judgement"
+  },
+  "real_model_eval": {
+    "status": "NOT_RUN",
+    "real_runs": 0,
+    "ceiling_runs": 1,
+    "why": "every recorded run used ground-truth oracles; an oracle run measures the design and can never be counted here"
+  },
+  "validator_production_status": {
+    "status": "NOT_ESTABLISHED",
+    "blocking": [
+      "no real model has been run through the pipeline",
+      "no development evaluation with real models has been recorded",
+      "the holdout has never been scored",
+      "no qualified reviewer has adjudicated the corpus, so the labels the gate rests on are model-authored"
+    ]
+  },
+  "benchmarks": {
+    "synthetic": "can the system detect deliberately planted defects? The corpora here support this one.",
+    "human": "does the system agree with qualified reviewers about the quality of real questions? Needs reviewers; not supported yet."
+  }
+}

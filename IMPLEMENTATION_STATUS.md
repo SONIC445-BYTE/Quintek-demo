@@ -790,6 +790,39 @@ reports the number that would settle it: 35 clean items for a perfect run, **53 
 single false positive**, 69 for two. The holdout was sized to 53 for that reason. The development
 set's 40 tolerates zero, which is one more reason it is not the gate.
 
+### Track D state, as generated
+
+`python3 tools_track_d_status.py --text` produces this, and every field in it is
+computed from the corpora, the holdout ledger and the recorded runs:
+
+```
+Implementation          COMPLETE
+Development testing     PASS
+Development evidence    NOT_RUN
+Holdout evaluation      NOT_RUN
+Human validation        NOT_RUN
+Real-model validation   NOT_RUN
+Production readiness    NOT_ESTABLISHED
+```
+
+**Track D is built. It is not validated.** The report exists because that
+distinction erodes by summary rather than by decision: `validator_production_status`
+has one code path, its input is four preconditions, and a ceiling run is recorded
+as `kind: ceiling` and excluded from `real_runs()` permanently, so the 100/100
+ceiling has no route by which it could be reported as performance.
+
+**Read that ceiling correctly.** It says the architecture now carries enough
+information to detect all ten planted defect classes. It does not say the
+validator detects them. v0.1's 60% was an information gap, not a competence gap,
+and Layer D closed it by taking the generation request — which changes what
+exists in the pipeline, not how well anything reads it.
+
+**Two benchmarks, one of them supported.** The corpora answer "can the system
+detect deliberately planted defects", where ground truth is sound because the
+defects were constructed. They say nothing about "does the system agree with
+qualified reviewers about real question quality". Both are needed; only the first
+is available.
+
 ### What Track D has NOT established
 
 - **No validator has been scored against the holdout.** Its ledger has zero `score` entries.
@@ -804,10 +837,22 @@ set's 40 tolerates zero, which is one more reason it is not the gate.
 
 ## Next steps
 
-1. Run a real provider pair through `tools_validator_eval.py run` on the **development** set, and
-   read the error analysis rather than the headline rate.
-2. Iterate the prompts against development only, until both arms clear with room to spare.
-3. Score **once** against the holdout, with a note saying what changed. Five runs exist, ever.
+Two questions are tangled and must be separated: **can the validator work**, and **which model
+should do the validating**. Establish the first while minimising dependence on the second.
+
+1. Run `tools_validator_eval.py experiments` on the **development** set. Three configurations,
+   recorded together, because the number that matters is the difference between them: A+B+D (the
+   validator without the layer whose failure mode is agreeing with itself), C alone (the judge's
+   contribution), and A+B+C+D. "Every layer earns its place" was asserted from a ceiling; this is
+   where it is confirmed or withdrawn.
+2. Run the same fixed development set against both model classes — the 8B that is fast and
+   currently unacceptable, and the 70B that was better and stalled — and compare sensitivity,
+   specificity, FP, FN, latency, cost and edge calibration before promoting either. The
+   development corpus tolerates zero false positives against a 90% threshold, so read the error
+   analysis rather than the headline rate.
+3. Freeze the configuration, then score **once** against the holdout with a note saying what
+   changed. No prompt edits after the freeze, and in particular none in response to what the
+   holdout shows — the locator gap already in its ledger is the worked example.
 4. Author a pilot corpus in one subject with two qualified reviewers — enough to compute a real
    kappa. `tools_validator_review.py` computes it and refuses to settle labels while anything is
    disputed.
