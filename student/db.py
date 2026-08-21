@@ -111,6 +111,7 @@ class Database:
         """
         migrations = [
             ("production_deployments", "deactivated_by", "TEXT NOT NULL DEFAULT ''"),
+            ("sources", "byte_size", "INTEGER NOT NULL DEFAULT 0"),
         ]
         for table, column, ddl in migrations:
             existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}

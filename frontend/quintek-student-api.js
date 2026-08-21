@@ -93,6 +93,10 @@ export async function generateQuestions(notebookId, count, opts) {
     family: options.family || '',
     difficulty: options.difficulty || '',
     reasoning_depth: options.reasoningDepth || '',
+    /* Free-text instructions the learner typed. Passed through verbatim; the
+     * generator's grounding rule is applied server-side and cannot be
+     * overridden from here. */
+    constraints: options.constraints || '',
     /* The billing reservation's id, passed through so what this generation
      * spends on inference is filed against the entitlement that authorised
      * it. Blank when nothing reserved -- the server records the spend against
@@ -156,6 +160,10 @@ export async function createDemo(title, question, opts) {
     question_type: options.questionType || '',
     difficulty: options.difficulty || '',
     reasoning_depth: options.reasoningDepth || '',
+    /* Free-text instructions the learner typed. Passed through verbatim; the
+     * generator's grounding rule is applied server-side and cannot be
+     * overridden from here. */
+    constraints: options.constraints || '',
     notes: options.notes || '',
   });
 }
@@ -174,4 +182,77 @@ export async function listDemos() {
  */
 export async function capabilities() {
   return call('GET', '/capabilities');
+}
+
+
+/* Read a File as base64, without the data: prefix.
+ *
+ * FileReader rather than an ArrayBuffer loop: the loop version is faster to
+ * write and blows the call stack on anything past a few megabytes, because
+ * `String.fromCharCode.apply` takes the whole array as arguments.
+ */
+export function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new BackendError(0,
+      'the file could not be read from your device'));
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* Add a source to a notebook, sending the FILE when there is one.
+ *
+ * The picker used to produce a File that went nowhere: `sources` carried a
+ * storage_key, ingestion resolved it under storage_dir, and no endpoint ever
+ * wrote a byte. A PDF could be chosen and never read.
+ */
+export async function addSource(notebookId, kind, opts) {
+  const options = opts || {};
+  const payload = {
+    kind: kind,
+    filename: options.filename || (options.file && options.file.name) || '',
+    mime_type: options.mimeType || (options.file && options.file.type) || '',
+    text: options.text || '',
+    url: options.url || '',
+  };
+  if (options.file) {
+    payload.content_base64 = await fileToBase64(options.file);
+  }
+  return call('POST', '/notebooks/' + notebookId + '/sources', payload);
+}
+
+/* Poll until extraction finishes. Resolves with the final progress payload.
+ *
+ * Ingestion is asynchronous, so a caller that returns as soon as the POST
+ * answers 202 reports success for a source nothing has read yet. `onProgress`
+ * exists so a screen can show what stage it is at instead of a spinner that
+ * says nothing.
+ */
+export async function waitForSource(sourceId, opts) {
+  const options = opts || {};
+  const attempts = options.attempts || 120;
+  const waitMs = options.waitMs || 1000;
+  const sleep = options.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
+
+  for (let i = 0; i < attempts; i += 1) {
+    const progress = await call('GET', '/sources/' + sourceId + '/progress');
+    if (options.onProgress) options.onProgress(progress);
+    const status = (progress && progress.status) || '';
+    if (status === 'extracted') return progress;
+    if (status === 'failed') {
+      throw new BackendError(422, progress.error
+        || 'this source could not be read');
+    }
+    await sleep(waitMs);
+  }
+  /* Timing out is NOT failure: extraction may still be running. Saying so
+   * stops a learner uploading the same chapter a second time. */
+  throw new BackendError(0,
+    'this source is taking longer than expected to read. It is still being '
+    + 'processed; check the notebook shortly rather than uploading it again.');
 }

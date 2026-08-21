@@ -901,6 +901,41 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
               </sc-if>
             </div>
 
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:#8a9093">How hard?</span>
+              <div style="display:flex;gap:6px">
+                <sc-for list="{{ makeDepths }}" as="md" hint-placeholder-count="3">
+                  <button onClick="{{ md.set }}" style="flex:1;padding:9px 8px;min-height:48px;border-radius:5px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12px;font-weight:500;background:{{ md.bg }};border:1.5px solid {{ md.bd }};color:{{ md.fg }}">{{ md.label }}</button>
+                </sc-for>
+              </div>
+              <span style="font-size:11px;line-height:1.5;color:#8a9093;text-wrap:pretty">{{ makeDepthNote }}</span>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <span style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:#8a9093">Framed like</span>
+                <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.06em;padding:3px 7px;border-radius:3px;color:#7c8386;background:#F1EFE9">OPTIONAL</span>
+              </span>
+              <sc-for list="{{ makeDemos }}" as="dm" hint-placeholder-count="3">
+                <button onClick="{{ dm.toggle }}" style="display:flex;align-items:center;gap:11px;width:100%;box-sizing:border-box;padding:12px;min-height:52px;border-radius:6px;cursor:pointer;text-align:left;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;background:{{ dm.bg }};border:1.5px solid {{ dm.bd }}">
+                  <span style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1">
+                    <span style="font-size:12.5px;font-weight:600;color:#16191A">{{ dm.title }}</span>
+                    <span style="font-size:11px;line-height:1.4;color:#7c8386">{{ dm.meta }}</span>
+                  </span>
+                  <span style="flex:none;font-size:11.5px;font-weight:600;color:{{ dm.fg }}">{{ dm.mark }}</span>
+                </button>
+              </sc-for>
+              <sc-if value="{{ makeDemosEmpty }}" hint-placeholder-val="{{ true }}">
+                <span style="padding:11px 12px;background:#FAFAF8;border:1px dashed #CFCCC2;border-radius:6px;font-size:11.5px;line-height:1.55;color:#7c8386;text-wrap:pretty">{{ makeDemosEmpty }}</span>
+              </sc-if>
+              <span style="font-size:11px;line-height:1.5;color:#8a9093;text-wrap:pretty">{{ makeDemoNote }}</span>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:#8a9093">Anything else? <span style="font-weight:400;color:#9aa0a2">(optional)</span></span>
+              <input value="{{ makeConstraints }}" onChange="{{ setMakeConstraints }}" placeholder="e.g. keep the stems short, always give lab values" style="min-height:44px;padding:0 11px;background:#fff;border:1px solid #E0DDD4;border-radius:5px;outline:none;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;color:#16191A" />
+            </div>
+
             <div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:#F5F3EC;border-radius:5px">
               <span style="font-size:11.5px;line-height:1.5;color:#5d6467;text-wrap:pretty">{{ makeGrounding }}</span>
             </div>
@@ -1522,6 +1557,20 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
 
           <sc-if value="{{ isLinkStep }}" hint-placeholder-val="{{ true }}">
             <div style="flex:1;display:flex;flex-direction:column;gap:14px">
+              <sc-if value="{{ ingestBusy }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;align-items:center;gap:9px;padding:14px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
+                  <span style="width:6px;height:6px;border-radius:50%;background:#B5812B;animation:pgpulse 1.1s infinite;flex:none"></span>
+                  <span style="font-size:12.5px;color:#8a5f13">{{ ingestBusy }}</span>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ ingestFailed }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;flex-direction:column;gap:8px;padding:14px;background:#fff;border:1px solid rgba(188,76,67,.3);border-left:2px solid #BC4C43;border-radius:0 6px 6px 0">
+                  <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:#BC4C43">Could not read this source</span>
+                  <span style="font-size:12.5px;line-height:1.6;color:#5d6467;text-wrap:pretty">{{ ingestFailed }}</span>
+                </div>
+              </sc-if>
+
               <div style="display:flex;flex-direction:column;gap:8px">
                 <sc-for list="{{ linkStats }}" as="ls" hint-placeholder-count="3">
                   <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid {{ ls.color }};border-radius:0 6px 6px 0">
@@ -1529,6 +1578,9 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
                     <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:17px;color:#16191A">{{ ls.n }}</span>
                   </div>
                 </sc-for>
+                <sc-if value="{{ ingestIllustrative }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-size:11px;line-height:1.5;color:#9aa0a2;text-wrap:pretty">{{ ingestIllustrative }}</span>
+                </sc-if>
               </div>
 
               <div style="display:flex;flex-direction:column;gap:10px;padding:15px;background:#fff;border:1px solid #E6E4DE;border-radius:8px">
@@ -1884,7 +1936,9 @@ class Component extends DCLogic {
     custom: false, customTime: false,
     srcType: null, srcValue: '', srcFileName: '', families: [], otherFamily: '',
     demoMode: 'upload', demoText: '', demoStamp: 0, demoIds: [], demoSaveError: '',
-    sourceCaps: {},
+    sourceCaps: {}, ingestStage: '', ingestError: '', ingestStats: null,
+    ingestStatus: '', obNotebookId: '',
+    makeDepth: 'pg2', makeDemoIds: [], availableDemos: [], makeConstraints: '',
     makeSrc: null, makeStage: 'idle', makeCount: 10, makeDone: 0,
     studentApi: null, makeLive: null, makeError: '',
     makeOffer: null, makeReservation: null,
@@ -1925,6 +1979,127 @@ class Component extends DCLogic {
    * `go('onboard')` alone keeps `step`, so someone who reached step 2 and
    * came back would land on "Concepts are extracted" with no source behind
    * it -- a screen reporting an extraction that never happened. */
+  /* The generation controls the original design called for, on the screen a
+   * learner actually uses.
+   *
+   * Question Studio was the authoring workspace where source, concepts,
+   * question type, difficulty, reasoning depth and DEMONSTRATIONS were
+   * configured -- but it is behind More, wired to constants, and no learner
+   * goes there to revise. Make Questions had only count and kind, so the two
+   * inputs that make the engine do what it was designed to do, depth and
+   * framing, were unreachable from the normal path.
+   *
+   * Moving them here does not retire demonstrations. It retires the
+   * DESTINATION. */
+  makeControlVals() {
+    const s = this.state;
+    const depth = s.makeDepth || 'pg2';
+    const chosen = s.makeDemoIds || [];
+    const demos = s.availableDemos || [];
+
+    return {
+      makeDepths: [
+        ['pg1', 'Recall', 'One step. States a fact and asks you to place it.'],
+        ['pg2', 'Reasoning', 'Two steps. A finding, then what it implies.'],
+        ['pg3', 'Integrated', 'Three steps, often across two subjects.'],
+      ].map(([key, label, note]) => ({
+        label, note, set: this.setMakeDepth(key),
+        bg: depth === key ? 'rgba(30,122,87,.08)' : '#fff',
+        bd: depth === key ? '#1E7A57' : '#E6E4DE',
+        fg: depth === key ? '#1E7A57' : '#5d6467' })),
+      makeDepthNote: ([
+        ['pg1', 'One step. States a finding and asks you to place it.'],
+        ['pg2', 'Two steps. A finding, then what it implies clinically.'],
+        ['pg3', 'Three steps, often pulling in a second subject.'],
+      ].find((d) => d[0] === depth) || [null, ''])[1],
+
+      makeDemos: demos.map((d) => {
+        const on = chosen.indexOf(d.id) >= 0;
+        return {
+          title: d.title || 'Untitled reference',
+          meta: [d.question_type, d.reasoning_depth].filter(Boolean).join(' \u00b7 ')
+            || (d.question || '').slice(0, 60),
+          toggle: this.toggleMakeDemo(d.id),
+          mark: on ? 'Using' : 'Use',
+          bg: on ? 'rgba(30,122,87,.06)' : '#fff',
+          bd: on ? '#1E7A57' : '#E6E4DE',
+          fg: on ? '#1E7A57' : '#8a9093' };
+      }),
+      /* Said only when there is genuinely nothing to choose, and it names
+       * where references come from -- an empty list with no explanation reads
+       * as a broken screen. */
+      makeDemosEmpty: demos.length === 0
+        ? (this.state.studentApi
+          ? 'No style references saved yet. Add one while bringing in a source, '
+            + 'and it will appear here for every batch afterwards.'
+          : 'Style references load from the backend. This build has none configured.')
+        : '',
+      makeDemoNote: 'A reference supplies the SHAPE only: stem structure, '
+        + 'reasoning depth, how distractors are built. No fact from it is ever '
+        + 'reused, because every question must still be answerable from your source.',
+
+      makeConstraints: s.makeConstraints || '',
+      setMakeConstraints: (e) => this.setState({ makeConstraints: e.target.value }),
+    };
+  }
+
+  setMakeDepth = (key) => () => this.setState({ makeDepth: key });
+
+  toggleMakeDemo = (id) => () => this.setState((st) => {
+    const cur = st.makeDemoIds || [];
+    return { makeDemoIds: cur.indexOf(id) >= 0
+      ? cur.filter((x) => x !== id)
+      : cur.concat([id]) };
+  });
+
+  loadDemos = (api) => {
+    const client = api || this.state.studentApi;
+    if (!client || !client.listDemos) return;
+    client.listDemos()
+      .then((payload) => this.setState({ availableDemos: payload.demos || [] }))
+      /* An empty list is the honest fallback: showing references that may not
+       * exist would let a learner pick one generation could not apply. */
+      .catch(() => this.setState({ availableDemos: [] }));
+  };
+
+  ingestVals() {
+    const s = this.state;
+    const live = !!s.studentApi;
+    const stats = s.ingestStats;
+
+    if (!live) {
+      return {
+        linkStats: [{ label: 'Concepts found', n: 84, color: '#3F6F8C' },
+          { label: 'Links between them', n: 312, color: '#7A5EA8' },
+          { label: 'Crossing subjects', n: 19, color: '#B5812B' }],
+        ingestBusy: '', ingestFailed: '', ingestIllustrative:
+          'Illustrative figures. Connect a backend to read a real source.',
+      };
+    }
+
+    if (s.ingestError) {
+      return { linkStats: [], ingestBusy: '', ingestIllustrative: '',
+        ingestFailed: s.ingestError };
+    }
+
+    if (!stats) {
+      return {
+        linkStats: [], ingestFailed: '', ingestIllustrative: '',
+        ingestBusy: s.ingestStage === 'uploading'
+          ? 'Sending your source\u2026'
+          : 'Reading it' + (s.ingestStatus ? ' (' + s.ingestStatus + ')' : '') + '\u2026',
+      };
+    }
+
+    /* Only counts the server actually returned. `links` and `crossings` are
+     * not in the progress payload, so they are not shown -- inventing them to
+     * keep three tidy rows is how the constants got there in the first
+     * place. */
+    const rows = [{ label: 'Concepts found', n: stats.concepts || 0, color: '#3F6F8C' }];
+    if (stats.pages) rows.push({ label: 'Pages read', n: stats.pages, color: '#7A5EA8' });
+    return { linkStats: rows, ingestBusy: '', ingestFailed: '', ingestIllustrative: '' };
+  }
+
   noopPick = () => {};
 
   goAddSource = () => {
@@ -1967,6 +2142,7 @@ class Component extends DCLogic {
       .then((api) => {
         this.setState({ studentApi: api.configured ? api : null });
         if (!api.configured || !api.capabilities) return null;
+        this.loadDemos(api);
         return api.capabilities()
           .then((caps) => this.setState({ sourceCaps: caps.sources || {} }))
           /* A capability lookup that fails leaves every kind offered. Hiding
@@ -2217,10 +2393,21 @@ class Component extends DCLogic {
     /* The reservation id doubles as the batch id, so what this request spends
      * on inference is filed against the entitlement that authorised it. */
     const reservationId = this.state.makeReservation;
+    const s = this.state;
+    /* Everything the original design fed the generator, from the screen a
+     * learner actually uses. Onboarding references and ones picked here are
+     * merged and de-duplicated -- selecting a reference you had already
+     * attached must not send it twice. */
+    const demoIds = (s.demoIds || []).concat(s.makeDemoIds || [])
+      .filter((id, i, all) => id && all.indexOf(id) === i);
+
     return api.generateQuestions(notebookId, count, {
       batch_id: reservationId,
-      /* The style references the learner attached during onboarding. */
-      demoIds: this.state.demoIds || [],
+      demoIds: demoIds,
+      reasoningDepth: { pg1: 'pg_recall', pg2: 'pg_reasoning', pg3: 'pg_integrated' }[
+        s.makeDepth || 'pg2'],
+      constraints: s.makeConstraints || '',
+      family: (s.makeFams || []).join(', '),
     })
       .then((result) => {
       const produced = result.count || 0;
@@ -2310,8 +2497,48 @@ class Component extends DCLogic {
      * does not wait on it: OPTIONAL means the step never blocks, and a
      * reference that fails to save leaves its id unset so generation simply
      * runs without it rather than pretending it was applied. */
-    if (s.step === 1) this.saveDemo();
+    if (s.step === 1) { this.saveDemo(); this.setState({ step: s.step + 1 }); return; }
+
+    /* Leaving step 1 is where the source is actually sent.
+     *
+     * It used to just increment the step, so step 2 announced "84 concepts
+     * found" over a file nothing had received. The numbers were constants.
+     * With a backend the step now waits for a real extraction and shows what
+     * that extraction actually produced. */
+    if (s.step === 0 && this.state.studentApi) { this.uploadSource(); return; }
     this.setState({ step: s.step + 1 });
+  };
+
+  uploadSource = () => {
+    const api = this.state.studentApi;
+    const s = this.state;
+    const notebookId = s.obNotebookId || s.notebook;
+
+    this.setState({ ingestStage: 'uploading', ingestError: '', ingestStats: null });
+
+    const payload = { filename: s.srcFileName || '', text: s.srcValue || '' };
+    if (this._sourceFile) { payload.file = this._sourceFile; payload.filename = this._sourceFile.name; }
+    if (s.srcType === 'link' || s.srcType === 'video') payload.url = s.srcValue || '';
+
+    api.addSource(notebookId, s.srcType, payload)
+      .then((created) => {
+        this.setState({ ingestStage: 'reading', step: 1 });
+        return api.waitForSource(created.source_id, {
+          onProgress: (p) => this.setState({ ingestStatus: p.status || '' }),
+        });
+      })
+      .then((done) => this.setState({
+        ingestStage: 'done',
+        ingestStats: {
+          concepts: done.concepts_found,
+          pages: done.page_count,
+          chunks: done.chunks,
+        },
+      }))
+      .catch((e) => this.setState({
+        ingestStage: 'error', step: 1,
+        ingestError: (e && e.message ? e.message : String(e)),
+      }));
   };
 
   conceptVals(name, subject) {
@@ -2776,7 +3003,12 @@ class Component extends DCLogic {
     return api.createDemo('Reference question', typed, {})
       .then((demo) => {
         const id = demo && demo.id;
-        if (id) this.setState((st) => ({ demoIds: (st.demoIds || []).concat([id]) }));
+        if (id) {
+          this.setState((st) => ({ demoIds: (st.demoIds || []).concat([id]) }));
+          /* So it is selectable on the very next batch rather than only after
+           * a restart. */
+          this.loadDemos();
+        }
         return id || null;
       })
       .catch((e) => {
@@ -3143,6 +3375,7 @@ class Component extends DCLogic {
             : 'Each one carries its source locator and the concepts it tests.')
         : 'Each one carries its page reference and the concepts it tests. They join the queue for this notebook.',
       resetMake: this.resetMake, startMake: this.startMake,
+      ...this.makeControlVals(),
       isBilling: r === 'billing', isPlans: r === 'plans',
       ...this.billingVals(),
       isToday: r === 'today', isWeak: r === 'weak', isMore: r === 'more',
@@ -3544,9 +3777,13 @@ class Component extends DCLogic {
        * OPTIONAL is a promise: `stepBlocked` never consults any of this. */
       ...this.demoVals(),
 
-      linkStats: [{ label: 'Concepts found', n: 84, color: '#3F6F8C' },
-        { label: 'Links between them', n: 312, color: '#7A5EA8' },
-        { label: 'Crossing subjects', n: 19, color: '#B5812B' }],
+      /* What the extraction ACTUALLY produced.
+       *
+       * These were fixed constants -- 84 concepts, 312 links, 19 crossings --
+       * shown over a file the server had never received. With a backend they
+       * are the server's counts; without one they stay as the design file's
+       * illustration, which is honest for a file opened from disk. */
+      ...this.ingestVals(),
       familyChoices: FAMILIES.map(([label, colour]) => {
         const on = (s.families || []).indexOf(label) >= 0;
         return { label, dot: colour, toggle: this.toggleFamily(label),

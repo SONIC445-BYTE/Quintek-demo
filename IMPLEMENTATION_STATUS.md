@@ -634,6 +634,39 @@ Neither result licenses a claim that Quintek can recognise a bad question.
 probed actually served. A catalogue entry is not an available model, and the funnel in
 `benchmark/candidates.py` exists so that difference is never assumed away again.
 
+## The question-authoring path, as designed
+
+Question Studio was specified as a configurable authoring workspace: source,
+target concepts, cross-notebook concepts, question type, difficulty, reasoning
+depth, demonstrations and constraints in, generated questions out, through
+validation and into the question bank and revision engine. It was never meant
+to be the learner's revision destination.
+
+What was built instead was a Studio screen wired entirely to constants --
+`runStudio` reveals one fixed example and calls nothing -- while the learner's
+own Make Questions screen offered only a count and a question kind. The two
+inputs that make the engine do what it was designed to do, reasoning depth and
+DEMONSTRATIONS, were therefore unreachable from any path a learner walks.
+
+Both now live on Make Questions, alongside free-text constraints, and travel
+into `QuestionGenerator.generate`. Demonstrations were not retired; the
+dedicated destination was. The style-not-facts rule they exist for is enforced
+server-side in `student/generation.py` and stated on the screen where
+references are attached, because a learner uploading a past paper reasonably
+expects its questions back and will not get them.
+
+Two defects found while wiring it:
+
+**Demonstrations were readable across accounts.** `_demos` looked ids up with
+no owner check, and those ids now arrive from the client. One learner could
+read another's reference question by guessing an id, through a channel that
+puts the text straight into a prompt. Scoped to the owner.
+
+**Question Studio printed fabricated provenance** -- specific model and prompt
+versions for a draft no model wrote. In a product whose claim is traceability
+from source to generation to validation, that undermines the architecture
+directly. Both fields now say `none`.
+
 ## The economics, as measured
 
 `tools_compute_budget.py` answers "given ₹X of recognised revenue, how much inference can Quintek

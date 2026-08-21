@@ -67,6 +67,9 @@ CREATE TABLE IF NOT EXISTS sources (
     filename    TEXT NOT NULL DEFAULT '',
     storage_key TEXT NOT NULL DEFAULT '',
     mime_type   TEXT NOT NULL DEFAULT '',
+    -- Bytes actually stored. Zero for a source that carries no file (text,
+    -- link, video), which is why it cannot double as "was anything uploaded".
+    byte_size   INTEGER NOT NULL DEFAULT 0,
     status      TEXT NOT NULL DEFAULT 'uploaded'
                 CHECK (status IN ('uploaded','chunking','processing','extracted','failed')),
     page_count  INTEGER NOT NULL DEFAULT 0,

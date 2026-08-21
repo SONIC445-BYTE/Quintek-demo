@@ -20,6 +20,13 @@ from urllib.parse import parse_qs, urlparse
 
 from .api import StudentAPI
 from .db import Database
+from .uploads import MAX_BYTES as MAX_UPLOAD_BYTES
+from .uploads import MAX_ENCODED_BYTES
+
+# The transport's ceiling, derived from the upload limit rather than picked
+# separately -- two numbers chosen independently drift, and the one that
+# drifts low rejects uploads the API would have accepted.
+MAX_REQUEST_BYTES = MAX_ENCODED_BYTES + 64 * 1024
 
 
 def build_billing(db_path: str | Path | None = None, *, env=None):
@@ -151,6 +158,17 @@ def make_handler(api: StudentAPI, billing=None):
             raw = b""
             if method in {"POST", "PUT"}:
                 length = int(self.headers.get("Content-Length") or 0)
+                # Checked BEFORE reading. The body is read into memory whole,
+                # so a request declaring a four-gigabyte upload is the whole
+                # server -- and file uploads made that reachable from outside.
+                if length > MAX_REQUEST_BYTES:
+                    self._send(413, {
+                        "error": f"request body is {length} bytes; the limit is "
+                                 f"{MAX_REQUEST_BYTES}. A file larger than "
+                                 f"{MAX_UPLOAD_BYTES // (1024 * 1024)} MB has to be "
+                                 "split rather than sent whole.",
+                    })
+                    return
                 raw = self.rfile.read(length) if length else b""
 
             if billing is not None and billing.owns(parsed.path):

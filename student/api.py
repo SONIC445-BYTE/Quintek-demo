@@ -17,6 +17,8 @@ import json
 from typing import Any
 
 from .db import Database, new_id, now_iso
+from .uploads import BINARY_KINDS, UploadError
+from .uploads import store as store_upload
 
 
 class ApiError(Exception):
@@ -399,17 +401,38 @@ class StudentAPI:
 
         text = body.get("text") or ""
         filename = (body.get("filename") or "").strip()
+        content = body.get("content_base64") or ""
         if kind in {"text", "note"} and not text.strip():
             raise ApiError(400, "a text source needs text")
         if kind == "link" and not (body.get("url") or "").strip():
             raise ApiError(400, "a link source needs a url")
+        if kind in BINARY_KINDS and not content and not body.get("storage_key"):
+            # Refuse at the door. Accepting a PDF source with no bytes behind
+            # it creates a row that ingestion can only fail on, several
+            # seconds later, with the real cause two tables away.
+            raise ApiError(
+                400,
+                f"a {kind} source needs the file itself. Send it as "
+                "`content_base64`.")
 
         sid = new_id("src")
+        storage_key = body.get("storage_key", "")
+        size = 0
+        if kind in BINARY_KINDS and content:
+            if self.engine is None:
+                raise ApiError(503, "no ingestion engine is configured, so there "
+                                    "is nowhere to store this file")
+            try:
+                storage_key, size = store_upload(
+                    self.engine.storage_dir, sid, filename, content)
+            except UploadError as exc:
+                raise ApiError(413 if "larger than" in str(exc) else 400, str(exc))
+
         self.db.execute(
             "INSERT INTO sources (id, notebook_id, kind, filename, storage_key,"
-            " mime_type, status, uploaded_at) VALUES (?,?,?,?,?,?,?,?)",
-            (sid, nid, kind, filename or body.get("url", ""), body.get("storage_key", ""),
-             body.get("mime_type", ""), "uploaded", now_iso()),
+            " mime_type, byte_size, status, uploaded_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (sid, nid, kind, filename or body.get("url", ""), storage_key,
+             body.get("mime_type", ""), size, "uploaded", now_iso()),
         )
 
         if self.engine is None:
@@ -421,7 +444,7 @@ class StudentAPI:
             raise ApiError(503, "source stored but no ingestion engine is configured")
 
         self.engine.enqueue_source(sid, raw_text=text, url=body.get("url", ""))
-        return {"source_id": sid, "status": "queued"}
+        return {"source_id": sid, "status": "queued", "bytes_stored": size}
 
     def source_progress(self, uid: str, sid: str) -> dict:
         row = self.db.query_one(
@@ -488,7 +511,11 @@ class StudentAPI:
                     demo_ids=body.get("demo_ids") or [],
                     family=body.get("family", ""), difficulty=body.get("difficulty", ""),
                     reasoning_depth=body.get("reasoning_depth", ""),
-                    constraints=body.get("constraints", ""))
+                    constraints=body.get("constraints", ""),
+                    # Demonstration ids come from the client. Scoping the
+                    # lookup to the caller is what stops one learner reading
+                    # another's reference question through a prompt.
+                    owner_id=uid)
         except GenerationFailed as exc:
             raise ApiError(422, str(exc))
         except Exception as exc:

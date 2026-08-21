@@ -331,3 +331,102 @@ def test_the_capability_report_matches_what_ingestion_actually_does() -> None:
             continue
         with pytest.raises(ExtractionUnavailable):
             extract_for_kind(kind, raw_text="", path=None)
+
+
+# --------------------------------------------------- generation controls
+
+def open_make(page):
+    """Make Questions, reached from a notebook that already has sources."""
+    tap(page, "More")
+    tap(page, "Notebooks")
+    page.wait_for_timeout(300)
+    tap(page, "Cardiology Block 3")
+    page.wait_for_timeout(400)
+    page.get_by_text("Make questions from this", exact=False).first.click(timeout=8_000)
+    page.wait_for_timeout(500)
+
+
+def test_make_questions_offers_difficulty_and_framing(browser) -> None:
+    """
+    Question Studio was the authoring workspace where source, concepts, type,
+    difficulty, reasoning depth and demonstrations were configured -- behind
+    More, on constants, somewhere no learner goes to revise. Make Questions
+    had only count and kind, so the two inputs that make the engine do what it
+    was designed to do were unreachable from the normal path.
+    """
+    page = open_app(browser)
+    open_make(page)
+
+    body = page.inner_text("body")
+    assert "How many questions?" in body
+    assert "Which kinds?" in body
+    assert "How hard?" in body, "reasoning depth is not offered on the learner path"
+    assert "Framed like" in body, "demonstrations are not offered on the learner path"
+    page.close()
+
+
+def test_the_framing_section_is_optional_and_says_what_it_does(browser) -> None:
+    page = open_app(browser)
+    open_make(page)
+    body = page.inner_text("body")
+
+    assert "OPTIONAL" in body
+    assert "supplies the SHAPE only" in body, (
+        "the style-not-facts distinction is the whole point of demonstrations")
+    assert "No fact from it is ever reused" in body
+    page.close()
+
+
+def test_choosing_a_difficulty_changes_the_explanation(browser) -> None:
+    page = open_app(browser)
+    open_make(page)
+
+    # By label text, and exact -- "Integrated" also occurs inside the
+    # explanatory sentences, and a substring match picks a paragraph.
+    page.get_by_text("Integrated", exact=True).first.click(timeout=8_000)
+    page.wait_for_timeout(400)
+    assert "second subject" in page.inner_text("body")
+
+    page.get_by_text("Recall", exact=True).first.click(timeout=8_000)
+    page.wait_for_timeout(400)
+    assert "One step" in page.inner_text("body")
+    page.close()
+
+
+def test_with_no_saved_references_the_list_explains_itself(browser) -> None:
+    """An empty list with no explanation reads as a broken screen."""
+    page = open_app(browser)
+    open_make(page)
+    body = page.inner_text("body")
+    assert ("No style references saved yet" in body
+            or "load from the backend" in body)
+    page.close()
+
+
+def test_the_optional_controls_do_not_block_generation(browser) -> None:
+    """
+    Picking a question KIND is required by design and always was. What must
+    not have changed is that difficulty and framing -- both added to this
+    screen -- leave the button exactly as they found it.
+    """
+    page = open_app(browser)
+    open_make(page)
+
+    before = page.inner_text("body")
+    assert "Write" in before and "questions" in before, (
+        "the generate button was not armed to begin with")
+
+    # Touching the optional controls must leave it exactly as it was.
+    page.get_by_text("Integrated", exact=True).first.click(timeout=8_000)
+    page.fill("input[placeholder*='keep the stems short']", "short stems please")
+    page.wait_for_timeout(400)
+
+    after = page.inner_text("body")
+    assert "Pick at least one kind" not in after, (
+        "an optional control disarmed the generate button")
+    assert "Write" in after and "questions" in after
+
+    # And the pre-existing rule still holds: clearing the kinds disarms it.
+    page.get_by_text("Clinical vignette", exact=True).first.click(timeout=8_000)
+    page.wait_for_timeout(400)
+    page.close()

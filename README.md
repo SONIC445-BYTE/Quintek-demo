@@ -13,7 +13,7 @@ Built and covered by tests:
 
 | Layer | What runs |
 |---|---|
-| `student/` | auth, ingestion, concept extraction, generation, validation, attempts, revision scheduling, notifications, question bank, transparency, HTTP transport |
+| `student/` | auth, file upload, ingestion, concept extraction, generation, validation, attempts, revision scheduling, notifications, question bank, transparency, HTTP transport |
 | `benchmark/` | gate registry, scoring, routing, health, fitness, evaluation scheduling, promotion, corpus, adversarial battery, provider status and candidate funnel |
 | `billing/` | plans, entitlements, append-only usage ledger, atomic reservations, provider cost ledger, subscriptions, webhooks, economics, compute budget, anti-abuse |
 | `frontend/` | learner app, admin console, public pricing page, four API clients |
@@ -29,7 +29,12 @@ Three things remain true and must not be papered over:
 2. **The thresholds are uncalibrated.** Every gate value is an engineering starting point that has
    never been validated against real candidate behaviour. Per the gate registry, a run against
    uncalibrated thresholds cannot yield an official PASS.
-3. **No validator has passed the adversarial battery.** The measured 8B validator caught 11 of 20
+3. **Only some source kinds can be read.** `GET /capabilities` reports which,
+   derived from the same conditions ingestion branches on. Text and PDF work;
+   links need outbound fetching and an HTML-to-text pass, photos need OCR, and
+   video needs a transcript source. The picker marks the rest unavailable with
+   the reason, before the learner commits a file rather than after.
+4. **No validator has passed the adversarial battery.** The measured 8B validator caught 11 of 20
    planted defects and false-flagged 9 of 10 clean items. It is not fit for purpose and is not
    presented as if it were.
 

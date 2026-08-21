@@ -211,10 +211,27 @@ class QuestionGenerator:
                     names.append(n["canonical_name"])
         return names[:limit]
 
-    def _demos(self, demo_ids: list[str]) -> list[dict]:
+    def _demos(self, demo_ids: list[str], owner_id: str = "") -> list[dict]:
+        """
+        Style references, scoped to their OWNER.
+
+        The ids arrive from the client -- the Make Questions screen sends
+        whichever the learner selected -- so an unscoped lookup would let
+        anyone read anyone else's reference question by guessing an id, and
+        read it through a channel that puts the text straight into a prompt.
+        A demonstration is something a learner wrote; it is theirs.
+
+        `owner_id` is optional only so existing internal callers that already
+        resolved ownership keep working. Every path reachable from HTTP
+        passes it.
+        """
         if not demo_ids:
             return []
         marks = ",".join("?" for _ in demo_ids)
+        if owner_id:
+            return [dict(r) for r in self.db.query(
+                f"SELECT * FROM question_demos WHERE id IN ({marks})"
+                f" AND owner_id = ?", tuple(demo_ids) + (owner_id,))]
         return [dict(r) for r in self.db.query(
             f"SELECT * FROM question_demos WHERE id IN ({marks})", tuple(demo_ids))]
 
@@ -266,7 +283,7 @@ class QuestionGenerator:
                  concept_ids: list[str] | None = None, source_id: str | None = None,
                  demo_ids: list[str] | None = None, family: str = "",
                  difficulty: str = "", reasoning_depth: str = "",
-                 constraints: str = "", trace=None) -> list[str]:
+                 constraints: str = "", owner_id: str = "", trace=None) -> list[str]:
         """
         `trace` is a `student.trace.GenerationTrace`, or None for no capture.
 
@@ -312,7 +329,8 @@ class QuestionGenerator:
 
         prompt = self.build_prompt(
             count=count, passages=passages, target_names=targets,
-            related_names=self._related(concept_ids), demos=self._demos(demo_ids),
+            related_names=self._related(concept_ids),
+            demos=self._demos(demo_ids, owner_id),
             family=family, difficulty=difficulty, reasoning_depth=reasoning_depth,
             constraints=constraints)
         trace.prompt(prompt=prompt, task_type="QUESTION_GENERATION",
