@@ -11,9 +11,11 @@ really a proxy for reputation.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
+from benchmark import candidates
 from benchmark.candidates import (BILLING_BLOCKED, MODEL_UNAVAILABLE, ROLE_FILTERS, SERVING,
                                   TIMEOUT, UNVERIFIED, CatalogueEntry, Filter, apply_filter,
                                   apply_probe_results, diversify, from_openrouter,
@@ -205,3 +207,106 @@ def test_cerebras_is_recorded_as_billing_blocked_not_as_a_bad_model():
     assert len(cerebras) == 2
     assert all(e.inference_status == BILLING_BLOCKED for e in cerebras)
     assert all(e.recheckable for e in cerebras)
+
+
+# ---------------------------------------------------------------------------
+# A router is not a model
+# ---------------------------------------------------------------------------
+# `openrouter/free` -- "Free Models Router" -- reached ALL THREE shortlists as
+# though it were a model. It passed every capability filter, and it prices
+# itself at 0/0 rather than the `-1` sentinel, so the guard that catches
+# `openrouter/auto` missed it entirely. A leaderboard containing it compares
+# model against model against a model-selection algorithm.
+
+ROUTER_ENTRY = {
+    "id": "openrouter/free", "name": "Free Models Router",
+    "context_length": 200000,
+    "architecture": {"modality": "text+image->text",
+                     "input_modalities": ["text", "image"],
+                     "output_modalities": ["text"], "tokenizer": "Router"},
+    "pricing": {"prompt": "0", "completion": "0"},
+    "supported_parameters": ["response_format", "tools", "reasoning"],
+}
+
+MODEL_ENTRY = {
+    "id": "inclusionai/ling-2.6-flash", "context_length": 131072,
+    "architecture": {"modality": "text->text", "input_modalities": ["text"],
+                     "output_modalities": ["text"], "tokenizer": "Other"},
+    "pricing": {"prompt": "0.00000001", "completion": "0.00000003"},
+    "supported_parameters": ["response_format", "tools", "reasoning"],
+}
+
+ALIAS_ENTRY = {
+    "id": "~z-ai/glm-latest", "context_length": 1048576,
+    "alias_target": {"name": "Z.ai: GLM 5.3", "slug": "z-ai/glm-5.3"},
+    "architecture": {"modality": "text->text", "input_modalities": ["text"],
+                     "output_modalities": ["text"], "tokenizer": "Router"},
+    "pricing": {"prompt": "0.0000014", "completion": "0.0000044"},
+    "supported_parameters": ["response_format"],
+}
+
+
+def _serving(payload):
+    entry = candidates.from_openrouter(payload)
+    entry.inference_status = candidates.SERVING
+    return entry
+
+
+def test_a_router_is_recognised_from_what_the_catalogue_said() -> None:
+    """Not from its name: a router published under another vendor's namespace
+    would slip a name-based rule."""
+    assert _serving(ROUTER_ENTRY).entry_kind == candidates.ENTRY_ROUTER
+    assert _serving(MODEL_ENTRY).entry_kind == candidates.ENTRY_MODEL
+    assert _serving(ALIAS_ENTRY).entry_kind == candidates.ENTRY_ALIAS
+
+
+def test_the_zero_priced_router_is_the_one_the_price_guard_missed() -> None:
+    entry = _serving(ROUTER_ENTRY)
+    assert entry.price_in_per_m == 0.0, "0/0, not the -1 sentinel"
+    assert entry.entry_kind == candidates.ENTRY_ROUTER
+
+
+@pytest.mark.parametrize("role", sorted(candidates.ROLE_FILTERS))
+def test_a_router_is_refused_by_every_role(role) -> None:
+    failures = candidates.ROLE_FILTERS[role].check(_serving(ROUTER_ENTRY))
+    assert failures, f"{role} admitted a router"
+    assert any("not a single model" in f for f in failures)
+
+
+@pytest.mark.parametrize("role", ["generation", "validation"])
+def test_a_real_model_still_gets_through(role) -> None:
+    """A guard that excluded everything would be worse than the bug."""
+    assert candidates.ROLE_FILTERS[role].check(_serving(MODEL_ENTRY)) == []
+
+
+def test_the_exclusion_can_be_switched_off_deliberately() -> None:
+    """
+    Routers may be worth evaluating one day -- against each OTHER, on their
+    own board. Named requirement rather than a hardcoded skip, so that is a
+    decision someone makes rather than an edit to this class.
+    """
+    router_board = candidates.Filter(name="routers", require_single_model=False,
+                                     require_structured=False)
+    assert router_board.check(_serving(ROUTER_ENTRY)) == []
+
+
+def test_no_shipped_shortlist_contains_a_router() -> None:
+    """The artifact that carried the bug."""
+    path = Path("discovery/shortlists.json")
+    if not path.exists():
+        pytest.skip("no shortlist artifact present")
+    data = json.loads(path.read_text())
+    for role, items in data.items():
+        offenders = [i["model_id"] for i in items
+                     if i.get("entry_kind") == candidates.ENTRY_ROUTER]
+        assert not offenders, f"{role} shortlist still contains {offenders}"
+
+
+def test_a_provider_with_no_kind_metadata_defaults_to_model() -> None:
+    """
+    NVIDIA and Cerebras expose only an id. Defaulting those to ROUTER would
+    empty their shortlists; defaulting to MODEL matches what those catalogues
+    actually contain.
+    """
+    entry = candidates.from_bare("nvidia", {"id": "meta/llama-3.1-8b-instruct"})
+    assert entry.entry_kind == candidates.ENTRY_MODEL

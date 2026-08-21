@@ -634,6 +634,63 @@ Neither result licenses a claim that Quintek can recognise a bad question.
 probed actually served. A catalogue entry is not an available model, and the funnel in
 `benchmark/candidates.py` exists so that difference is never assumed away again.
 
+## Where the model catalogue comes from
+
+`discovery/catalogue_raw.json` was a 1.1 MB copy of OpenRouter's catalogue
+living inside the product repository — the "someone manually copies models,
+six months later it is stale" shape, already instantiated. It moved by six
+entries in the single day between being copied and being checked.
+
+Discovery now lives in a separate repository, `SONIC445-BYTE/Registry-repo`,
+under one rule:
+
+> **The agent records observations. Quintek applies policy.**
+
+The external agent fetches and normalises, keeping the raw response
+byte-for-byte alongside the normalised form, both hashed in a manifest. It
+applies **no eligibility rule whatsoever** — every entry is kept, including
+routers, aliases and things with no price. A test there parses its own source
+for judgement vocabulary and fails the build if any appears.
+
+Two consequences justify the split:
+
+**The negative space survives.** A snapshot holding only what some rule
+accepted could never answer *"what did we pass over in August, and would
+today's rules have taken it?"* Re-filtering an old observation under new rules
+is only possible if the observation was never filtered.
+
+**Policy keeps one implementation.** Eligibility lives in
+`benchmark/candidates.py` and nowhere else. A second copy in the discovery
+repository would drift, and when it did nobody could say which of the two
+dropped a model.
+
+Availability probing is deliberately absent from v0.1. The record shape is
+fixed — keyed on `(model, endpoint, credential_class, time)`, never on the
+model alone — and probing refuses rather than half-working. The same model
+answers PASS at 08:00 and BILLING_BLOCKED at 18:00; this project measured
+exactly that on Cerebras, which authenticated perfectly and returned 402 on
+inference.
+
+## A router was in every shortlist
+
+`openrouter/free` — "Free Models Router" — was in the generation, validation
+AND vision shortlists as though it were a model. It passed every capability
+filter, and it prices itself at **0/0** rather than the `-1` sentinel, so the
+guard that catches `openrouter/auto` missed it completely.
+
+A leaderboard containing it compares model against model against a
+model-selection algorithm, which makes every ranking on it unreadable.
+
+`CatalogueEntry` now carries `entry_kind`, derived from what the catalogue
+itself states — routing products carry `tokenizer: "Router"`, aliases carry
+`alias_target` — and never from the name, since a router published under
+another vendor's namespace would slip a name-based rule. Of 414 entries: 396
+MODEL, 12 ALIAS, 6 ROUTER.
+
+`Filter.require_single_model` defaults True and is a named requirement rather
+than a hardcoded skip, so a future router-versus-router board can switch it
+off deliberately.
+
 ## The question-authoring path, as designed
 
 Question Studio was specified as a configurable authoring workspace: source,

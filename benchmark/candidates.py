@@ -51,6 +51,26 @@ PROVIDER_ERROR = "5xx_PROVIDER"
 TIMEOUT = "TIMEOUT"
 UNKNOWN = "UNKNOWN"
 
+# What an entry IS, as its catalogue described it. A FACT carried in from
+# discovery, not a judgement made here.
+#
+# The distinction is not academic. `openrouter/free` is a Free Models Router:
+# it selects among models rather than being one. It reached all three
+# shortlists because it passed every capability filter and prices itself at
+# 0/0 -- so the `-1` sentinel guard that catches `openrouter/auto` misses it
+# completely. A leaderboard containing it compares model against model against
+# a model-selection algorithm, which makes every ranking on it unreadable.
+ENTRY_MODEL = "MODEL"
+ENTRY_ROUTER = "ROUTER"
+ENTRY_ALIAS = "ALIAS"
+ENTRY_AGGREGATOR = "AGGREGATOR"
+ENTRY_UNKNOWN = "UNKNOWN"
+
+# Kinds that are not a single model and therefore cannot be a candidate in a
+# model benchmark. Routers may be worth evaluating one day -- against each
+# OTHER, on a separate board, with their own baseline. Not on this one.
+NOT_A_SINGLE_MODEL = {ENTRY_ROUTER, ENTRY_AGGREGATOR}
+
 # Statuses that could become SERVING without any change to the model itself.
 # Kept apart from permanent unavailability so a shortlist can be rebuilt when
 # a bill is paid or a rate limit clears.
@@ -88,6 +108,12 @@ class CatalogueEntry:
     inference_reason: str = ""
     observed_at: str = ""
     latency_ms: float | None = None
+    # What the source said this is. Defaults to MODEL because most providers
+    # expose nothing else and their catalogues are models; a provider that
+    # says otherwise -- OpenRouter marks routers with tokenizer "Router" and
+    # aliases with an alias_target -- is carried through unchanged.
+    entry_kind: str = ENTRY_MODEL
+    alias_target: str | None = None
 
     @property
     def key(self) -> str:
@@ -136,6 +162,10 @@ class Filter:
 
     name: str
     require_confirmed_inference: bool = True
+    # A router is not a model. Left as a named requirement rather than a
+    # hardcoded skip so a future router-versus-router board can switch it off
+    # deliberately instead of by editing this class.
+    require_single_model: bool = True
     require_structured: bool = False
     require_reasoning: bool = False
     require_vision: bool = False
@@ -155,6 +185,12 @@ class Filter:
     def check(self, entry: CatalogueEntry) -> list[str]:
         """Every reason this entry fails, or an empty list if it passes."""
         failures = []
+
+        if self.require_single_model and entry.entry_kind in NOT_A_SINGLE_MODEL:
+            failures.append(
+                f"is a {entry.entry_kind.lower()}, not a single model: it selects "
+                "among models, so ranking it beside them compares a model with a "
+                "model-selection algorithm")
 
         if self.require_confirmed_inference and not entry.confirmed:
             failures.append(
@@ -347,8 +383,23 @@ def from_openrouter(model: dict) -> CatalogueEntry:
             return None
         return number * 1_000_000
 
+    # What the entry IS, straight from what OpenRouter said. A routing product
+    # carries tokenizer "Router"; an alias carries alias_target. Neither is
+    # inferred from the name -- `openrouter/free` and `openrouter/auto` share a
+    # prefix with nothing that guarantees kind, and a name-based rule would
+    # miss a router published under any other vendor's namespace.
+    alias = model.get("alias_target") or None
+    if alias:
+        kind = ENTRY_ALIAS
+    elif architecture.get("tokenizer") == "Router":
+        kind = ENTRY_ROUTER
+    else:
+        kind = ENTRY_MODEL
+
     return CatalogueEntry(
         provider="openrouter", model_id=model["id"],
+        entry_kind=kind,
+        alias_target=(alias.get("slug") if isinstance(alias, dict) else alias),
         context_length=model.get("context_length"),
         supports_structured=bool(parameters & {"response_format", "structured_outputs"}),
         supports_tools=bool(parameters & {"tools", "tool_choice"}),
