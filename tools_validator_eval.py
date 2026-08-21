@@ -14,6 +14,11 @@ Run a validator against a labelled set and report what it actually did.
         Run each layer alone and in combination against oracles, so the
         contribution of each is visible instead of inferred. Still a ceiling.
 
+    python3 tools_validator_eval.py forecast
+        What the experiment set will cost, computed exactly, before anything is
+        spent. Layer A is free and deterministic, so the number of items that
+        never reach a model is knowable in advance rather than estimated.
+
     python3 tools_validator_eval.py experiments --candidate <spec> --judge <spec>
         The three measurements that separate "can the validator work" from
         "which model should do it", run in order and recorded:
@@ -55,7 +60,8 @@ import json
 import sys
 from pathlib import Path
 
-from validator import ablation, analysis, freeze as freeze_mod, metrics, pipeline, runs, scripted
+from validator import (ablation, analysis, budget as budget_mod, forecast as forecast_mod,
+                       freeze as freeze_mod, metrics, pipeline, runs, scripted)
 from validator.devset import CLEAN, DEFECTIVE, load
 from validator.conformance import ConformanceUnavailable
 from validator.grounding import GroundingUnavailable
@@ -228,7 +234,7 @@ def run_real(args):
 
 
 def _record(devset, verdicts, outages, config, providers, *, kind, note="", freeze="",
-            runs_dir=None):
+            runs_dir=None, budget=None):
     """Write the run to the record. A ceiling and a measurement are different kinds."""
     from validator.holdout import corpus_hash
     matrix = score(devset.cases, verdicts)
@@ -243,7 +249,8 @@ def _record(devset, verdicts, outages, config, providers, *, kind, note="", free
         sensitivity=matrix.sensitivity, specificity=matrix.specificity,
         gate=("withheld (oracle run)" if kind == runs.KIND_CEILING else gate.outcome),
         outages=len(outages), analysis=analysis.report(devset.cases, verdicts), note=note,
-        freeze=freeze, items_expected=expected, items_decided=decided,
+        freeze=freeze, budget=dict(budget or {}),
+        items_expected=expected, items_decided=decided,
         completeness=(ablation.COMPLETE if not outages and decided >= expected
                       else ablation.INCOMPLETE))
     return runs.record(run, runs_dir=runs_dir or runs.RUNS_DIR)
@@ -302,18 +309,51 @@ def run_experiments(args):
              "judge": (judge_provider, runs.SEAT_JUDGE),
              "conformance": (conform, runs.SEAT_CANDIDATE)}
     provider_records = [runs.describe_provider(role, prov, seat=seat,
-                                               endpoint=args.endpoint)
+                                               endpoint=args.endpoint,
+                                               credential_ref=args.credential_env)
                         for role, (prov, seat) in seats.items()]
+    spends_money = any(p.is_model and not p.is_oracle for p in provider_records)
+
+    plan = forecast_mod.plan(devset, EXPERIMENTS, max_retries=args.max_retries,
+                             max_calls=args.max_calls,
+                             max_judge_calls=args.max_judge_calls)
+    print(forecast_mod.render(plan))
+    print()
+    if plan["verdict"] == forecast_mod.IMPOSSIBLE:
+        print("refusing to start: the budget is below what the measurement needs, so "
+              "every arm would stop early and no delta could be computed.",
+              file=sys.stderr)
+        return 2
+    if spends_money:
+        if args.max_calls is None or args.max_judge_calls is None:
+            print("refusing to start: a run using real models needs both --max-calls and "
+                  "--max-judge-calls. Discovering the cost halfway through is the thing "
+                  "the forecast above exists to prevent.", file=sys.stderr)
+            return 2
+        if not args.confirm_spend:
+            print("refusing to start: this run will send requests to a real model. Read "
+                  "the forecast above, then pass --confirm-spend.", file=sys.stderr)
+            return 2
+
+    spend = budget_mod.Budget(max_calls=args.max_calls,
+                              max_judge_calls=args.max_judge_calls)
+    for prov, seat in ((ground, runs.SEAT_CANDIDATE),
+                       (judge_provider, runs.SEAT_JUDGE)):
+        budget_mod.meter(prov, spend, seat)
 
     current = freeze_mod.build(
         corpus=str(devset.root), corpus_hash=corpus_hash(devset.root),
         models=[freeze_mod.describe_model(role, prov, seat=seat,
                                           endpoint=args.endpoint,
-                                          temperature=args.temperature)
+                                          temperature=args.temperature,
+                                          credential_ref=args.credential_env)
                 for role, (prov, seat) in seats.items()],
         experiments=[{"name": title, "layers": layers, "config": flags}
                      for title, layers, flags in EXPERIMENTS],
         sampling={"temperature": args.temperature},
+        extra={"retry_max_retries": args.max_retries,
+               "budget_max_calls": args.max_calls,
+               "budget_max_judge_calls": args.max_judge_calls},
         note=args.note, created_at=runs.now())
     freeze_path = freeze_mod.path_for(str(devset.root),
                                       args.freeze_dir or freeze_mod.FREEZE_DIR)
@@ -347,7 +387,8 @@ def run_experiments(args):
         _record(devset, verdicts, outages, config, provider_records,
                 kind=(runs.KIND_CEILING if used_fake else runs.KIND_DEVELOPMENT),
                 note=f"{title}; {args.note}".strip("; "),
-                freeze=in_force.digest(), runs_dir=args.runs_dir or runs.RUNS_DIR)
+                freeze=in_force.digest(), runs_dir=args.runs_dir or runs.RUNS_DIR,
+                budget=spend.as_dict())
         arms.append(ablation.Arm(
             name=title, layers=layers, matrix=matrix, outages=len(outages),
             items_expected=len(devset.arms), items_decided=matrix.total,
@@ -396,6 +437,33 @@ def parse_seat(spec: str, *, endpoint: str = "") -> dict:
     return out
 
 
+def _budget_args(sub_parser):
+    sub_parser.add_argument("--max-calls", type=int, default=None,
+                            help="hard ceiling on OUTBOUND ATTEMPTS, the unit the meter "
+                                 "counts; retries are included")
+    sub_parser.add_argument("--max-judge-calls", type=int, default=None,
+                            help="hard ceiling on outbound attempts in the judge seat")
+    sub_parser.add_argument("--credential-env", default="",
+                            help="name of the environment variable holding the key. "
+                                 "Recorded as credential_ref; the value never is")
+    sub_parser.add_argument("--confirm-spend", action="store_true",
+                            help="required before a run using real models makes any "
+                                 "request")
+
+
+def run_forecast(args):
+    devset = load(args.corpus)
+    data = forecast_mod.plan(devset, EXPERIMENTS, max_retries=args.max_retries,
+                             max_calls=args.max_calls,
+                             max_judge_calls=args.max_judge_calls)
+    print(forecast_mod.render(data))
+    if args.out:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.out).write_text(json.dumps(data, indent=2), encoding="utf-8")
+        print(f"\nwritten to {args.out}")
+    return 0
+
+
 def _seats(sub_parser):
     """The two experimental roles, plus the endpoint. Never --provider."""
     sub_parser.add_argument("--candidate", required=True,
@@ -440,8 +508,15 @@ def main(argv=None):
     _seats(real)
     real.add_argument("--note", default="")
 
+    forecast_cmd = sub.add_parser("forecast")
+    forecast_cmd.add_argument("--max-calls", type=int, default=None)
+    forecast_cmd.add_argument("--max-judge-calls", type=int, default=None)
+    forecast_cmd.add_argument("--max-retries", type=int, default=2)
+
     experiments = sub.add_parser("experiments")
     _seats(experiments)
+    _budget_args(experiments)
+    experiments.add_argument("--max-retries", type=int, default=2)
     experiments.add_argument("--note", default="")
     experiments.add_argument("--temperature", type=float, default=0.0)
     experiments.add_argument("--refreeze", action="store_true",
@@ -451,7 +526,8 @@ def main(argv=None):
     if _reject_provider(args):
         return 2
     return {"ceiling": run_ceiling, "layers": run_layers, "run": run_real,
-            "experiments": run_experiments}[args.mode](args)
+            "experiments": run_experiments,
+            "forecast": run_forecast}[args.mode](args)
 
 
 if __name__ == "__main__":

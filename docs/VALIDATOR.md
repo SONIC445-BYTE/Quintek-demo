@@ -263,6 +263,72 @@ Not pinned: the clock and the note. **A credential has no field to live in** —
 `freeze.build` refuses a configuration containing one, because a manifest is a
 committed artifact.
 
+## What the run will cost, before it costs it
+
+Layer A is deterministic and free, so the number of items that never reach a
+model is knowable in advance by running it. Everything after that is a fixed
+number of requests per item. `tools_validator_eval.py forecast` therefore
+computes the cost exactly rather than estimating it:
+
+```
+items 100; 5 stopped by Layer A before any model call; 95 reach B/C/D
+
+experiment      candidate   judge
+1  A+B+D              285       0
+2  C                    0     100
+3  ABCD               285      95
+TOTAL PLANNED         570     195      (765 logical calls)
+```
+
+**Experiment 1 spends nothing in the judge seat.** A judge failure cannot cost
+it, which is why it runs first.
+
+**Planned is not spendable.** The frozen configuration includes a retry policy,
+so a logical call that succeeds on its third attempt sends three requests. At
+`max_retries=2` the 765 planned calls are up to **2295 outbound attempts**, 585
+of them in the judge seat. `--max-calls` and `--max-judge-calls` are expressed
+in outbound attempts — the same unit the meter counts — because a budget
+compared against the planned figure looks comfortable and is not.
+
+The forecast prints three verdicts:
+
+| | |
+|---|---|
+| `WITHIN BUDGET` | even the worst case fits |
+| `WILL EXCEED` | the measurement fits, the worst case does not. The run may stop early; a stopped arm is `INCOMPLETE`, not a lower score |
+| `BUDGET TOO SMALL FOR THE MEASUREMENT` | the plan alone exceeds the budget, so no arm could complete. The runner refuses to start |
+
+A run using real models refuses to start without **both** budgets and
+`--confirm-spend`. Discovering the cost halfway through is what the forecast
+exists to prevent.
+
+## The budget is counted where the money leaves
+
+`BaseProvider.generate` retries around `self._call`, and `_call` is where the
+HTTP request is made. A budget placed around `generate` would count one logical
+question and permit three requests. The meter therefore sits at `_call` for any
+provider that implements it, so retries are counted, and the run record says
+which boundary was used (`outbound_attempt`, or `logical_call` for the test
+doubles that override `generate`) rather than asserting it was the right one.
+
+Exhaustion introduces **no new outcome**. `spend` raises, the provider's retry
+loop records an error, the layer raises its `Unavailable`, the runner counts an
+outage, and the arm is `INCOMPLETE` with no delta. A deliberately stopped
+experiment is still an incomplete experiment. Exhaustion also does not consume
+budget: once over the ceiling `spend` raises without incrementing, so the spent
+figure in the record is the number of requests that actually went out.
+
+## The credential is a name, not a value
+
+`credential_ref` records the *environment variable name* — `NVIDIA_API_KEY` —
+in both the run record and the freeze manifest. Enough to reproduce the run,
+useless to anyone who takes the file.
+
+Two layers of protection, because the schema will grow. The manifest refuses
+any field named like a credential, and it also refuses any *value* shaped like
+one — `nvapi-`, `sk-`, `Bearer …`, AWS keys, JWTs — so a credential arriving in
+a field nobody thought to forbid is still caught.
+
 ## Complete and incomplete runs are not comparable
 
 A run with outages, or one that did not reach every item, is recorded
@@ -300,10 +366,13 @@ omitted conclusion is one the reader supplies.
 python3 tools_track_d_status.py --text                      # the state, derived
 python3 tools_validator_eval.py ceiling                     # the design's ceiling, free
 python3 tools_validator_eval.py layers                      # per-layer, still a ceiling
+python3 tools_validator_eval.py forecast --max-calls 2400 --max-judge-calls 600
 python3 tools_validator_eval.py experiments \
   --candidate 'nvidia:meta/llama-3.1-8b-instruct' \
   --judge     'nvidia:meta/llama-3.1-70b-instruct' \
   --endpoint  https://integrate.api.nvidia.com/v1 \
+  --credential-env NVIDIA_API_KEY \
+  --max-calls 2400 --max-judge-calls 600 --confirm-spend \
   --note "first development experiment set"
 python3 tools_validator_eval.py run --candidate ... --judge ...   # one measurement
 python3 tools_validator_review.py sheet --reviewer "Dr A" --out a.jsonl

@@ -968,3 +968,208 @@ def test_a_run_record_distinguishes_the_seat_from_the_layer():
     assert [r.as_dict()["role"] for r in records] == ["grounding", "judge", "conformance"]
     with pytest.raises(ValueError):
         runs.describe_provider("grounding", object(), seat="whatever")
+
+
+# --------------------------------------- the forecast and the hard call budget
+
+from validator import budget as budget_mod, forecast as forecast_mod  # noqa: E402
+from benchmark.providers.base import (BaseProvider,  # noqa: E402
+                                      GenerationRequest)
+
+
+def test_the_forecast_is_exact_because_layer_a_is_free(dev):
+    plan = forecast_mod.plan(dev, eval_tool.EXPERIMENTS, max_retries=2)
+    assert plan["items"] == 100
+    # Five items carry a fatal structural finding, so they never reach a model.
+    assert plan["stopped_by_layer_a"] == 5
+    assert plan["reach_model_layers"] == 95
+    assert plan["planned"]["total"] == 765
+    assert plan["planned"]["judge"] == 195
+    assert plan["planned"]["candidate"] == 570
+
+
+def test_experiment_one_spends_nothing_in_the_judge_seat(dev):
+    plan = forecast_mod.plan(dev, eval_tool.EXPERIMENTS, max_retries=2)
+    first = plan["experiments"][0]
+    assert first["layers"] == "ABD"
+    assert first["judge"] == 0, "a judge failure must not be able to cost experiment 1"
+
+
+def test_the_judge_alone_is_not_gated_by_layer_a(dev):
+    """Experiment 2 has no structural layer, so every item reaches the judge."""
+    plan = forecast_mod.plan(dev, eval_tool.EXPERIMENTS, max_retries=2)
+    assert plan["experiments"][1]["judge"] == 100
+
+
+def test_planned_and_spendable_differ_by_the_frozen_retry_policy(dev):
+    plan = forecast_mod.plan(dev, eval_tool.EXPERIMENTS, max_retries=2)
+    assert plan["retry"]["attempts_per_logical_call"] == 3
+    assert plan["max_spendable"]["total"] == 765 * 3
+    assert plan["max_spendable"]["judge"] == 195 * 3
+
+
+def test_a_budget_that_covers_the_plan_but_not_the_worst_case_warns(dev):
+    plan = forecast_mod.plan(dev, eval_tool.EXPERIMENTS, max_retries=2,
+                             max_calls=800, max_judge_calls=200)
+    assert plan["verdict"] == forecast_mod.WILL_EXCEED
+    assert plan["impossible"] == []
+    assert "may stop early" in forecast_mod.render(plan)
+
+
+def test_a_budget_below_the_measurement_is_impossible_not_merely_tight(dev):
+    plan = forecast_mod.plan(dev, eval_tool.EXPERIMENTS, max_retries=0, max_calls=100)
+    assert plan["verdict"] == forecast_mod.IMPOSSIBLE
+    assert any("cannot complete even with no retries" in r for r in plan["impossible"])
+
+
+def test_no_budget_is_reported_as_a_decision_not_a_default(dev):
+    plan = forecast_mod.plan(dev, eval_tool.EXPERIMENTS)
+    assert plan["verdict"] == forecast_mod.NO_BUDGET
+    assert "Nothing will stop this run early" in forecast_mod.render(plan)
+
+
+class _Retrying(BaseProvider):
+    """
+    A provider whose outbound attempt always fails, so the retry loop runs.
+
+    Subclasses BaseProvider rather than ReplayProvider on purpose: ReplayProvider
+    overrides generate() and therefore never reaches _call, which is the boundary
+    under test here.
+    """
+    name = "retrying-test-double"
+    model = "retrying"
+    model_family = "none"
+    is_model = True
+
+    def _call(self, request, timeout_seconds):
+        raise RuntimeError("transport failure")
+
+
+def test_the_budget_counts_retries_not_logical_calls():
+    """
+    The whole point of metering at the outbound boundary. One logical call with
+    max_retries=2 sends three requests, and all three are counted.
+    """
+    provider = _Retrying()
+    spend = budget_mod.Budget(max_calls=10)
+    _, boundary = budget_mod.meter(provider, spend, budget_mod.SEAT_CANDIDATE)
+    assert boundary == budget_mod.BOUNDARY_OUTBOUND
+    response = provider.generate(GenerationRequest(item_id="i", prompt="p"))
+    assert response.attempts == 3
+    assert spend.total == 3, "a budget around generate() would have counted 1"
+
+
+def test_exhaustion_does_not_itself_consume_budget():
+    spend = budget_mod.Budget(max_calls=2)
+    for _ in range(2):
+        spend.spend(budget_mod.SEAT_CANDIDATE)
+    for _ in range(5):
+        with pytest.raises(budget_mod.BudgetExhausted):
+            spend.spend(budget_mod.SEAT_CANDIDATE)
+    assert spend.total == 2
+
+
+def test_the_judge_ceiling_is_separate_from_the_total():
+    spend = budget_mod.Budget(max_calls=100, max_judge_calls=1)
+    spend.spend(budget_mod.SEAT_JUDGE)
+    with pytest.raises(budget_mod.BudgetExhausted, match="judge call budget"):
+        spend.spend(budget_mod.SEAT_JUDGE)
+    spend.spend(budget_mod.SEAT_CANDIDATE)          # the candidate is unaffected
+    assert spend.spent[budget_mod.SEAT_CANDIDATE] == 1
+
+
+def test_metering_a_provider_twice_does_not_double_count():
+    """The candidate occupies two layers with one object."""
+    provider = scripted.ReplayProvider(default={"ok": True})
+    spend = budget_mod.Budget()
+    budget_mod.meter(provider, spend, budget_mod.SEAT_CANDIDATE)
+    budget_mod.meter(provider, spend, budget_mod.SEAT_CANDIDATE)
+    provider.generate(GenerationRequest(item_id="i", prompt="p"))
+    assert spend.total == 1
+
+
+def test_budget_exhaustion_lands_in_the_existing_incomplete_path():
+    """
+    No new outcome. The layer raises Unavailable, which the runner counts as an
+    outage, which makes the arm INCOMPLETE, which produces no delta.
+    """
+    provider = scripted.ReplayProvider(default={"passage_addresses_question": True,
+                                                "supported": ["A"], "evidence": {}})
+    spend = budget_mod.Budget(max_calls=0)
+    budget_mod.meter(provider, spend, budget_mod.SEAT_CANDIDATE)
+    with pytest.raises(grounding.GroundingUnavailable, match="backend failed"):
+        grounding.check(item(), provider)
+
+
+def test_exhaustion_reaches_the_caller_the_same_way_at_both_boundaries():
+    """
+    A caller must not need two code paths for one event. At the outbound
+    boundary the provider's retry loop turns the exception into a failed
+    response; at the logical boundary the meter does it.
+    """
+    for provider in (_Retrying(), scripted.ReplayProvider(default={"ok": True})):
+        spend = budget_mod.Budget(max_calls=0)
+        budget_mod.meter(provider, spend, budget_mod.SEAT_CANDIDATE)
+        response = provider.generate(GenerationRequest(item_id="i", prompt="p"))
+        assert response.ok is False
+        assert "BudgetExhausted" in (response.error or "")
+
+
+def test_a_run_using_real_models_refuses_without_budgets_and_confirmation(
+        tmp_path, monkeypatch, dev, capsys):
+    import benchmark.providers.registry as registry
+
+    class _Real(scripted.ReplayProvider):
+        is_model = True
+        is_oracle = False
+
+    ground, judge_provider, _ = scripted.oracle(dev.cases)
+    real_ground = _Real(dict(ground.replies), model="candidate-x")
+    real_judge = _Real(dict(judge_provider.replies), model="judge-y")
+    by_name = {"g": real_ground, "j": real_judge}
+    monkeypatch.setattr(registry, "build_provider", lambda spec: by_name[spec["provider"]])
+
+    base = ["--runs-dir", str(tmp_path / "runs"), "--freeze-dir", str(tmp_path),
+            "experiments", "--candidate", "g", "--judge", "j", "--note", "n"]
+    assert eval_tool.main(base) == 2
+    assert "needs both --max-calls" in capsys.readouterr().err
+
+    assert eval_tool.main(base + ["--max-calls", "3000", "--max-judge-calls", "600"]) == 2
+    assert "pass --confirm-spend" in capsys.readouterr().err
+
+
+def test_a_budget_below_the_measurement_refuses_before_any_request(
+        tmp_path, monkeypatch, dev, capsys):
+    import benchmark.providers.registry as registry
+    ground, judge_provider, _ = scripted.oracle(dev.cases)
+    by_name = {"g": ground, "j": judge_provider}
+    monkeypatch.setattr(registry, "build_provider", lambda spec: by_name[spec["provider"]])
+    code = eval_tool.main(["--runs-dir", str(tmp_path / "runs"), "--freeze-dir",
+                           str(tmp_path), "experiments", "--candidate", "g",
+                           "--judge", "j", "--note", "n", "--max-calls", "10"])
+    assert code == 2
+    assert "below what the measurement needs" in capsys.readouterr().err
+    assert not (tmp_path / "runs").exists(), "nothing may be recorded before a refusal"
+
+
+def test_the_manifest_records_the_credential_name_and_never_a_value():
+    entry = freeze_mod.describe_model("judge", object(), seat="judge",
+                                      endpoint="https://integrate.api.nvidia.com/v1",
+                                      credential_ref="NVIDIA_API_KEY")
+    assert entry["credential_ref"] == "NVIDIA_API_KEY"
+    assert "nvapi-" not in json.dumps(entry)
+
+
+@pytest.mark.parametrize("value", [
+    "nvapi-ABCDEFGHIJKLMNOPQRSTUVWX",
+    "sk-ABCDEFGHIJKLMNOPQRSTUVWX",
+    "Bearer ABCDEFGHIJKLMNOPQRSTUVWX",
+    "AKIAIOSFODNN7EXAMPLE",
+])
+def test_a_credential_shaped_value_is_refused_whatever_field_it_arrives_in(value):
+    """
+    Defence in depth: the forbidden-key list is closed today and the schema will
+    grow. This catches a credential in a field nobody thought to forbid.
+    """
+    with pytest.raises(freeze_mod.FreezeViolation, match="shaped like a credential"):
+        _freeze(models=[{"role": "judge", "some_new_field": value}])

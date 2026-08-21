@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -47,6 +48,18 @@ FREEZE_NAME = "freeze.json"
 # Keys that must never appear in a manifest, whatever a caller passes.
 FORBIDDEN_KEYS = ("api_key", "apikey", "key", "token", "secret", "password",
                   "authorization", "auth")
+
+# Defence in depth on the values, not just the field names. The key set above
+# is closed today and the schema will grow; a credential arriving in a field
+# nobody thought to forbid is the failure this catches. Matching shapes, not a
+# list of known keys, because the point is to catch one we have not seen.
+CREDENTIAL_SHAPES = re.compile(
+    r"(nvapi-[A-Za-z0-9_\-]{16,}"
+    r"|sk-[A-Za-z0-9_\-]{16,}"
+    r"|rzp_(?:live|test)_[A-Za-z0-9]{10,}"
+    r"|AKIA[0-9A-Z]{16}"
+    r"|Bearer\s+[A-Za-z0-9._\-]{16,}"
+    r"|ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})")
 
 
 class FreezeViolation(RuntimeError):
@@ -98,6 +111,15 @@ class Freeze:
 
 def _scrub(value):
     """Refuse a manifest that would carry a credential into a committed file."""
+    if isinstance(value, str):
+        match = CREDENTIAL_SHAPES.search(value)
+        if match:
+            raise FreezeViolation(
+                f"refusing to freeze a configuration containing a value shaped like a "
+                f"credential ({match.group(0)[:8]}...). Record the environment variable "
+                "NAME as credential_ref instead; the value belongs in the environment and "
+                "nowhere in a committed artifact.")
+        return value
     if isinstance(value, dict):
         for key in value:
             if str(key).strip().lower() in FORBIDDEN_KEYS:
@@ -112,7 +134,8 @@ def _scrub(value):
 
 
 def describe_model(role: str, provider, *, seat: str = "candidate",
-                   endpoint: str = "", temperature: float = 0.0) -> dict:
+                   endpoint: str = "", temperature: float = 0.0,
+                   credential_ref: str = "") -> dict:
     """
     One model in the manifest, identified by its seat as well as its layer.
 
@@ -124,6 +147,10 @@ def describe_model(role: str, provider, *, seat: str = "candidate",
     return _scrub({
         "seat": seat,
         "role": role,
+        # The NAME of the environment variable the key is read from, never the
+        # key. Enough to reproduce the run; useless to anybody who steals the
+        # manifest.
+        "credential_ref": credential_ref,
         "provider": str(getattr(provider, "name", "unknown")),
         "model": str(getattr(provider, "model", "unknown")),
         "model_version": str(getattr(provider, "model_version", "") or ""),

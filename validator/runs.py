@@ -64,12 +64,13 @@ class ProviderRecord:
     is_model: bool = True
     seat: str = SEAT_CANDIDATE      # the experimental role
     endpoint: str = ""
+    credential_ref: str = ""        # the env var NAME, never the value
 
     def as_dict(self) -> dict:
         return {"seat": self.seat, "role": self.role, "provider": self.provider,
                 "model": self.model, "model_family": self.model_family,
-                "endpoint": self.endpoint, "is_oracle": self.is_oracle,
-                "is_model": self.is_model}
+                "endpoint": self.endpoint, "credential_ref": self.credential_ref,
+                "is_oracle": self.is_oracle, "is_model": self.is_model}
 
 
 @dataclass
@@ -89,6 +90,7 @@ class Run:
     analysis: dict = field(default_factory=dict)
     note: str = ""
     freeze: str = ""
+    budget: dict = field(default_factory=dict)
     completeness: str = ""
     items_expected: int = 0
     items_decided: int = 0
@@ -125,17 +127,18 @@ class Run:
                 "counts": self.counts, "sensitivity": self.sensitivity,
                 "specificity": self.specificity, "gate": self.gate,
                 "outages": self.outages, "analysis": self.analysis, "note": self.note,
-                "freeze": self.freeze, "completeness": self.completeness,
+                "freeze": self.freeze, "budget": self.budget,
+                "completeness": self.completeness,
                 "items_expected": self.items_expected,
                 "items_decided": self.items_decided}
 
 
 def describe_provider(role: str, provider, *, seat: str = SEAT_CANDIDATE,
-                      endpoint: str = "") -> ProviderRecord:
+                      endpoint: str = "", credential_ref: str = "") -> ProviderRecord:
     if seat not in SEATS:
         raise ValueError(f"{seat!r} is not one of {', '.join(SEATS)}")
     return ProviderRecord(
-        seat=seat, endpoint=endpoint,
+        seat=seat, endpoint=endpoint, credential_ref=credential_ref,
         role=role, provider=str(getattr(provider, "name", "unknown")),
         model=str(getattr(provider, "model", "unknown")),
         model_family=str(getattr(provider, "model_family", "") or ""),
@@ -175,6 +178,7 @@ def load_all(runs_dir: str | Path = RUNS_DIR) -> list[Run]:
             specificity=raw.get("specificity"), gate=raw.get("gate", ""),
             outages=int(raw.get("outages") or 0), analysis=raw.get("analysis") or {},
             note=raw.get("note", ""), freeze=raw.get("freeze", ""),
+            budget=raw.get("budget") or {},
             completeness=raw.get("completeness", ""),
             items_expected=int(raw.get("items_expected") or 0),
             items_decided=int(raw.get("items_decided") or 0), path=str(path)))
