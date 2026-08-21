@@ -310,3 +310,111 @@ def test_a_provider_with_no_kind_metadata_defaults_to_model() -> None:
     """
     entry = candidates.from_bare("nvidia", {"id": "meta/llama-3.1-8b-instruct"})
     assert entry.entry_kind == candidates.ENTRY_MODEL
+
+
+# ---------------------------------------------------------------------------
+# Consuming a discovery snapshot
+# ---------------------------------------------------------------------------
+# The external agent records what a catalogue contained and judges nothing.
+# Quintek reads that and applies ROLE_FILTERS. These tests pin the seam: the
+# loader must not acquire an opinion, and the filters must still have one.
+
+SNAPSHOT = {
+    "schema_version": "catalogue_entry/0.1.0",
+    "normalizer_version": "0.1.0",
+    "observed_at": "2026-08-21T17:28:43Z",
+    "entries": [
+        {"model_id": "a/model", "entry_kind": "MODEL", "context_length": 131072,
+         "input_modalities": ["text"], "output_modalities": ["text"],
+         "supported_parameters": ["response_format", "reasoning", "tools"],
+         "price_in_per_m_usd": 0.01, "price_out_per_m_usd": 0.03,
+         "source": "openrouter", "observed_at": "2026-08-21T17:28:43Z"},
+        {"model_id": "openrouter/free", "entry_kind": "ROUTER",
+         "context_length": 200000, "input_modalities": ["text", "image"],
+         "output_modalities": ["text"],
+         "supported_parameters": ["response_format", "reasoning"],
+         "price_in_per_m_usd": 0.0, "price_out_per_m_usd": 0.0,
+         "source": "openrouter"},
+        {"model_id": "~v/latest", "entry_kind": "ALIAS", "alias_target": "v/1.0",
+         "context_length": 8192, "input_modalities": ["text"],
+         "output_modalities": ["text"], "supported_parameters": [],
+         "source": "openrouter"},
+    ],
+}
+
+
+def _snapshot_file(tmp_path, payload=None):
+    path = tmp_path / "openrouter.normalized.json"
+    path.write_text(json.dumps(payload or SNAPSHOT))
+    return path
+
+
+def test_a_snapshot_loads_every_entry_including_the_ones_we_will_reject(tmp_path):
+    """
+    Dropping routers at load time would recreate the problem the split exists
+    to solve: a catalogue already filtered cannot be re-read under different
+    rules.
+    """
+    entries = candidates.load_discovery_snapshot(_snapshot_file(tmp_path))
+    assert len(entries) == 3
+    assert {e.entry_kind for e in entries} == {"MODEL", "ROUTER", "ALIAS"}
+
+
+def test_the_loader_applies_no_rule_of_its_own(tmp_path):
+    entries = candidates.load_discovery_snapshot(_snapshot_file(tmp_path))
+    # The router is present after loading...
+    assert any(e.entry_kind == "ROUTER" for e in entries)
+    # ...and refused only when a FILTER is applied.
+    for entry in entries:
+        entry.inference_status = SERVING
+    passing = [e for e in entries if not ROLE_FILTERS["generation"].check(e)]
+    assert [e.model_id for e in passing] == ["a/model"]
+
+
+def test_capability_is_derived_here_not_in_the_snapshot(tmp_path):
+    """
+    The snapshot records `supported_parameters` verbatim. What counts as
+    "supports structured output" is Quintek's reading of that list, so it is
+    computed on this side of the boundary.
+    """
+    entries = candidates.load_discovery_snapshot(_snapshot_file(tmp_path))
+    by_id = {e.model_id: e for e in entries}
+    assert by_id["a/model"].supports_structured is True
+    assert by_id["a/model"].supports_reasoning is True
+
+
+def test_an_empty_parameter_list_is_unknown_not_false(tmp_path):
+    """"We do not know" must not read as "no"."""
+    entries = candidates.load_discovery_snapshot(_snapshot_file(tmp_path))
+    alias = next(e for e in entries if e.entry_kind == "ALIAS")
+    assert alias.supports_structured is None
+
+
+def test_provenance_survives_the_load(tmp_path):
+    entries = candidates.load_discovery_snapshot(_snapshot_file(tmp_path))
+    assert all(e.observed_at for e in entries)
+
+
+def test_a_snapshot_of_the_wrong_shape_says_so(tmp_path):
+    """Rather than yielding an empty list that reads as 'no models exist'."""
+    path = tmp_path / "bad.json"
+    path.write_text(json.dumps({"models": []}))
+    with pytest.raises(ValueError) as exc:
+        candidates.load_discovery_snapshot(path)
+    assert "refusing to guess" in str(exc.value)
+
+
+def test_the_real_snapshot_loads_if_one_is_checked_out(tmp_path):
+    """
+    Exercised against the actual artifact when the discovery repository is
+    present beside this one; skipped otherwise, since Quintek must never
+    REQUIRE it to be.
+    """
+    root = Path("/home/user/registry-repo/snapshots/openrouter")
+    if not root.exists():
+        pytest.skip("discovery repository not checked out here")
+    newest = sorted(root.iterdir())[-1] / "openrouter.normalized.json"
+    entries = candidates.load_discovery_snapshot(newest)
+    assert len(entries) > 100
+    assert any(e.entry_kind == "ROUTER" for e in entries), (
+        "the snapshot should still contain routers -- filtering is our job")

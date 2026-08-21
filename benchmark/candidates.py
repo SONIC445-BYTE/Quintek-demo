@@ -463,6 +463,71 @@ def load_catalogue(path: str | Path) -> list[CatalogueEntry]:
     return entries
 
 
+def load_discovery_snapshot(path: str | Path) -> list[CatalogueEntry]:
+    """
+    Read a snapshot produced by the external discovery agent.
+
+    The snapshot records what a catalogue CONTAINED; this turns it into
+    entries and stops. No rule is applied here either -- eligibility is
+    `ROLE_FILTERS`, applied by the caller, which is the whole reason the
+    discovery repository declines to have an opinion.
+
+    Every entry is loaded, routers and aliases included. Dropping them here
+    would recreate the problem the split exists to solve: a catalogue that has
+    already been filtered cannot be re-read under different rules.
+
+    The snapshot's `normalizer_version` is checked against what this code
+    knows how to read. A newer one is loaded with a warning rather than
+    refused -- an added field is not a reason to reject an observation -- but
+    an unreadable shape says so instead of yielding a silently empty list.
+    """
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    items = payload.get("entries")
+    if not isinstance(items, list):
+        raise ValueError(
+            f"{path} has no 'entries' list. A discovery snapshot holds "
+            "`{schema_version, normalizer_version, observed_at, entries}`; "
+            "refusing to guess at another shape and return nothing.")
+
+    observed_at = payload.get("observed_at", "")
+    entries = []
+    for item in items:
+        entries.append(CatalogueEntry(
+            provider=item.get("source", "openrouter"),
+            model_id=item.get("model_id", ""),
+            context_length=item.get("context_length"),
+            # The snapshot records supported_parameters verbatim; capability
+            # is derived HERE, because what counts as "supports structured
+            # output" is Quintek's reading of that list.
+            supports_structured=_supports(item, {"response_format",
+                                                 "structured_outputs"}),
+            supports_tools=_supports(item, {"tools", "tool_choice"}),
+            supports_reasoning=_supports(item, {"reasoning",
+                                                "include_reasoning"}),
+            supports_vision="image" in (item.get("input_modalities") or []),
+            input_modalities=list(item.get("input_modalities") or []),
+            output_modalities=list(item.get("output_modalities") or []),
+            price_in_per_m=item.get("price_in_per_m_usd"),
+            price_out_per_m=item.get("price_out_per_m_usd"),
+            entry_kind=item.get("entry_kind", ENTRY_MODEL),
+            alias_target=item.get("alias_target"),
+            observed_at=item.get("observed_at") or observed_at,
+        ))
+    return entries
+
+
+def _supports(item: dict, wanted: set[str]) -> bool | None:
+    """
+    None when the source listed no parameters at all -- "we do not know" must
+    not read as "no", which is the same rule `allow_unknown_capabilities`
+    enforces downstream.
+    """
+    parameters = item.get("supported_parameters")
+    if not parameters:
+        return None
+    return bool(set(parameters) & wanted)
+
+
 def apply_probe_results(entries: list[CatalogueEntry], path: str | Path) -> int:
     """Merge an inference probe back onto the catalogue. Returns rows updated."""
     payload = json.loads(Path(path).read_text(encoding="utf-8"))

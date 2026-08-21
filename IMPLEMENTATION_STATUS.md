@@ -671,6 +671,17 @@ answers PASS at 08:00 and BILLING_BLOCKED at 18:00; this project measured
 exactly that on Cerebras, which authenticated perfectly and returned 402 on
 inference.
 
+`benchmark/candidates.load_discovery_snapshot` is the consuming half. It loads
+every entry a snapshot holds — routers and aliases included — and applies no
+rule of its own; capability is derived on this side, because what counts as
+"supports structured output" is Quintek's reading of a parameter list, not a
+fact the catalogue stated. Against the first real snapshot: 420 entries in,
+355 / 258 / 225 through the generation / validation / vision filters, zero
+routers admitted.
+
+Quintek never *requires* the discovery repository to be present. The test that
+reads a real snapshot skips when it is absent.
+
 ## A router was in every shortlist
 
 `openrouter/free` — "Free Models Router" — was in the generation, validation
