@@ -98,6 +98,12 @@ export async function generateQuestions(notebookId, count, opts) {
      * it. Blank when nothing reserved -- the server records the spend against
      * nobody rather than guessing an owner. */
     batch_id: options.batch_id || options.batchId || '',
+    /* Style references the learner supplied. The engine reads their SHAPE --
+     * stem structure, reasoning depth, distractor strategy -- and is
+     * forbidden from reusing any fact from them; that rule lives in
+     * `student/generation.py`, not here, because a grounding rule enforced by
+     * a client is a grounding rule anyone can turn off. */
+    demo_ids: options.demoIds || options.demo_ids || [],
   });
 
   const ids = result.question_ids || [];
@@ -131,4 +137,41 @@ export async function questionBank(limit) {
 /* What this deployment is actually running, for the screen that discloses it. */
 export async function powering() {
   return call('GET', '/ai/benchmark/powering');
+}
+
+
+/* Save an example question as a style reference.
+ *
+ * Returns the demonstration's id, which `generateQuestions` takes as
+ * `demoIds`. Text only: the backend stores a question's SHAPE, and reading
+ * one out of a photograph needs OCR that `student/ingestion.py` reports as
+ * unconfigured. Offering an image path here would be a control that looks
+ * like it works and cannot.
+ */
+export async function createDemo(title, question, opts) {
+  const options = opts || {};
+  return call('POST', '/demos', {
+    title: title,
+    question: question,
+    question_type: options.questionType || '',
+    difficulty: options.difficulty || '',
+    reasoning_depth: options.reasoningDepth || '',
+    notes: options.notes || '',
+  });
+}
+
+export async function listDemos() {
+  return call('GET', '/demos');
+}
+
+
+/* Which source kinds this deployment can actually read.
+ *
+ * Unauthenticated, because the source picker is the first screen a new learner
+ * sees. Without it the picker offers five kinds with equal prominence and
+ * three of them fail the moment they are tried -- the learner finds out after
+ * committing a file, not before choosing.
+ */
+export async function capabilities() {
+  return call('GET', '/capabilities');
 }

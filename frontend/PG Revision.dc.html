@@ -540,8 +540,9 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
           <div style="display:flex;flex-direction:column;gap:13px;padding:15px;background:#fff;border:1px solid #E6E4DE;border-radius:6px;animation:pgfade .3s ease both">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
               <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;letter-spacing:.1em;color:#8a9093">Draft 1 of {{ studioCount }}</span>
-              <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11px;font-weight:600;padding:4px 7px;border-radius:3px;color:#8a5f13;background:rgba(181,129,43,.12)">Validation pending</span>
+              <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11px;font-weight:600;padding:4px 7px;border-radius:3px;color:#8a5f13;background:rgba(181,129,43,.12)">Worked example</span>
             </div>
+            <div style="padding:10px 11px;background:#FAF8F2;border:1px solid #E6E4DE;border-radius:5px;font-size:11.5px;line-height:1.55;color:#5d6467;text-wrap:pretty">This screen shows a fixed worked example of what a generated question looks like. It is not calling a model. To generate real questions from your own source, use <b>Make questions</b> from a notebook.</div>
             <div style="font-family:'Source Serif 4',Georgia,'Times New Roman',serif;font-size:15px;line-height:1.5;color:#16191A;text-wrap:pretty">{{ draftStem }}</div>
             <div style="display:flex;flex-direction:column;gap:5px">
               <sc-for list="{{ draftOptions }}" as="d" hint-placeholder-count="4">
@@ -597,7 +598,10 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
             </div>
           </div>
         </sc-for>
-        <button onClick="{{ noop }}" style="width:100%;min-height:48px;background:transparent;border:1px dashed #CFCCC2;border-radius:6px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:13px;color:#6f7679" style-hover="border-color:#1E7A57;color:#1E7A57">+ Add a demonstration</button>
+        <button onClick="{{ goAddSource }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;padding:13px;min-height:48px;background:transparent;border:1px dashed #CFCCC2;border-radius:6px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;color:#6f7679" style-hover="border-color:#1E7A57;color:#1E7A57">
+          <span style="font-size:13px;font-weight:600">+ Add a demonstration</span>
+          <span style="font-size:11px;line-height:1.45;color:#8a9093">Attach one while bringing in a source</span>
+        </button>
       </div>
     </sc-if>
 
@@ -772,6 +776,13 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
           <button onClick="{{ setAnnual }}" style="flex:1;padding:9px;border:none;border-radius:5px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;font-weight:600;background:{{ billAnnualBg }};color:{{ billAnnualFg }}">Annual</button>
         </div>
 
+        <sc-if value="{{ plansNote }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:8px;padding:16px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid #B5812B;border-radius:0 7px 7px 0">
+            <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:#B5812B">No prices to show</span>
+            <span style="font-size:12.5px;line-height:1.6;color:#5d6467;text-wrap:pretty">{{ plansNote }}</span>
+          </div>
+        </sc-if>
+
         <sc-for list="{{ billPlanCards }}" as="pc" hint-placeholder-count="3">
           <div style="display:flex;flex-direction:column;gap:11px;padding:16px;background:#fff;border:1px solid #E6E4DE;border-radius:7px">
             <span style="display:flex;align-items:center;justify-content:space-between;gap:10px">
@@ -803,12 +814,12 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
           <span style="font-size:13px;line-height:1.6;color:#5d6467;max-width:250px;text-wrap:pretty">Upload one source, lecture notes, a scanned page, a chapter PDF, and concepts, links and questions follow from it.</span>
           <div style="display:flex;flex-direction:column;gap:7px;width:100%;padding-top:4px">
             <sc-for list="{{ sourceTypes }}" as="st" hint-placeholder-count="5">
-              <button onClick="{{ addSource }}" style="display:flex;align-items:center;gap:11px;width:100%;box-sizing:border-box;padding:12px;min-height:52px;background:#fff;border:1px solid #E6E4DE;border-radius:6px;cursor:pointer;text-align:left;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif" style-hover="border-color:#1E7A57">
+              <button onClick="{{ st.start }}" style="display:flex;align-items:center;gap:11px;width:100%;box-sizing:border-box;padding:12px;min-height:52px;background:#fff;border:1px solid #E6E4DE;border-radius:6px;cursor:pointer;text-align:left;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif" style-hover="border-color:#1E7A57">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#1E7A57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;flex:none">
                   <path d="{{ st.d }}"></path>
                 </svg>
-                <span style="flex:1;min-width:0;font-size:13px;color:#16191A">{{ st.label }}</span>
-                <span style="flex:none;font-size:11.5px;font-weight:600;color:#1E7A57">{{ st.action }}</span>
+                <span style="flex:1;min-width:0;font-size:13px;color:{{ st.labelFg }}">{{ st.label }}</span>
+                <span style="flex:none;font-size:11.5px;font-weight:600;color:{{ st.fg }}">{{ st.action }}</span>
               </button>
             </sc-for>
           </div>
@@ -1169,7 +1180,7 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
         <div style="display:flex;flex-direction:column;gap:9px">
           <div style="display:flex;align-items:baseline;justify-content:space-between">
             <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">Sources</span>
-            <button onClick="{{ addSource }}" style="background:none;border:none;padding:6px 0;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:#1E7A57">Add a source</button>
+            <button onClick="{{ goAddSource }}" style="background:none;border:none;padding:6px 0;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:#1E7A57">Add a source</button>
           </div>
           <sc-for list="{{ sources }}" as="s" hint-placeholder-count="3">
             <button onClick="{{ s.make }}" style="display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box;text-align:left;padding:12px;background:#fff;border:1px solid #E6E4DE;border-radius:6px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif" style-hover="border-color:#1E7A57">
@@ -1440,8 +1451,11 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
                   <path d="{{ st.d }}"></path>
                 </svg>
                 <span style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1">
-                  <span style="font-size:13.5px;font-weight:600;color:#16191A">{{ st.label }}</span>
+                  <span style="font-size:13.5px;font-weight:600;color:{{ st.labelFg }}">{{ st.label }}</span>
                   <span style="font-size:11.5px;line-height:1.4;color:#7c8386">{{ st.note }}</span>
+                  <sc-if value="{{ st.unavailableReason }}" hint-placeholder-val="{{ true }}">
+                    <span style="font-size:11px;line-height:1.45;color:#B5812B;text-wrap:pretty">{{ st.unavailableReason }}</span>
+                  </sc-if>
                 </span>
                 <span style="flex:none;font-size:11.5px;font-weight:600;color:{{ st.fg }}">{{ st.action }}</span>
               </button>
@@ -1449,7 +1463,26 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
             <sc-if value="{{ pickedSource }}" hint-placeholder-val="{{ true }}">
               <div style="display:flex;flex-direction:column;gap:8px;padding:12px;background:#fff;border:1px solid #1E7A57;border-radius:7px;animation:pgfade .25s ease both">
                 <span style="font-size:11.5px;font-weight:600;color:#8a9093">{{ sourceFieldLabel }}</span>
-                <input value="{{ sourceValue }}" onChange="{{ setSourceValue }}" placeholder="{{ sourcePlaceholder }}" style="min-height:44px;padding:0 11px;background:#FAFAF8;border:1px solid #E0DDD4;border-radius:5px;outline:none;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;color:#16191A" />
+
+                <sc-if value="{{ sourceWantsFile }}" hint-placeholder-val="{{ true }}">
+                  <label style="display:flex;align-items:center;gap:11px;min-height:52px;padding:0 13px;background:#FAFAF8;border:1px dashed #1E7A57;border-radius:5px;cursor:pointer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#1E7A57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;flex:none">
+                      <path d="{{ sourceFileIcon }}"></path>
+                    </svg>
+                    <span style="flex:1;min-width:0;font-size:12.5px;color:{{ sourceFileFg }}">{{ sourceFileName }}</span>
+                    <span style="flex:none;font-size:11.5px;font-weight:600;color:#1E7A57">{{ sourceFileAction }}</span>
+                    <input type="file" accept="{{ sourceAccept }}" capture="{{ sourceCapture }}" onChange="{{ setSourceFile }}" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden" />
+                  </label>
+                </sc-if>
+
+                <sc-if value="{{ sourceWantsTextarea }}" hint-placeholder-val="{{ true }}">
+                  <textarea value="{{ sourceValue }}" onChange="{{ setSourceValue }}" placeholder="{{ sourcePlaceholder }}" rows="6" style="min-height:120px;padding:11px;background:#FAFAF8;border:1px solid #E0DDD4;border-radius:5px;outline:none;resize:vertical;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;line-height:1.55;color:#16191A"></textarea>
+                </sc-if>
+
+                <sc-if value="{{ sourceWantsUrl }}" hint-placeholder-val="{{ true }}">
+                  <input type="url" inputmode="url" autocapitalize="none" autocorrect="off" spellcheck="false" value="{{ sourceValue }}" onChange="{{ setSourceValue }}" placeholder="{{ sourcePlaceholder }}" style="min-height:44px;padding:0 11px;background:#FAFAF8;border:1px solid #E0DDD4;border-radius:5px;outline:none;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;color:#16191A" />
+                </sc-if>
+
                 <span style="font-size:11px;line-height:1.5;color:#8a9093;text-wrap:pretty">{{ sourceHint }}</span>
               </div>
             </sc-if>
@@ -1488,13 +1521,54 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
           </sc-if>
 
           <sc-if value="{{ isLinkStep }}" hint-placeholder-val="{{ true }}">
-            <div style="flex:1;display:flex;flex-direction:column;gap:8px;justify-content:center">
-              <sc-for list="{{ linkStats }}" as="ls" hint-placeholder-count="3">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid {{ ls.color }};border-radius:0 6px 6px 0">
-                  <span style="font-size:13px;color:#16191A">{{ ls.label }}</span>
-                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:17px;color:#16191A">{{ ls.n }}</span>
+            <div style="flex:1;display:flex;flex-direction:column;gap:14px">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <sc-for list="{{ linkStats }}" as="ls" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid {{ ls.color }};border-radius:0 6px 6px 0">
+                    <span style="font-size:13px;color:#16191A">{{ ls.label }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:17px;color:#16191A">{{ ls.n }}</span>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:10px;padding:15px;background:#fff;border:1px solid #E6E4DE;border-radius:8px">
+                <span style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                  <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">Question style</span>
+                  <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.06em;padding:3px 7px;border-radius:3px;color:#7c8386;background:#F1EFE9">OPTIONAL</span>
+                </span>
+                <span style="font-size:12.5px;line-height:1.6;color:#5d6467;text-wrap:pretty">Show Quintek the kind of question you are preparing for, a past paper screenshot, a page from a question bank, or one you type out. It copies the SHAPE: stem structure, reasoning depth, how distractors are built.</span>
+
+                <div style="display:flex;gap:7px">
+                  <sc-for list="{{ demoTabs }}" as="dt" hint-placeholder-count="2">
+                    <button onClick="{{ dt.set }}" style="flex:1;min-height:42px;border-radius:6px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12px;font-weight:600;background:{{ dt.bg }};border:1.5px solid {{ dt.bd }};color:{{ dt.fg }}">{{ dt.label }}</button>
+                  </sc-for>
                 </div>
-              </sc-for>
+
+                <sc-if value="{{ demoWantsFile }}" hint-placeholder-val="{{ true }}">
+                  <label style="display:flex;align-items:center;gap:11px;min-height:52px;padding:0 13px;background:#FAFAF8;border:1px dashed #1E7A57;border-radius:6px;cursor:pointer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#1E7A57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;flex:none">
+                      <path d="{{ demoIcon }}"></path>
+                    </svg>
+                    <span style="flex:1;min-width:0;font-size:12.5px;color:{{ demoFileFg }}">{{ demoFileName }}</span>
+                    <span style="flex:none;font-size:11.5px;font-weight:600;color:#1E7A57">{{ demoFileAction }}</span>
+                    <input type="file" accept="image/*,.pdf,.doc,.docx,.txt" multiple="{{ true }}" onChange="{{ setDemoFile }}" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden" />
+                  </label>
+                </sc-if>
+
+                <sc-if value="{{ demoWantsText }}" hint-placeholder-val="{{ true }}">
+                  <textarea value="{{ demoText }}" onChange="{{ setDemoText }}" placeholder="Paste one or two example questions, with their options and the correct answer if you have it." rows="6" style="min-height:120px;padding:11px;background:#FAFAF8;border:1px solid #E0DDD4;border-radius:6px;outline:none;resize:vertical;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;line-height:1.55;color:#16191A"></textarea>
+                </sc-if>
+
+                <sc-if value="{{ demoAdded }}" hint-placeholder-val="{{ true }}">
+                  <span style="display:flex;align-items:flex-start;gap:9px;padding:10px 12px;background:{{ demoAddedBg }};border:1px solid {{ demoAddedBd }};border-radius:5px">
+                    <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11px;font-weight:600;color:{{ demoAddedFg }};flex:none">{{ demoAddedLabel }}</span>
+                    <span style="flex:1;min-width:0;font-size:11.5px;line-height:1.5;color:#5d6467">{{ demoAdded }}</span>
+                    <button onClick="{{ clearDemo }}" style="flex:none;min-height:32px;padding:0 9px;background:transparent;border:none;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11px;font-weight:600;color:#BC4C43">Remove</button>
+                  </span>
+                </sc-if>
+
+                <span style="padding:9px 11px;background:#F5F3EC;border-radius:5px;font-size:11px;line-height:1.55;color:#5d6467;text-wrap:pretty">{{ demoGroundingNote }}</span>
+              </div>
             </div>
           </sc-if>
         </div>
@@ -1808,12 +1882,15 @@ class Component extends DCLogic {
     trigger: '20:00', channels: { push: true, email: false }, tested: false,
     category: 'ALL', openTask: null, modelId: null, cmpA: 0, cmpB: 1,
     custom: false, customTime: false,
-    srcType: null, srcValue: '', families: [], otherFamily: '',
+    srcType: null, srcValue: '', srcFileName: '', families: [], otherFamily: '',
+    demoMode: 'upload', demoText: '', demoStamp: 0, demoIds: [], demoSaveError: '',
+    sourceCaps: {},
     makeSrc: null, makeStage: 'idle', makeCount: 10, makeDone: 0,
     studentApi: null, makeLive: null, makeError: '',
     makeOffer: null, makeReservation: null,
     billingApi: null, billing: null, billingError: '', planInterval: 'monthly',
     billingBusy: '', billingNote: '', pendingCheckout: null, checkoutApi: null,
+    pricingError: '',
     pricing: null,
     makeFams: ['Clinical vignette', 'Interpretation', 'Mechanism'],
     makeCustomOn: false, makeCustomVal: '', makeOther: '',
@@ -1843,7 +1920,32 @@ class Component extends DCLogic {
   setStrategy = (v) => () => this.setState({ strategy: v });
   setTrigger = (t) => () => this.setState({ trigger: t, tested: false, customTime: false });
   openCustomTime = () => this.setState({ customTime: true });
-  pickSource = (k) => () => this.setState((st) => ({ srcType: st.srcType === k ? null : k, srcValue: '' }));
+  /* Back to the start of the flow, not wherever it was left.
+   *
+   * `go('onboard')` alone keeps `step`, so someone who reached step 2 and
+   * came back would land on "Concepts are extracted" with no source behind
+   * it -- a screen reporting an extraction that never happened. */
+  noopPick = () => {};
+
+  goAddSource = () => {
+    this._sourceFile = null;
+    this.setState({ route: 'onboard', step: 0, srcType: null, srcValue: '',
+      srcFileName: '' });
+  };
+
+  startSource = (k) => () => {
+    this._sourceFile = null;
+    this.setState({ route: 'onboard', step: 0, srcType: k, srcValue: '', srcFileName: '' });
+  };
+
+  pickSource = (k) => () => {
+    /* Clear the previous pick. Switching from PDF to Photo while still
+     * holding the PDF would upload a document under the photo pipeline. */
+    this._sourceFile = null;
+    this.setState((st) => ({
+      srcType: st.srcType === k ? null : k, srcValue: '', srcFileName: '',
+    }));
+  };
   toggleFamily = (l) => () => this.setState((st) => {
     const cur = st.families || [];
     return { families: cur.indexOf(l) >= 0 ? cur.filter((x) => x !== l) : cur.concat([l]) };
@@ -1862,7 +1964,16 @@ class Component extends DCLogic {
      * still runs on the in-file constants, deliberately: wiring a screen at a
      * time keeps the debugging surface small enough to actually debug. */
     import('./quintek-student-api.js')
-      .then((api) => this.setState({ studentApi: api.configured ? api : null }))
+      .then((api) => {
+        this.setState({ studentApi: api.configured ? api : null });
+        if (!api.configured || !api.capabilities) return null;
+        return api.capabilities()
+          .then((caps) => this.setState({ sourceCaps: caps.sources || {} }))
+          /* A capability lookup that fails leaves every kind offered. Hiding
+           * options because one request failed would be worse than the
+           * problem it is guarding against. */
+          .catch(() => null);
+      })
       .catch(() => this.setState({ studentApi: null }));
     /* Billing. Unconfigured means a design file opened from disk, and the
      * screen keeps its constants. A CONFIGURED backend that fails shows the
@@ -1959,12 +2070,30 @@ class Component extends DCLogic {
     const cur = st.makeFams;
     return { makeFams: cur.indexOf(l) >= 0 ? cur.filter((x) => x !== l) : cur.concat([l]) };
   });
+  /* Two requests, not one, because they answer to different authorities.
+   *
+   * `/pricing` is PUBLIC -- it is the same catalogue the marketing page
+   * serves. `/me/subscription` and `/me/usage` need a session. Loading all
+   * three through one `Promise.all` meant a signed-out learner got a 401 on
+   * the private pair and the whole thing rejected, throwing away the public
+   * pricing that had loaded perfectly well. The visible symptom was a
+   * "Choose your plan" screen with a working Monthly/Annual toggle and
+   * nothing underneath it: no prices, no error, no explanation. */
   loadBilling = (api) => {
     const client = api || this.state.billingApi;
     if (!client) return;
-    Promise.all([client.subscription(), client.usage(), client.pricing()])
-      .then(([subscription, usage, pricing]) =>
-        this.setState({ billing: { subscription, usage }, pricing, billingError: '' }))
+
+    client.pricing()
+      .then((pricing) => this.setState({ pricing, pricingError: '' }))
+      .catch((e) => this.setState({
+        pricing: null,
+        pricingError: (e && e.message ? e.message : String(e)) +
+          '. No prices are shown rather than prices the server has not confirmed.',
+      }));
+
+    Promise.all([client.subscription(), client.usage()])
+      .then(([subscription, usage]) =>
+        this.setState({ billing: { subscription, usage }, billingError: '' }))
       .catch((e) => this.setState({
         billing: null,
         billingError: (e && e.message ? e.message : String(e)) +
@@ -2088,7 +2217,11 @@ class Component extends DCLogic {
     /* The reservation id doubles as the batch id, so what this request spends
      * on inference is filed against the entitlement that authorised it. */
     const reservationId = this.state.makeReservation;
-    return api.generateQuestions(notebookId, count, { batch_id: reservationId })
+    return api.generateQuestions(notebookId, count, {
+      batch_id: reservationId,
+      /* The style references the learner attached during onboarding. */
+      demoIds: this.state.demoIds || [],
+    })
       .then((result) => {
       const produced = result.count || 0;
       const reservationId = this.state.makeReservation;
@@ -2173,6 +2306,11 @@ class Component extends DCLogic {
       this.setState({ route: 'revise', step: 0, sessionCount: s.obCount, qi: 0, picked: null, submitted: false, judgement: null, done: false });
       return;
     }
+    /* Leaving step 2 is where a typed style reference gets saved. Advancing
+     * does not wait on it: OPTIONAL means the step never blocks, and a
+     * reference that fails to save leaves its id unset so generation simply
+     * runs without it rather than pretending it was applied. */
+    if (s.step === 1) this.saveDemo();
     this.setState({ step: s.step + 1 });
   };
 
@@ -2456,7 +2594,7 @@ class Component extends DCLogic {
         billManageable: false, billRenewal: '', billScheduled: '',
         billCanCancel: false, billCancelNote: '', billCancelling: false,
         billCancelLabel: 'Cancel subscription', cancelPlan: this.cancelPlan,
-        billPlanCards: [], ...this.intervalStyles(),
+        ...this.planVals(null), ...this.intervalStyles(),
         setMonthly: this.setPlanInterval('monthly'),
         setAnnual: this.setPlanInterval('annual'),
         goPlans: this.go('plans'), goBilling: this.go('billing'),
@@ -2475,7 +2613,11 @@ class Component extends DCLogic {
         billManageable: false, billRenewal: '', billScheduled: '',
         billCanCancel: false, billCancelNote: '', billCancelling: false,
         billCancelLabel: 'Cancel subscription', cancelPlan: this.cancelPlan,
-        billPlanCards: [], ...this.intervalStyles(),
+        /* Plans still render here. A learner who cannot load their OWN usage
+         * -- signed out, expired token, server hiccup -- can still be shown
+         * what is on sale, because that catalogue is public and is exactly
+         * what they came to this screen to read. */
+        ...this.planVals(null), ...this.intervalStyles(),
         setMonthly: this.setPlanInterval('monthly'),
         setAnnual: this.setPlanInterval('annual'),
         goPlans: this.go('plans'), goBilling: this.go('billing'), billDemoNote: '',
@@ -2484,13 +2626,10 @@ class Component extends DCLogic {
     }
 
     const bars = api.usageBars(live.usage);
+    /* `plan` is the FAMILY on this payload -- 'free', 'pro', 'power'. Reading
+     * `plan_id` here would never match a family name and every card would
+     * silently fall back to a plain "Choose". */
     const sub = live.subscription || {};
-    const cards = s.pricing
-      /* `plan` is the FAMILY on this payload -- 'free', 'pro', 'power'. Reading
-       * `plan_id` here would never match a family name and every card would
-       * silently fall back to a plain "Choose". */
-      ? api.planCards(s.pricing, s.planInterval, sub.plan || '')
-      : [];
 
     return {
       billLive: true, billOutage: false, billError: '',
@@ -2527,14 +2666,7 @@ class Component extends DCLogic {
         ? sub.scheduled_change.plan + ' begins ' +
           String(sub.scheduled_change.effective_at || '').slice(0, 10)
         : '',
-      billPlanCards: cards.map((c) => ({
-        ...c,
-        choose: this.choosePlan(c.planId, c.direction),
-        /* A current plan's button is inert and looks it. */
-        ctaBg: c.isCurrent ? '#EDEBE4' : '#1E7A57',
-        ctaFg: c.isCurrent ? '#7c8386' : '#fff',
-        ctaCursor: c.isCurrent ? 'default' : 'pointer',
-      })),
+      ...this.planVals(sub),
       ...this.intervalStyles(),
       setMonthly: this.setPlanInterval('monthly'),
       setAnnual: this.setPlanInterval('annual'),
@@ -2543,6 +2675,156 @@ class Component extends DCLogic {
       billBusyNote: { pay: 'Waiting for the payment sheet…',
         confirm: 'Confirming with your bank. Do not pay again.',
         plan: 'Changing your plan…', cancel: 'Cancelling…' }[s.billingBusy] || '',
+    };
+  }
+
+  demoVals() {
+    const s = this.state;
+    const mode = s.demoMode || 'upload';
+    const files = this._demoFiles || [];
+    const typed = (s.demoText || '').trim();
+
+    /* What will ACTUALLY happen to each attachment, said before the upload
+     * rather than discovered afterwards.
+     *
+     * `student/ingestion.py` refuses images outright -- "image ingestion needs
+     * OCR, which is not configured in this deployment". Accepting a
+     * screenshot here and quietly reading nothing from it would be the same
+     * defect as the file picker that was really a text box: a control that
+     * looks like it works and cannot. */
+    const readable = files.filter((f) => !/^image\//.test(f.type || ''));
+    const images = files.filter((f) => /^image\//.test(f.type || ''));
+
+    let added = '';
+    if (files.length) {
+      const parts = [];
+      if (readable.length) {
+        parts.push(readable.map((f) => f.name).join(', ')
+          + ' will be read as a style reference.');
+      }
+      if (images.length) {
+        parts.push(images.map((f) => f.name).join(', ')
+          + ' cannot be read yet: photos need OCR, which this deployment does '
+          + 'not have. Type the question out instead, or attach a PDF.');
+      }
+      added = parts.join(' ');
+    } else if (typed) {
+      added = typed.length + ' characters of example question text will be used '
+        + 'as a style reference.';
+    }
+
+    const imagesOnly = files.length > 0 && readable.length === 0;
+
+    return {
+      demoTabs: [['upload', 'Upload a photo or file'], ['type', 'Type it out']]
+        .map(([key, label]) => ({
+          label, set: this.setDemoMode(key),
+          bg: mode === key ? 'rgba(30,122,87,.06)' : '#fff',
+          bd: mode === key ? '#1E7A57' : '#E6E4DE',
+          fg: mode === key ? '#1E7A57' : '#5d6467' })),
+      demoWantsFile: mode === 'upload',
+      demoWantsText: mode === 'type',
+      demoIcon: ICONS.maximize,
+      demoFileName: files.length
+        ? files.map((f) => f.name).join(', ')
+        : 'Screenshot, photo of a page, or a document',
+      demoFileFg: files.length ? '#16191A' : '#9aa0a2',
+      demoFileAction: files.length ? 'Change' : 'Choose',
+      demoText: s.demoText || '',
+      setDemoText: (e) => this.setState({ demoText: e.target.value }),
+      setDemoFile: (e) => {
+        const picked = e && e.target && e.target.files;
+        if (!picked || !picked.length) return;
+        this._demoFiles = Array.prototype.slice.call(picked);
+        this.setState({ demoStamp: Date.now() });
+      },
+      clearDemo: () => {
+        this._demoFiles = [];
+        this.setState({ demoText: '', demoStamp: Date.now() });
+      },
+      demoAdded: added,
+      /* Amber when nothing usable was attached, green when something was. The
+       * colour has to disagree with the tick when the attachment is inert. */
+      demoAddedFg: (imagesOnly && !typed) ? '#B5812B' : '#1E7A57',
+      demoAddedLabel: (imagesOnly && !typed) ? 'NOT USED' : 'READY',
+      demoAddedBg: (imagesOnly && !typed) ? 'rgba(181,129,43,.08)' : 'rgba(30,122,87,.06)',
+      demoAddedBd: (imagesOnly && !typed) ? 'rgba(181,129,43,.3)' : 'rgba(30,122,87,.25)',
+      /* Said on the screen where the examples are taken, not buried in a
+       * settings page. A learner uploading a past paper reasonably expects
+       * its questions to come back; they will not, and that has to be stated
+       * before they upload rather than explained afterwards. */
+      demoGroundingNote: 'Only the shape is copied. Every question Quintek writes '
+        + 'must still be answerable from YOUR source, so no fact, value or diagnosis '
+        + 'from these examples is ever reused.',
+    };
+  }
+
+  setDemoMode = (mode) => () => this.setState({ demoMode: mode });
+
+  /* Persist the typed reference, if there is one, and remember its id.
+   *
+   * Called when the learner leaves step 2. Failure is deliberately quiet in
+   * one direction only: a style reference that could not be saved must not
+   * stop somebody starting their revision, but it must also never be
+   * SILENTLY treated as saved, so the id stays unset and generation simply
+   * runs without it. */
+  saveDemo = () => {
+    const api = this.state.studentApi;
+    const typed = (this.state.demoText || '').trim();
+    if (!api || !typed || !api.createDemo) return Promise.resolve(null);
+
+    return api.createDemo('Reference question', typed, {})
+      .then((demo) => {
+        const id = demo && demo.id;
+        if (id) this.setState((st) => ({ demoIds: (st.demoIds || []).concat([id]) }));
+        return id || null;
+      })
+      .catch((e) => {
+        this.setState({ demoSaveError: (e && e.message ? e.message : String(e))
+          + '. Your questions will be generated without it.' });
+        return null;
+      });
+  };
+
+  /* The plan catalogue, computed the same way in every branch.
+   *
+   * Prices are PUBLIC, so they must survive a signed-out session, an expired
+   * token and a failed usage lookup. Only the direction of each card --
+   * upgrade, downgrade, current -- depends on knowing the learner's plan, and
+   * when that is unknown every card is a plain "Choose" rather than a guess.
+   * The one thing this never does is invent a price: with no pricing payload
+   * it returns no cards and `plansNote` says why. */
+  planVals(sub) {
+    const s = this.state;
+    const api = s.billingApi;
+    const cards = (api && s.pricing)
+      ? api.planCards(s.pricing, s.planInterval, (sub && sub.plan) || '')
+      : [];
+
+    let note = '';
+    if (!api) {
+      note = 'Prices load from the Quintek backend, and this build has none '
+        + 'configured. Nothing is shown rather than a price that might not be '
+        + 'the one you would be charged.';
+    } else if (s.pricingError) {
+      note = s.pricingError;
+    } else if (!s.pricing) {
+      note = 'Loading plans\u2026';
+    } else if (cards.length === 0) {
+      note = 'No paid plans are on offer at the moment.';
+    }
+
+    return {
+      billPlanCards: cards.map((c) => ({
+        ...c,
+        choose: this.choosePlan(c.planId, c.direction),
+        /* A current plan's button is inert and looks it. */
+        ctaBg: c.isCurrent ? '#EDEBE4' : '#1E7A57',
+        ctaFg: c.isCurrent ? '#7c8386' : '#fff',
+        ctaCursor: c.isCurrent ? 'default' : 'pointer',
+      })),
+      plansNote: note,
+      plansEmpty: cards.length === 0,
     };
   }
 
@@ -3007,12 +3289,20 @@ class Component extends DCLogic {
       draftOptions: [['A', 'Serum iron', '#33393b', '#9aa0a2'], ['B', 'Ferritin', '#1E7A57', '#1E7A57'], ['C', 'TIBC', '#33393b', '#9aa0a2'], ['D', 'MCV', '#33393b', '#9aa0a2']]
         .map(([mark, text, fg, markFg]) => ({ mark, text, fg, markFg })),
       draftExplanation: 'Ferritin reflects storage iron directly; serum iron and TIBC move with transport and acute-phase state. The distractor set uses the values a reader is most likely to over-read, per the demonstration\u2019s distractor strategy.',
+      /* Provenance is the one field on this screen that must never be
+       * invented. It used to read 'claude-sonnet-4.6 - prompt v7 - temp 0'
+       * and 'gpt-5.1 - prompt v2 - independent call': specific model names,
+       * for a draft no model wrote. This screen does not call a backend --
+       * `runStudio` reveals a fixed example -- so the only honest values are
+       * the ones below. A product whose entire claim is that you can see
+       * which model wrote your question cannot print a made-up one on a
+       * demonstration screen. */
       draftMeta: [
         { k: 'concepts', v: 'Iron metabolism · Ferritin', fg: '#33393b' },
         { k: 'source', v: 'Iron handling.pdf p.3–4', fg: '#1E7A57' },
         { k: 'demonstrations used', v: s.studio.demo || 'DEMO 014', fg: '#33393b' },
-        { k: 'generator', v: 'claude-sonnet-4.6 · prompt v7 · temp 0', fg: '#33393b' },
-        { k: 'validator', v: 'gpt-5.1 · prompt v2 · independent call', fg: '#33393b' },
+        { k: 'generator', v: 'none — worked example, not generated', fg: '#B5812B' },
+        { k: 'validator', v: 'none — nothing was validated', fg: '#B5812B' },
       ],
       draftActions: [['Accept', 'accept'], ['Edit', 'edit'], ['Regenerate', 'regen'], ['Reject', 'reject']].map(([label, act]) => ({
         label, act: this.studioAction(act),
@@ -3092,6 +3382,12 @@ class Component extends DCLogic {
       conceptCount: (84 + s.extraCount) + ' in total',
       traceSource: s.extraCount ? 'Aortic stenosis lecture.pdf' : 'Valvular disease notes.pdf',
       addSource: this.addSource,
+      /* Both "Add a source" and "+ Add a demonstration" now open the REAL
+       * picker. The first used to run `addSource`, a simulated extraction
+       * that played a progress bar and announced concepts nothing had read;
+       * the second was a `noop` -- a dashed button that did nothing at all
+       * and gave no hint that demonstrations are captured during ingestion. */
+      goAddSource: this.goAddSource,
 
       filters: Object.keys(SUBJ).map((k) => ({ label: SUBJ[k].label, dot: SUBJ[k].color, toggle: this.toggleFilter(k),
         bg: s.filters[k] ? 'rgba(30,122,87,.08)' : '#fff', bd: s.filters[k] ? '#1E7A57' : '#E6E4DE', fg: s.filters[k] ? '#1E7A57' : '#6f7679' })),
@@ -3166,21 +3462,88 @@ class Component extends DCLogic {
       stepCtaFg: (s.step === 2 && !s.obCount) ? '#9aa0a2' : '#fff',
       stepCtaCursor: (s.step === 2 && !s.obCount) ? 'not-allowed' : 'pointer',
       isSourceStep: s.step === 0, isLinkStep: s.step === 1, isFamilyStep: s.step === 2,
-      sourceTypes: SOURCE_TYPES.map(([key, label, note, action, icon]) => ({
-        label, note, action, d: ICONS[icon], pick: this.pickSource(key),
-        bg: s.srcType === key ? 'rgba(30,122,87,.06)' : '#fff',
-        bd: s.srcType === key ? '#1E7A57' : '#E6E4DE',
-        fg: s.srcType === key ? '#1E7A57' : '#8a9093' })),
+      sourceTypes: SOURCE_TYPES.map(([key, label, note, action, icon]) => {
+        /* What the SERVER says it can read. With no backend every kind stays
+         * offered, which is right for a design file opened from disk; with
+         * one, a kind it cannot read is shown as unavailable with the
+         * server's own reason, BEFORE the tap. */
+        const cap = (s.sourceCaps || {})[key];
+        const off = !!cap && cap.available === false;
+        return {
+        label, note, d: ICONS[icon],
+        action: off ? 'Unavailable' : action,
+        unavailable: off,
+        unavailableReason: off ? (cap.reason || '') : '',
+        pick: off ? this.noopPick : this.pickSource(key),
+        /* From an empty notebook, these open the REAL picker with this kind
+         * already chosen. They used to call `addSource`, which ran a
+         * simulated extraction animation -- tapping 'Choose file' never
+         * showed a file chooser and never read a document, it just played a
+         * progress bar and claimed 84 concepts. */
+        start: off ? this.noopPick : this.startSource(key),
+        bg: off ? '#FAFAF8' : (s.srcType === key ? 'rgba(30,122,87,.06)' : '#fff'),
+        bd: off ? '#EDEBE4' : (s.srcType === key ? '#1E7A57' : '#E6E4DE'),
+        fg: off ? '#9aa0a2' : (s.srcType === key ? '#1E7A57' : '#8a9093'),
+        labelFg: off ? '#9aa0a2' : '#16191A' };
+      }),
       pickedSource: !!s.srcType,
       sourceFieldLabel: { pdf: 'Selected file', image: 'Captured image', link: 'Page address', video: 'Video address', text: 'Your text' }[s.srcType] || '',
       sourcePlaceholder: { pdf: 'Iron handling.pdf', image: 'Ward notes photo.jpg', link: 'https://', video: 'https://', text: 'Paste or type here' }[s.srcType] || '',
       sourceValue: s.srcValue,
       setSourceValue: (e) => this.setState({ srcValue: e.target.value }),
+
+      /* Each source kind gets the control it actually needs.
+       *
+       * Every kind used to render the SAME single-line text box, so 'Choose
+       * file' opened a field you were expected to TYPE A FILENAME INTO, and
+       * 'Open camera' did the same. Neither could ever produce a file. A
+       * typed filename is not a document: nothing is uploaded, nothing is
+       * read, and the next step has no bytes to extract concepts from. */
+      sourceWantsFile: s.srcType === 'pdf' || s.srcType === 'image',
+      sourceWantsTextarea: s.srcType === 'text',
+      sourceWantsUrl: s.srcType === 'link' || s.srcType === 'video',
+      sourceAccept: s.srcType === 'image'
+        ? 'image/*'
+        : '.pdf,.doc,.docx,.txt,.md,.rtf,application/pdf,text/plain',
+      /* `capture` asks Android for the CAMERA rather than the gallery. It is
+       * only meaningful for the photo kind; anywhere else it would hijack a
+       * document picker. */
+      sourceCapture: s.srcType === 'image' ? 'environment' : '',
+      sourceFileIcon: ICONS[s.srcType === 'image' ? 'maximize' : 'file'],
+      sourceFileName: s.srcFileName
+        || (s.srcType === 'image' ? 'No image chosen yet' : 'No file chosen yet'),
+      sourceFileFg: s.srcFileName ? '#16191A' : '#9aa0a2',
+      sourceFileAction: s.srcFileName
+        ? 'Change'
+        : (s.srcType === 'image' ? 'Open camera' : 'Choose file'),
+      /* The File object is kept on the instance, not in state: it is not
+       * serialisable, it must not be cloned on every render, and only its
+       * NAME belongs on screen. */
+      setSourceFile: (e) => {
+        const file = e && e.target && e.target.files && e.target.files[0];
+        if (!file) return;
+        this._sourceFile = file;
+        this.setState({ srcFileName: file.name, srcValue: file.name });
+      },
       sourceHint: { pdf: 'Read page by page, so every concept keeps its page reference.',
         image: 'Handwriting is read too. The image itself stays as the reference.',
         link: 'The page text is captured once, so questions do not drift if the page changes.',
         video: 'The transcript is used, and each concept keeps its timestamp.',
         text: 'Long notes are chunked, so nothing is truncated.' }[s.srcType] || '',
+      /* Optional reference questions, taken at the moment the learner has
+       * just seen their source read.
+       *
+       * This is the one part of Question Studio a learner actually needs, and
+       * Studio is an operator screen they never reach: it is behind
+       * More -> Question studio, wired to fixed constants, and its
+       * 'Demonstrations' field offers DEMO 014/009/021 -- ids from a seeded
+       * library, not anything this person owns. Asking here instead means the
+       * question style is set once, in the flow, by the person who knows what
+       * exam they are sitting.
+       *
+       * OPTIONAL is a promise: `stepBlocked` never consults any of this. */
+      ...this.demoVals(),
+
       linkStats: [{ label: 'Concepts found', n: 84, color: '#3F6F8C' },
         { label: 'Links between them', n: 312, color: '#7A5EA8' },
         { label: 'Crossing subjects', n: 19, color: '#B5812B' }],

@@ -106,6 +106,44 @@ def extract_plain_text(text: str) -> list[ExtractedPage]:
     ] or [ExtractedPage(ordinal=1, text=text.strip(), locator={"paragraph": 1})]
 
 
+# What this deployment can actually read, and why not when it cannot.
+#
+# The five source kinds are offered with equal prominence in the app, but three
+# of them raise `ExtractionUnavailable` the moment they are tried. A picker
+# that offers five doors and opens two is the same defect as a "Choose file"
+# button that shows a text box: the failure is discovered after the learner has
+# committed, not before.
+#
+# Derived from the SAME conditions `extract_for_kind` branches on below, so the
+# two cannot drift: adding OCR makes this report OCR without a second edit.
+def source_capabilities() -> dict:
+    pdf_ok = _pdf_available()
+    return {
+        "text": {"available": True, "reason": ""},
+        "note": {"available": True, "reason": ""},
+        "pdf": {
+            "available": pdf_ok,
+            "reason": "" if pdf_ok else
+            "PDF reading needs the 'pypdf' package, which is not installed here.",
+        },
+        "link": {
+            "available": False,
+            "reason": "Fetching a page needs outbound access and an HTML-to-text "
+                      "pass, neither of which is configured. Paste the text instead.",
+        },
+        "image": {
+            "available": False,
+            "reason": "Reading a photo needs OCR, which is not configured here. "
+                      "Type the notes out instead.",
+        },
+        "video": {
+            "available": False,
+            "reason": "A video needs a transcript source, which is not configured "
+                      "here. Paste the transcript instead.",
+        },
+    }
+
+
 def extract_for_kind(kind: str, *, path: str | Path | None = None,
                      raw_text: str = "", url: str = "") -> list[ExtractedPage]:
     if kind in {"text", "note"}:

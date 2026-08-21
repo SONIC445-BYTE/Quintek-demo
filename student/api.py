@@ -110,6 +110,14 @@ class StudentAPI:
         if seg[:1] == ["auth"]:
             return self._auth(method, seg[1:], body, token)
 
+        # What this deployment can actually read. Unauthenticated on purpose:
+        # the source picker is the FIRST screen a new learner sees, before any
+        # account exists, and it has to know which kinds are real before
+        # offering them.
+        if seg == ["capabilities"] and method == "GET":
+            from .ingestion import source_capabilities
+            return 200, {"sources": source_capabilities()}
+
         user = self._user(token)
         uid = user["id"]
 
