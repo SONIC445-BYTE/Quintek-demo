@@ -234,7 +234,7 @@ def run_real(args):
 
 
 def _record(devset, verdicts, outages, config, providers, *, kind, note="", freeze="",
-            runs_dir=None, budget=None):
+            runs_dir=None, budget=None, measurement_unit=""):
     """Write the run to the record. A ceiling and a measurement are different kinds."""
     from validator.holdout import corpus_hash
     matrix = score(devset.cases, verdicts)
@@ -250,6 +250,7 @@ def _record(devset, verdicts, outages, config, providers, *, kind, note="", free
         gate=("withheld (oracle run)" if kind == runs.KIND_CEILING else gate.outcome),
         outages=len(outages), analysis=analysis.report(devset.cases, verdicts), note=note,
         freeze=freeze, budget=dict(budget or {}),
+        measurement_unit=measurement_unit,
         items_expected=expected, items_decided=decided,
         completeness=(ablation.COMPLETE if not outages and decided >= expected
                       else ablation.INCOMPLETE))
@@ -337,9 +338,19 @@ def run_experiments(args):
 
     spend = budget_mod.Budget(max_calls=args.max_calls,
                               max_judge_calls=args.max_judge_calls)
-    for prov, seat in ((ground, runs.SEAT_CANDIDATE),
-                       (judge_provider, runs.SEAT_JUDGE)):
-        budget_mod.meter(prov, spend, seat)
+    boundaries = set()
+    try:
+        for prov, seat in ((ground, runs.SEAT_CANDIDATE),
+                           (judge_provider, runs.SEAT_JUDGE)):
+            _, boundary = budget_mod.meter(prov, spend, seat)
+            boundaries.add(boundary)
+    except budget_mod.UnmeterableProvider as exc:
+        print(f"refusing to start: {exc}", file=sys.stderr)
+        return 2
+    # One unit for the whole set. A mixed set would put two incomparable
+    # numbers under one column heading.
+    unit = (budget_mod.CANONICAL_UNIT if boundaries == {budget_mod.CANONICAL_UNIT}
+            else budget_mod.BOUNDARY_LOGICAL)
 
     current = freeze_mod.build(
         corpus=str(devset.root), corpus_hash=corpus_hash(devset.root),
@@ -388,7 +399,7 @@ def run_experiments(args):
                 kind=(runs.KIND_CEILING if used_fake else runs.KIND_DEVELOPMENT),
                 note=f"{title}; {args.note}".strip("; "),
                 freeze=in_force.digest(), runs_dir=args.runs_dir or runs.RUNS_DIR,
-                budget=spend.as_dict())
+                budget=spend.as_dict(), measurement_unit=unit)
         arms.append(ablation.Arm(
             name=title, layers=layers, matrix=matrix, outages=len(outages),
             items_expected=len(devset.arms), items_decided=matrix.total,

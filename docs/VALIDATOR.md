@@ -311,6 +311,22 @@ provider that implements it, so retries are counted, and the run record says
 which boundary was used (`outbound_attempt`, or `logical_call` for the test
 doubles that override `generate`) rather than asserting it was the right one.
 
+**One unit, not one per provider.** `outbound_attempt` is the canonical unit
+for any real benchmark run, and `meter` **refuses** a real model that does not
+implement `_call` rather than quietly counting it at `generate` — otherwise two
+records could carry "300 calls" under the same heading while differing by the
+retry policy. Test doubles are counted logically, which costs nothing and is
+recorded as `logical_call`, and a run carrying that unit is excluded from
+`real_runs()` on top of the exclusions it already fails.
+
+**The budget is yours to choose.** The forecast prints planned and worst-case
+figures for both seats and stops there. Setting `--max-calls 1710
+--max-judge-calls 585` says "I will pay for the worst case"; setting 1000/300
+says "I will pay this much, and if retries exhaust it the experiment becomes
+INCOMPLETE". Both are defensible. What is not is a budget that looks sufficient
+against 765 while ignoring retry spend — which is why the verdict compares
+against the worst case.
+
 Exhaustion introduces **no new outcome**. `spend` raises, the provider's retry
 loop records an error, the layer raises its `Unavailable`, the runner counts an
 outage, and the arm is `INCOMPLETE` with no delta. A deliberately stopped

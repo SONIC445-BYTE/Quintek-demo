@@ -1173,3 +1173,55 @@ def test_a_credential_shaped_value_is_refused_whatever_field_it_arrives_in(value
     """
     with pytest.raises(freeze_mod.FreezeViolation, match="shaped like a credential"):
         _freeze(models=[{"role": "judge", "some_new_field": value}])
+
+
+# ------------------------------------- one accounting unit, not one per provider
+
+def test_a_real_model_that_cannot_be_metered_at_the_outbound_boundary_is_refused():
+    """
+    Counting a real model at generate() would record logical calls under the
+    same name as outbound attempts, and the two differ by the retry policy.
+    """
+    class _RealWithoutCall(scripted.ReplayProvider):
+        is_model = True
+        is_oracle = False
+
+    with pytest.raises(budget_mod.UnmeterableProvider, match="does not implement _call"):
+        budget_mod.meter(_RealWithoutCall(), budget_mod.Budget(),
+                         budget_mod.SEAT_CANDIDATE)
+
+
+def test_the_canonical_unit_is_the_outbound_attempt():
+    assert budget_mod.CANONICAL_UNIT == budget_mod.BOUNDARY_OUTBOUND
+    provider = _Retrying()
+    _, boundary = budget_mod.meter(provider, budget_mod.Budget(),
+                                   budget_mod.SEAT_CANDIDATE)
+    assert boundary == budget_mod.CANONICAL_UNIT
+
+
+def test_a_run_counted_in_the_wrong_unit_is_not_a_real_measurement(tmp_path):
+    """
+    Belt and braces on top of the refusal above: even if such a record existed,
+    it is not comparable with one counted in outbound attempts, so it is
+    excluded rather than silently placed in the same column.
+    """
+    run = _run(runs.KIND_DEVELOPMENT, oracle=False)
+    run.measurement_unit = budget_mod.BOUNDARY_LOGICAL
+    runs.record(run, runs_dir=tmp_path)
+    assert runs.real_runs(runs_dir=tmp_path) == []
+    assert runs.development_metrics(tmp_path)["status"] == runs.NOT_RUN
+
+    run.measurement_unit = budget_mod.CANONICAL_UNIT
+    runs.record(run, runs_dir=tmp_path)
+    assert len(runs.real_runs(runs_dir=tmp_path)) == 1
+
+
+def test_test_doubles_keep_their_own_accounting_without_claiming_to_be_real():
+    """A fixture reply costs nothing, so counting it logically is fine -- and
+    the run it produces is excluded from measurements on other grounds."""
+    provider = scripted.ReplayProvider(default={"ok": True})
+    _, boundary = budget_mod.meter(provider, budget_mod.Budget(),
+                                   budget_mod.SEAT_CANDIDATE)
+    assert boundary == budget_mod.BOUNDARY_LOGICAL
+    record = runs.describe_provider("grounding", provider)
+    assert record.is_model is False

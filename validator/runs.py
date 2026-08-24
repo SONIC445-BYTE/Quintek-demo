@@ -91,6 +91,7 @@ class Run:
     note: str = ""
     freeze: str = ""
     budget: dict = field(default_factory=dict)
+    measurement_unit: str = ""
     completeness: str = ""
     items_expected: int = 0
     items_decided: int = 0
@@ -109,13 +110,22 @@ class Run:
         """
         A run that measures a validator rather than a design.
 
-        Both exclusions are needed and they are different. An oracle answers
-        from ground truth; a replay provider answers from a fixture. Neither
-        was asked anything, and a record that counted either would say a
-        validator had been evaluated when no model had seen an item.
+        Three exclusions, and they are different. An oracle answers from ground
+        truth; a replay provider answers from a fixture. Neither was asked
+        anything, and a record that counted either would say a validator had
+        been evaluated when no model had seen an item.
+
+        The third is the unit. A run counted in logical calls is not comparable
+        with one counted in outbound attempts -- they differ by the retry
+        policy -- so a record carrying the wrong unit is excluded rather than
+        silently compared.
         """
+        from validator.budget import CANONICAL_UNIT
+        counted_in_the_wrong_unit = (self.measurement_unit
+                                     and self.measurement_unit != CANONICAL_UNIT)
         return (bool(self.providers) and not self.used_an_oracle
-                and not self.used_a_test_double)
+                and not self.used_a_test_double
+                and not counted_in_the_wrong_unit)
 
     def as_dict(self) -> dict:
         return {"at": self.at, "kind": self.kind, "corpus": self.corpus,
@@ -128,6 +138,7 @@ class Run:
                 "specificity": self.specificity, "gate": self.gate,
                 "outages": self.outages, "analysis": self.analysis, "note": self.note,
                 "freeze": self.freeze, "budget": self.budget,
+                "measurement_unit": self.measurement_unit,
                 "completeness": self.completeness,
                 "items_expected": self.items_expected,
                 "items_decided": self.items_decided}
@@ -179,6 +190,7 @@ def load_all(runs_dir: str | Path = RUNS_DIR) -> list[Run]:
             outages=int(raw.get("outages") or 0), analysis=raw.get("analysis") or {},
             note=raw.get("note", ""), freeze=raw.get("freeze", ""),
             budget=raw.get("budget") or {},
+            measurement_unit=raw.get("measurement_unit", ""),
             completeness=raw.get("completeness", ""),
             items_expected=int(raw.get("items_expected") or 0),
             items_decided=int(raw.get("items_decided") or 0), path=str(path)))

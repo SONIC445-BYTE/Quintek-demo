@@ -40,12 +40,25 @@ from benchmark.providers.base import BaseProvider, GenerationResponse
 BOUNDARY_OUTBOUND = "outbound_attempt"
 BOUNDARY_LOGICAL = "logical_call"
 
+# The unit a real benchmark run is counted in. Not "whichever unit the provider
+# happened to support": a record saying 300 calls means 300 requests left the
+# machine, always, or the number is not comparable with the next one.
+#
+# A test double counted at `generate` uses BOUNDARY_LOGICAL, which is fine
+# because nothing was spent -- but such a run is never a real measurement, and
+# `meter` refuses to let a real model be counted that way at all.
+CANONICAL_UNIT = BOUNDARY_OUTBOUND
+
 SEAT_CANDIDATE = "candidate"
 SEAT_JUDGE = "judge"
 
 
 class BudgetExhausted(RuntimeError):
     """The ceiling was reached. Deliberately an ordinary exception."""
+
+
+class UnmeterableProvider(RuntimeError):
+    """A real model that does not expose the boundary its spend is counted at."""
 
 
 @dataclass
@@ -98,7 +111,18 @@ def meter(provider, budget: Budget, seat: str):
     if getattr(provider, "_quintek_metered", False):
         return provider, budget.boundaries.get(str(getattr(provider, "model", "")), "")
 
-    if type(provider)._call is not BaseProvider._call:
+    real = (getattr(provider, "is_model", True)
+            and not getattr(provider, "is_oracle", False))
+    exposes_outbound = type(provider)._call is not BaseProvider._call
+    if real and not exposes_outbound:
+        raise UnmeterableProvider(
+            f"{getattr(provider, 'model', 'this provider')!r} is a real model but does not "
+            "implement _call, so its requests cannot be counted where they leave the "
+            "machine. Counting it at generate() instead would record logical calls under "
+            "the same name as outbound attempts, and the two differ by the retry policy. "
+            "Implement _call, or do not present this provider's runs as measurements.")
+
+    if exposes_outbound:
         boundary = BOUNDARY_OUTBOUND
         original = provider._call
 
