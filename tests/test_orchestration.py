@@ -8,6 +8,8 @@ Orchestrator/CallLimiter/ExecutionLog logic without any network dependency.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import json
 import threading
 from pathlib import Path
@@ -93,7 +95,7 @@ def test_provider_failure_falls_back_to_next_eligible_candidate(env):
     def factory(candidate):
         if candidate.candidate_id == bad.candidate_id:
             p = AlwaysFails()
-            p.retry_policy.max_retries = 0
+            p.retry_policy = replace(p.retry_policy, max_retries=0)
             return p
         return ScriptedProvider(accuracy=1.0)
 
@@ -127,7 +129,7 @@ def test_exhausting_all_fallbacks_returns_none_but_logs_every_attempt(env):
 
     def factory(candidate):
         p = AlwaysFails()
-        p.retry_policy.max_retries = 0
+        p.retry_policy = replace(p.retry_policy, max_retries=0)
         return p
 
     orch = Orchestrator(registry, archive, factory, exec_log, routing_log)

@@ -34,8 +34,27 @@ class GenerationRequest:
     metadata: dict = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(frozen=True)
 class RetryPolicy:
+    """
+    Frozen, because `BaseProvider.retry_policy` is a class attribute and
+    therefore ONE object shared by every provider that has not been given its
+    own. While this was mutable, `provider.retry_policy.max_retries = 0`
+    silently retuned every other provider in the process -- including ones
+    already constructed -- and the manifest went on recording the mutated
+    value for all of them, so the record looked consistent while the run was
+    not.
+
+    That matters most where it is hardest to notice: an experiment set freezes
+    `max_retries`, and the spend forecast multiplies planned calls by
+    `1 + max_retries`. A mid-run mutation would leave the frozen number and the
+    actual behaviour disagreeing with nothing to show for it.
+
+    To change a policy, assign a new one -- `provider.retry_policy =
+    RetryPolicy(max_retries=0, timeout_seconds=5.0)` -- which creates an
+    instance attribute and cannot leak.
+    """
+
     max_retries: int = 2
     timeout_seconds: float = 30.0
     backoff_base_seconds: float = 0.0

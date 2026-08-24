@@ -974,7 +974,7 @@ def test_a_run_record_distinguishes_the_seat_from_the_layer():
 
 from validator import budget as budget_mod, forecast as forecast_mod  # noqa: E402
 from benchmark.providers.base import (BaseProvider,  # noqa: E402
-                                      GenerationRequest)
+                                      GenerationRequest, RetryPolicy)
 
 
 def test_the_forecast_is_exact_because_layer_a_is_free(dev):
@@ -1040,6 +1040,10 @@ class _Retrying(BaseProvider):
     model = "retrying"
     model_family = "none"
     is_model = True
+    # Stated rather than inherited: this test is about a logical call with two
+    # retries, so it sets two retries instead of trusting whatever the process
+    # default happens to be by the time it runs.
+    retry_policy = RetryPolicy(max_retries=2, timeout_seconds=1.0)
 
     def _call(self, request, timeout_seconds):
         raise RuntimeError("transport failure")
@@ -1225,3 +1229,29 @@ def test_test_doubles_keep_their_own_accounting_without_claiming_to_be_real():
     assert boundary == budget_mod.BOUNDARY_LOGICAL
     record = runs.describe_provider("grounding", provider)
     assert record.is_model is False
+
+
+def test_a_providers_retry_policy_cannot_leak_into_every_other_provider():
+    """
+    `BaseProvider.retry_policy` is a class attribute, so it is ONE object shared
+    by every provider that has not been given its own. While RetryPolicy was
+    mutable, `provider.retry_policy.max_retries = 0` retuned every provider in
+    the process and the manifest went on recording the mutated value for all of
+    them -- a run that looked consistent in the record and was not.
+
+    It is caught here rather than only in the provider tests because the freeze
+    pins max_retries and the spend forecast multiplies by 1 + max_retries: a
+    silent mutation makes the frozen number and the actual behaviour disagree.
+    """
+    from dataclasses import replace as dataclass_replace
+    from benchmark.providers.scripted import ScriptedProvider
+
+    one, other = ScriptedProvider(), ScriptedProvider()
+    with pytest.raises(Exception) as caught:
+        one.retry_policy.max_retries = 0
+    assert "Frozen" in type(caught.value).__name__
+
+    one.retry_policy = dataclass_replace(one.retry_policy, max_retries=0)
+    assert one.retry_policy.max_retries == 0
+    assert other.retry_policy.max_retries == 2, "the change escaped to another provider"
+    assert BaseProvider.retry_policy.max_retries == 2, "the change escaped to the default"

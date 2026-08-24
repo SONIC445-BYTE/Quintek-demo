@@ -75,7 +75,8 @@ def _infer_family(model_id: str) -> str:
 #:
 #: This is a shared, free-tier, queue-behind-other-tenants endpoint; latency
 #: is dominated by queueing, not by token generation. Override per instance
-#: (`provider.retry_policy.timeout_seconds = ...`) or globally with
+#: (`provider.retry_policy = replace(provider.retry_policy, timeout_seconds=...)`)
+#: or globally with
 #: NVIDIA_TIMEOUT_SECONDS for a dedicated deployment where 30s is realistic.
 NIM_DEFAULT_TIMEOUT_SECONDS = 180.0
 
