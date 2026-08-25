@@ -35,6 +35,13 @@ WILL_EXCEED = "WILL EXCEED THE CONFIGURED BUDGET"
 NO_BUDGET = "NO BUDGET SET"
 IMPOSSIBLE = "BUDGET TOO SMALL FOR THE MEASUREMENT"
 
+# The wall-clock verdict is reported entirely separately from the money
+# verdict above. They answer different questions -- how much this costs, and
+# how long it might take -- and nothing about WITHIN/WILL_EXCEED/IMPOSSIBLE
+# changes because this exists.
+NO_WALL_CLOCK = "NO WALL-CLOCK CEILING SET"
+WALL_CLOCK_SET = "WALL-CLOCK CEILING SET"
+
 # Requests each layer makes per item it is handed. Grounding asks twice: once
 # about the key, once about the explanation, deliberately separated so an
 # answer to one cannot contaminate the other.
@@ -59,6 +66,7 @@ def _survivors(devset, *, require_source: bool, require_reference: bool) -> int:
 
 def plan(devset, experiments, *, max_retries: int = 2,
          max_calls: int | None = None, max_judge_calls: int | None = None,
+         max_wall_minutes: float | None = None,
          check_explanation: bool = True) -> dict:
     """
     `experiments` is a sequence of (name, layers, config-flag dict).
@@ -139,6 +147,10 @@ def plan(devset, experiments, *, max_retries: int = 2,
         "budget": {"max_calls": max_calls, "max_judge_calls": max_judge_calls,
                    "unit": "outbound attempts"},
         "verdict": verdict, "exceeds": exceeds, "impossible": impossible,
+        "wall_clock": {
+            "max_minutes": max_wall_minutes,
+            "verdict": WALL_CLOCK_SET if max_wall_minutes is not None else NO_WALL_CLOCK,
+        },
     }
 
 
@@ -193,4 +205,13 @@ def render(data: dict) -> str:
     if data["verdict"] == NO_BUDGET:
         lines.append("  Nothing will stop this run early. Set --max-calls and "
                      "--max-judge-calls if that is not what you want.")
+    lines.append("")
+    wall = data.get("wall_clock") or {}
+    lines.append(f"WALL-CLOCK CEILING: {wall.get('verdict', NO_WALL_CLOCK)}")
+    if wall.get("max_minutes") is not None:
+        lines.append(f"  --max-wall-minutes            {wall['max_minutes']:g}")
+    else:
+        lines.append("  Nothing will stop this run by elapsed time. A call-count budget "
+                     "does not bound wall-clock time on a queued endpoint; set "
+                     "--max-wall-minutes if that matters here.")
     return "\n".join(lines)

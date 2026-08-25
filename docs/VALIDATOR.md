@@ -263,6 +263,28 @@ Not pinned: the clock and the note. **A credential has no field to live in** —
 `freeze.build` refuses a configuration containing one, because a manifest is a
 committed artifact.
 
+## Running a subset: --only
+
+`experiments --only ABD,C,ABCD` (any subset of the real layer codes) runs only
+the named experiments instead of all three. Two things stay true whichever
+subset runs:
+
+**The frozen configuration always describes all three.** The freeze manifest's
+`experiments` field is built from the fixed set, not from `--only`, so a
+`--only C` invocation and a full run produce the same digest, and a later
+invocation for the remaining experiments is not refused as a changed
+configuration. That is what makes `--only C` now, `--only ABD,ABCD` later, a
+natural way to run the set in stages rather than a way to fork it.
+
+**Each experiment's row is unchanged by what else runs alongside it.** The
+forecast, the budget check, and the run record for `--only C` cover only the
+100 judge calls that experiment needs — not the full set's 765/195 — and that
+row is identical to the one a full run would print for the same experiment.
+This is why the flag exists: a budget sized for one arm evaluated against the
+whole set's total is exactly the trap `BUDGET TOO SMALL FOR THE MEASUREMENT`
+was built to catch, and would refuse a `C`-only run that was never asking for
+765 calls in the first place.
+
 ## What the run will cost, before it costs it
 
 Layer A is deterministic and free, so the number of items that never reach a
@@ -333,6 +355,32 @@ outage, and the arm is `INCOMPLETE` with no delta. A deliberately stopped
 experiment is still an incomplete experiment. Exhaustion also does not consume
 budget: once over the ceiling `spend` raises without incrementing, so the spent
 figure in the record is the number of requests that actually went out.
+
+## A wall-clock ceiling, independent of the call budget
+
+The candidate/judge endpoint is a shared, free-tier, queue-behind-other-tenants
+one (`benchmark/providers/nvidia.py`): 0.6s for `GET /v1/models`, 72.9s and
+separately 180.8s for near-identical 8-token completions on the same model,
+measured on the same day. Every call-count ceiling in this document can be
+respected and the run can still take hours, because none of them bound time.
+
+`--max-wall-minutes <N>` does. Once N minutes have elapsed since the
+invocation started, no new call is started — a call already in flight
+finishes. Same treatment as `--max-calls`: the arm in progress becomes
+`INCOMPLETE` with no delta, not a lower score, and the whole invocation stops
+starting further experiments once the ceiling is crossed (the arm that was
+mid-run when it tripped is still recorded, including as an incomplete one; the
+NEXT experiment in the invocation does not start at all, rather than being
+started only to fail every call immediately).
+
+It is a genuinely separate mechanism from the call budget, in `validator/wallclock.py`
+rather than a field on `Budget` — different question, different file. Checked
+at the same choke point the meter already checks (`budget.meter`'s optional
+`clock=` parameter, default `None`, so every existing call site is unaffected).
+No default; the forecast prints `NO WALL-CLOCK CEILING SET` explicitly rather
+than letting an unset ceiling pass as silent, unbounded running — the same
+philosophy as the money verdicts, reported as a fully separate line so setting
+one does not imply anything about the other.
 
 ## The credential is a name, not a value
 

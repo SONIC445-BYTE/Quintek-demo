@@ -1255,3 +1255,203 @@ def test_a_providers_retry_policy_cannot_leak_into_every_other_provider():
     assert one.retry_policy.max_retries == 0
     assert other.retry_policy.max_retries == 2, "the change escaped to another provider"
     assert BaseProvider.retry_policy.max_retries == 2, "the change escaped to the default"
+
+
+# ------------------------------------------------- --only: scoped experiments
+
+from validator import wallclock  # noqa: E402
+
+
+def test_only_accepts_the_real_layer_codes_case_insensitively():
+    selected = eval_tool._select_experiments("c")
+    assert [layers for _t, layers, _f in selected] == ["C"]
+    selected = eval_tool._select_experiments("ABCD,abd")
+    assert [layers for _t, layers, _f in selected] == ["ABD", "ABCD"], \
+        "EXPERIMENTS order is preserved regardless of the order given on the CLI"
+
+
+def test_only_with_nothing_selects_everything():
+    assert eval_tool._select_experiments(None) == list(eval_tool.EXPERIMENTS)
+    assert eval_tool._select_experiments("") == list(eval_tool.EXPERIMENTS)
+
+
+def test_only_refuses_an_unknown_name_without_running_anything():
+    with pytest.raises(ValueError, match="ZZZ"):
+        eval_tool._select_experiments("C,ZZZ")
+
+
+def test_only_c_alone_is_forecast_at_its_own_cost_not_the_full_sets(dev):
+    """
+    This is the whole point of the flag: a budget sized for experiment C alone
+    (100 judge calls) must not be evaluated against the full set's 765/195, or
+    it is refused as BUDGET TOO SMALL for a measurement it was never meant to
+    fund.
+    """
+    selected = eval_tool._select_experiments("C")
+    # 100 planned judge calls fits a budget of 100 exactly at zero retries;
+    # WITHIN needs the WORST case to fit too, so size the budget for that.
+    scoped = forecast_mod.plan(dev, selected, max_retries=2, max_calls=300,
+                               max_judge_calls=300)
+    assert scoped["planned"]["total"] == 100
+    assert scoped["planned"]["candidate"] == 0
+    assert scoped["verdict"] == forecast_mod.WITHIN
+
+    tight = forecast_mod.plan(dev, selected, max_retries=2, max_calls=100,
+                              max_judge_calls=100)
+    assert tight["verdict"] == forecast_mod.WILL_EXCEED, \
+        "planned fits a budget of 100; the worst case (300) does not"
+
+    full = forecast_mod.plan(dev, eval_tool.EXPERIMENTS, max_retries=2,
+                             max_calls=100, max_judge_calls=100)
+    assert full["verdict"] == forecast_mod.IMPOSSIBLE
+
+
+def test_only_c_alones_row_matches_its_row_in_a_full_forecast(dev):
+    """Line-for-line comparability: the row for C does not depend on its siblings."""
+    scoped = forecast_mod.plan(dev, eval_tool._select_experiments("C"), max_retries=2)
+    full = forecast_mod.plan(dev, eval_tool.EXPERIMENTS, max_retries=2)
+    scoped_row = scoped["experiments"][0]
+    full_row = next(r for r in full["experiments"] if r["layers"] == "C")
+    assert scoped_row["by_layer"] == full_row["by_layer"]
+    assert scoped_row["candidate"] == full_row["candidate"]
+    assert scoped_row["judge"] == full_row["judge"]
+
+
+def test_a_freeze_built_with_only_c_matches_one_built_for_the_full_set(tmp_path):
+    """
+    The frozen configuration always describes all three experiments, so an
+    invocation using --only does not get treated as a different configuration
+    from a full run -- which is what makes a natural follow-up invocation for
+    the remaining experiments trivial rather than a fresh freeze.
+    """
+    common = dict(corpus="corpus/validator_dev", corpus_hash="h",
+                 models=[{"role": "judge", "model": "m"}],
+                 sampling={"temperature": 0.0})
+    full_defs = [{"name": t, "layers": layers, "config": f}
+                for t, layers, f in eval_tool.EXPERIMENTS]
+    a = freeze_mod.build(experiments=full_defs, **common)
+    b = freeze_mod.build(experiments=full_defs, **common)  # as a --only C run would build it
+    assert a.digest() == b.digest()
+
+
+def test_the_experiments_end_to_end_run_honours_only(tmp_path, monkeypatch, dev):
+    import benchmark.providers.registry as registry
+    ground, judge_provider, conform = scripted.oracle(dev.cases)
+    by_name = {"g": ground, "j": judge_provider}
+    monkeypatch.setattr(registry, "build_provider",
+                        lambda spec: by_name[spec["provider"]])
+
+    code = eval_tool.main([
+        "--runs-dir", str(tmp_path / "runs"), "--freeze-dir", str(tmp_path),
+        "experiments", "--candidate", "g", "--judge", "j", "--only", "C",
+        "--note", "smoke"])
+    assert code == 0
+
+    recorded = runs.load_all(tmp_path / "runs")
+    assert len(recorded) == 1
+    assert recorded[0].config == "v0.2.0[C]"
+
+    # A second invocation for the remaining experiments must not be refused
+    # as a configuration change.
+    code = eval_tool.main([
+        "--runs-dir", str(tmp_path / "runs"), "--freeze-dir", str(tmp_path),
+        "experiments", "--candidate", "g", "--judge", "j", "--only", "ABD,ABCD",
+        "--note", "smoke continued"])
+    assert code == 0
+    assert len(runs.load_all(tmp_path / "runs")) == 3
+
+
+# --------------------------------------------------- wall-clock ceiling
+
+def test_unset_wall_clock_never_raises():
+    clock = wallclock.WallClock(max_minutes=None)
+    for _ in range(1000):
+        clock.check()  # must never raise
+
+
+def test_a_set_wall_clock_raises_once_elapsed_exceeds_it():
+    clock = wallclock.WallClock(max_minutes=0.0)  # already "elapsed" at t=0
+    with pytest.raises(wallclock.WallClockExceeded, match="wall-clock ceiling"):
+        clock.check()
+
+
+def test_meter_without_a_clock_behaves_exactly_as_before():
+    """No `clock` argument: byte-for-byte the pre-existing behaviour."""
+    provider = scripted.ReplayProvider(default={"ok": True})
+    spend = budget_mod.Budget(max_calls=5)
+    budget_mod.meter(provider, spend, budget_mod.SEAT_CANDIDATE)
+    response = provider.generate(GenerationRequest(item_id="i", prompt="p"))
+    assert response.ok
+    assert spend.total == 1
+
+
+def test_a_logical_provider_converts_wall_clock_exceeded_to_a_failed_response():
+    provider = scripted.ReplayProvider(default={"ok": True})
+    spend = budget_mod.Budget(max_calls=100)
+    clock = wallclock.WallClock(max_minutes=0.0)
+    budget_mod.meter(provider, spend, budget_mod.SEAT_CANDIDATE, clock=clock)
+    response = provider.generate(GenerationRequest(item_id="i", prompt="p"))
+    assert response.ok is False
+    assert "WallClockExceeded" in response.error
+    assert spend.total == 0, "the clock is checked before spend, so nothing was spent"
+
+
+def test_an_outbound_provider_lets_wall_clock_exceeded_reach_its_own_retry_loop():
+    """
+    Same treatment as BudgetExhausted at this boundary: uncaught from the
+    counted wrapper, handled by BaseProvider.generate's existing retry loop,
+    which already converts any exception from _call into a failed response.
+    """
+    provider = scripted.ReplayProvider(default={"ok": True})  # placeholder, replaced below
+
+    class _Real(BaseProvider):
+        name, model, model_family, is_model = "real-test", "real", "none", True
+        retry_policy = RetryPolicy(max_retries=1, timeout_seconds=1.0)
+
+        def _call(self, request, timeout_seconds):
+            return "raw", {"ok": True}, None, None
+
+    provider = _Real()
+    spend = budget_mod.Budget(max_calls=100)
+    clock = wallclock.WallClock(max_minutes=0.0)
+    budget_mod.meter(provider, spend, budget_mod.SEAT_CANDIDATE, clock=clock)
+    response = provider.generate(GenerationRequest(item_id="i", prompt="p"))
+    assert response.ok is False
+    assert "WallClockExceeded" in response.error
+    assert response.attempts == 2, "the retry loop ran, exactly as it does for BudgetExhausted"
+
+
+def test_forecast_reports_the_wall_clock_ceiling_separately_from_the_money_verdict(dev):
+    plan = forecast_mod.plan(dev, eval_tool.EXPERIMENTS, max_calls=2400,
+                             max_judge_calls=600, max_wall_minutes=30)
+    assert plan["verdict"] == forecast_mod.WITHIN          # money verdict untouched
+    assert plan["wall_clock"] == {"max_minutes": 30, "verdict": forecast_mod.WALL_CLOCK_SET}
+
+    unset = forecast_mod.plan(dev, eval_tool.EXPERIMENTS)
+    assert unset["wall_clock"]["verdict"] == forecast_mod.NO_WALL_CLOCK
+    assert "NO WALL-CLOCK CEILING SET" in forecast_mod.render(unset)
+
+
+def test_the_experiments_run_stops_starting_new_experiments_past_the_ceiling(
+        tmp_path, monkeypatch, dev):
+    """
+    The arm in progress when the clock trips still gets recorded (it may be
+    INCOMPLETE from per-call outages); the NEXT experiment in this invocation
+    does not start at all.
+    """
+    import benchmark.providers.registry as registry
+    ground, judge_provider, conform = scripted.oracle(dev.cases)
+    by_name = {"g": ground, "j": judge_provider}
+    monkeypatch.setattr(registry, "build_provider",
+                        lambda spec: by_name[spec["provider"]])
+
+    code = eval_tool.main([
+        "--runs-dir", str(tmp_path / "runs"), "--freeze-dir", str(tmp_path),
+        "experiments", "--candidate", "g", "--judge", "j",
+        "--only", "ABD,C", "--max-wall-minutes", "0", "--note", "smoke"])
+    assert code == 0
+    recorded = runs.load_all(tmp_path / "runs")
+    # The first selected experiment (ABD) is recorded; the clock is already
+    # past its ceiling before the second (C) would start.
+    assert len(recorded) == 1
+    assert recorded[0].config == "v0.2.0[ABD]"

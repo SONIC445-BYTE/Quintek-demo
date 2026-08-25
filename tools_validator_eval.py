@@ -23,14 +23,23 @@ Run a validator against a labelled set and report what it actually did.
         The three measurements that separate "can the validator work" from
         "which model should do it", run in order and recorded:
 
-            1  A+B+D   everything except the free-answer judge
-            2  C       the judge alone
-            3  A+B+C+D the whole validator
+            ABD    everything except the free-answer judge
+            C      the judge alone
+            ABCD   the whole validator
 
         Only Layer A is deterministic; B and D are model calls constrained to
-        quote their evidence. Experiment 1 is not "the deterministic layers",
-        it is "the validator without the layer whose failure mode is
-        agreeing with itself".
+        quote their evidence. ABD is not "the deterministic layers", it is
+        "the validator without the layer whose failure mode is agreeing with
+        itself".
+
+        --only ABD,C,ABCD (any subset, comma-separated) runs only the named
+        experiments instead of all three. The frozen configuration still
+        describes all three -- so a later invocation with a different --only,
+        or none at all, is not treated as a change of configuration -- but the
+        forecast, the budget check, and every recorded run cover only what
+        this invocation actually executes. Useful to buy a cheap read on one
+        arm (C is 100 judge calls, no Layer A gate ahead of it, and the arm
+        most exposed to an unreliable endpoint) before committing to the rest.
 
 VOCABULARY
 ----------
@@ -39,6 +48,15 @@ VOCABULARY
     --judge       the independent model brought in to answer the item itself
                   and disagree with the key. A different model, enforced.
     --endpoint    where the requests go. Recorded, never a credential.
+
+--max-wall-minutes <N> stops NEW calls once N minutes have elapsed since this
+invocation started; a call already in flight finishes. Same treatment as
+--max-calls: the arm in progress becomes INCOMPLETE with no delta, not a lower
+score. Independent of the call budget -- the endpoint's own measured variance
+(0.6s for a model listing, 72.9s and separately 180.8s for near-identical
+completions) means every call-count ceiling can be respected and the run can
+still take hours. No default; unset prints NO WALL-CLOCK CEILING SET rather
+than running unbounded and silently.
 
 There is deliberately no --provider. "Provider" is the adapter that builds a
 model, and using the same word for "the model being evaluated" makes every run
@@ -61,7 +79,7 @@ import sys
 from pathlib import Path
 
 from validator import (ablation, analysis, budget as budget_mod, forecast as forecast_mod,
-                       freeze as freeze_mod, metrics, pipeline, runs, scripted)
+                       freeze as freeze_mod, metrics, pipeline, runs, scripted, wallclock)
 from validator.devset import CLEAN, DEFECTIVE, load
 from validator.conformance import ConformanceUnavailable
 from validator.grounding import GroundingUnavailable
@@ -286,6 +304,28 @@ EXPERIMENTS = (
 )
 
 
+def _select_experiments(only: str | None):
+    """
+    The experiments this invocation will execute, in EXPERIMENTS order.
+
+    Order is fixed regardless of how --only lists them: execution order is
+    "cheapest / least judge-dependent first", and letting the CLI argument
+    order override that would make --only a way to accidentally reorder a run
+    that was ordered on purpose.
+    """
+    if not only or not only.strip():
+        return list(EXPERIMENTS)
+    requested = {name.strip().upper() for name in only.split(",") if name.strip()}
+    by_code = {layers.upper(): (title, layers, flags) for title, layers, flags in EXPERIMENTS}
+    unknown = sorted(requested - set(by_code))
+    if unknown:
+        raise ValueError(
+            f"--only names {unknown} which {'is' if len(unknown) == 1 else 'are'} not "
+            f"among this set's experiments: {', '.join(sorted(by_code))}")
+    return [by_code[layers.upper()] for _t, layers, _f in EXPERIMENTS
+            if layers.upper() in requested]
+
+
 def run_experiments(args):
     """
     The three measurements, in order, against one frozen configuration.
@@ -296,6 +336,12 @@ def run_experiments(args):
     """
     from benchmark.providers.registry import build_provider
     from validator.holdout import corpus_hash
+
+    try:
+        selected = _select_experiments(args.only)
+    except ValueError as exc:
+        print(f"refusing to start: {exc}", file=sys.stderr)
+        return 2
 
     devset = load(args.corpus)
     ground = build_provider(parse_seat(args.candidate, endpoint=args.endpoint))
@@ -315,10 +361,15 @@ def run_experiments(args):
                         for role, (prov, seat) in seats.items()]
     spends_money = any(p.is_model and not p.is_oracle for p in provider_records)
 
-    plan = forecast_mod.plan(devset, EXPERIMENTS, max_retries=args.max_retries,
+    plan = forecast_mod.plan(devset, selected, max_retries=args.max_retries,
                              max_calls=args.max_calls,
-                             max_judge_calls=args.max_judge_calls)
+                             max_judge_calls=args.max_judge_calls,
+                             max_wall_minutes=args.max_wall_minutes)
     print(forecast_mod.render(plan))
+    if len(selected) < len(EXPERIMENTS):
+        print(f"(scoped to {', '.join(layers for _t, layers, _f in selected)} by --only; "
+              f"the frozen configuration still covers all of "
+              f"{', '.join(layers for _t, layers, _f in EXPERIMENTS)})")
     print()
     if plan["verdict"] == forecast_mod.IMPOSSIBLE:
         print("refusing to start: the budget is below what the measurement needs, so "
@@ -338,11 +389,13 @@ def run_experiments(args):
 
     spend = budget_mod.Budget(max_calls=args.max_calls,
                               max_judge_calls=args.max_judge_calls)
+    clock = (wallclock.WallClock(max_minutes=args.max_wall_minutes)
+             if args.max_wall_minutes is not None else None)
     boundaries = set()
     try:
         for prov, seat in ((ground, runs.SEAT_CANDIDATE),
                            (judge_provider, runs.SEAT_JUDGE)):
-            _, boundary = budget_mod.meter(prov, spend, seat)
+            _, boundary = budget_mod.meter(prov, spend, seat, clock=clock)
             boundaries.add(boundary)
     except budget_mod.UnmeterableProvider as exc:
         print(f"refusing to start: {exc}", file=sys.stderr)
@@ -364,7 +417,8 @@ def run_experiments(args):
         sampling={"temperature": args.temperature},
         extra={"retry_max_retries": args.max_retries,
                "budget_max_calls": args.max_calls,
-               "budget_max_judge_calls": args.max_judge_calls},
+               "budget_max_judge_calls": args.max_judge_calls,
+               "max_wall_minutes": args.max_wall_minutes},
         note=args.note, created_at=runs.now())
     freeze_path = freeze_mod.path_for(str(devset.root),
                                       args.freeze_dir or freeze_mod.FREEZE_DIR)
@@ -387,7 +441,7 @@ def run_experiments(args):
         print(f"running under frozen configuration {in_force.digest()[:12]}\n")
 
     arms = []
-    for title, layers, flags in EXPERIMENTS:
+    for title, layers, flags in selected:
         config = pipeline.Config(**flags)
         verdicts, outages = evaluate(devset.cases, grounding_provider=ground,
                                      judge_provider=judge_provider,
@@ -408,6 +462,18 @@ def run_experiments(args):
         print(render(title, devset.cases, verdicts, outages,
                      oracle_used=used_fake, config=config))
         print()
+        # The arm that just ran is recorded and reported above regardless --
+        # it may itself be INCOMPLETE if the ceiling was crossed partway
+        # through it. This only decides whether the NEXT experiment in this
+        # invocation gets to start at all; the meter would refuse every one of
+        # its calls anyway, but starting it just to watch it fail immediately
+        # is noise this avoids.
+        if clock is not None and clock.max_minutes is not None \
+                and clock.elapsed_minutes >= clock.max_minutes \
+                and (title, layers, flags) != selected[-1]:
+            print(f"wall-clock ceiling reached at {clock.elapsed_minutes:.1f} minute(s); "
+                  "not starting the remaining experiment(s) in this invocation.")
+            break
 
     data = ablation.report(arms,
                            judge_model=str(getattr(judge_provider, "model", "")),
@@ -528,6 +594,15 @@ def main(argv=None):
     _seats(experiments)
     _budget_args(experiments)
     experiments.add_argument("--max-retries", type=int, default=2)
+    experiments.add_argument("--max-wall-minutes", type=float, default=None,
+                             help="stop starting new calls once this many minutes have "
+                                  "elapsed since the invocation started; a call already "
+                                  "in flight finishes. No default -- unset prints NO "
+                                  "WALL-CLOCK CEILING SET rather than running unbounded")
+    experiments.add_argument("--only", default=None,
+                             help="comma-separated subset of this set's experiments "
+                                  "(ABD, C, ABCD) to run instead of all three; the "
+                                  "frozen configuration still covers all three")
     experiments.add_argument("--note", default="")
     experiments.add_argument("--temperature", type=float, default=0.0)
     experiments.add_argument("--refreeze", action="store_true",

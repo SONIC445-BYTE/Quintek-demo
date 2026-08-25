@@ -36,6 +36,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from benchmark.providers.base import BaseProvider, GenerationResponse
+from validator.wallclock import WallClockExceeded
 
 BOUNDARY_OUTBOUND = "outbound_attempt"
 BOUNDARY_LOGICAL = "logical_call"
@@ -101,12 +102,22 @@ class Budget:
                         "logical calls; see boundaries"}
 
 
-def meter(provider, budget: Budget, seat: str):
+def meter(provider, budget: Budget, seat: str, *, clock=None):
     """
     Count every request this provider makes against `budget`.
 
     Idempotent per instance: the candidate occupies two layers with one object,
     and wrapping it twice would count each of its requests twice.
+
+    `clock`, if given, is a `validator.wallclock.WallClock` checked immediately
+    before `budget.spend`, at the same choke point and with the same
+    per-boundary treatment: uncaught at the outbound boundary, where the
+    provider's own retry loop already handles an exception from `_call`
+    exactly as it handles `BudgetExhausted`; converted to a failed response at
+    the logical boundary, where there is no such loop. Omitting `clock`
+    changes nothing about how `budget` alone is verified -- every existing
+    caller that does not pass one sees identical behaviour to before this
+    parameter existed.
     """
     if getattr(provider, "_quintek_metered", False):
         return provider, budget.boundaries.get(str(getattr(provider, "model", "")), "")
@@ -127,6 +138,8 @@ def meter(provider, budget: Budget, seat: str):
         original = provider._call
 
         def counted(request, timeout_seconds):
+            if clock is not None:
+                clock.check()
             budget.spend(seat)
             return original(request, timeout_seconds)
 
@@ -140,9 +153,11 @@ def meter(provider, budget: Budget, seat: str):
             # reaches callers by exactly the same route at both boundaries. At
             # the outbound boundary the provider's own retry loop performs this
             # conversion; here there is no retry loop to do it, and a caller
-            # that saw a bare BudgetExhausted from one provider and a failed
+            # that saw a bare exception from one provider and a failed
             # response from another would need two code paths for one event.
             try:
+                if clock is not None:
+                    clock.check()
                 budget.spend(seat)
             except BudgetExhausted as exc:
                 return GenerationResponse(
@@ -151,6 +166,13 @@ def meter(provider, budget: Budget, seat: str):
                     model=getattr(provider, "model", "unknown"),
                     model_version=getattr(provider, "model_version", "unknown"),
                     latency_ms=0.0, error=f"BudgetExhausted: {exc}")
+            except WallClockExceeded as exc:
+                return GenerationResponse(
+                    item_id=request.item_id, raw_output="", parsed=None,
+                    provider=getattr(provider, "name", "unknown"),
+                    model=getattr(provider, "model", "unknown"),
+                    model_version=getattr(provider, "model_version", "unknown"),
+                    latency_ms=0.0, error=f"WallClockExceeded: {exc}")
             return original_generate(request)
 
         provider.generate = counted_generate
