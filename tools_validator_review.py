@@ -16,6 +16,14 @@ Run the two-reviewer protocol over a labelled corpus.
     python3 tools_validator_review.py apply --a ... --b ... --out settled.jsonl
         Write the settled labels, refusing while anything is still disputed.
 
+Both `merge` and `apply` enforce a minimum kappa by default: --min-kappa
+defaults to review.MIN_KAPPA_PHASE_3 (0.67), the remediation-band floor below
+which two reviewers are not reliably labelling the same thing. A corpus scored
+against labels from below that floor measures the labelling, not the
+validator. `apply` REFUSES to write settled output when kappa is below the
+floor, exactly as it already refuses on a disputed or unanswered item -- pass
+--min-kappa 0 to see what would have been written anyway.
+
 The corpus in this repository is model-authored and every item carries
 `label_status: unreviewed`. Running it through this tool with two named
 clinicians is what changes that. Nothing else does, and no flag here will.
@@ -59,16 +67,13 @@ def cmd_sheet(args):
 def _merged(args):
     a, b = review.load_sheet(args.a), review.load_sheet(args.b)
     adjudications, _ = _load_adjudications(args.adjudications)
-    return review.merge(a, b, adjudications, args.adjudicator)
+    min_kappa = None if args.min_kappa < 0 else args.min_kappa
+    return review.merge(a, b, adjudications, args.adjudicator, min_kappa=min_kappa)
 
 
 def cmd_merge(args):
     result = _merged(args)
     print(review.render(result))
-    if result["agreement"]["kappa"] is not None and result["agreement"]["kappa"] < 0.6:
-        print("\nA kappa below 0.6 means the reviewers are not reliably labelling the same "
-              "thing. Fix the labelling instructions before scoring any validator against "
-              "this corpus -- the validator's numbers cannot be better than the labels.")
     return 0
 
 
@@ -76,7 +81,13 @@ def cmd_apply(args):
     result = _merged(args)
     if not result["usable_for_scoring"]:
         print(review.render(result))
-        print("\nrefusing to write settled labels while items are disputed or unanswered")
+        gate = result.get("kappa_gate")
+        if gate is not None and not gate["passed"]:
+            print(f"\nrefusing to write settled labels: {gate['why']}. Fix the labelling "
+                  "instructions and redo the pilot before scaling -- the validator's "
+                  "numbers cannot be better than the labels they are scored against.")
+        else:
+            print("\nrefusing to write settled labels while items are disputed or unanswered")
         return 2
     with Path(args.out).open("w", encoding="utf-8") as fh:
         for item_id, row in sorted(result["settled"].items()):
@@ -101,6 +112,11 @@ def main(argv=None):
         cmd.add_argument("--b", required=True)
         cmd.add_argument("--adjudications", default="")
         cmd.add_argument("--adjudicator", default="")
+        cmd.add_argument("--min-kappa", type=float, default=review.MIN_KAPPA_PHASE_3,
+                         help="reviewer agreement floor; below this the corpus's ground "
+                              "truth is not established. Defaults to the Phase 3 "
+                              "remediation-band floor (0.67). Pass a negative value to "
+                              "disable the gate entirely and only report kappa")
         if name == "apply":
             cmd.add_argument("--out", required=True)
 

@@ -51,6 +51,29 @@ BROKEN = "BROKEN"
 UNSURE = "UNSURE"
 REVIEW_LABELS = (USABLE, BROKEN, UNSURE)
 
+# Phase 3 of the roadmap: the minimum agreement below which two reviewers are
+# not reliably labelling the same thing, and a corpus scored against their
+# labels would measure the labelling, not the validator. 0.67 is the
+# remediation-band floor; below it the rubric needs fixing and the pilot
+# redone before anything is scaled.
+#
+# This constant does not gate anything by itself -- `merge()` only enforces it
+# when a caller opts in via `min_kappa`, which keeps the library usable by
+# anyone who wants to see the numbers without being blocked by them. The CLI
+# (`tools_validator_review.py`) is what makes 0.67 the enforced default a
+# reviewer running Phase 3 actually gets.
+MIN_KAPPA_PHASE_3 = 0.67
+
+# Descriptive, not a separate gate. Nothing currently defines "strong
+# agreement" as its own pass/fail threshold; this only labels the band a
+# passing kappa falls into, so a report can distinguish "cleared the floor"
+# from "cleared it comfortably" without implying a second gate exists.
+STRONG_KAPPA = 0.80
+
+KAPPA_BLOCKED = "blocked"
+KAPPA_ACCEPTABLE = "acceptable"
+KAPPA_STRONG = "strong"
+
 # How a settled review maps onto the corpus label.
 SETTLED_LABEL = {USABLE: CLEAN, BROKEN: DEFECTIVE, UNSURE: EDGE}
 
@@ -187,14 +210,31 @@ def disagreements(a: Sheet, b: Sheet) -> list[dict]:
     return out
 
 
+def kappa_band(value: float | None, *, min_kappa: float = MIN_KAPPA_PHASE_3,
+              strong: float = STRONG_KAPPA) -> str | None:
+    """Which band a kappa falls in. None when kappa itself is undefined."""
+    if value is None:
+        return None
+    if value < min_kappa:
+        return KAPPA_BLOCKED
+    return KAPPA_STRONG if value >= strong else KAPPA_ACCEPTABLE
+
+
 def merge(a: Sheet, b: Sheet, adjudications: dict[str, Judgement] | None = None,
-          adjudicator: str = "") -> dict:
+          adjudicator: str = "", *, min_kappa: float | None = None) -> dict:
     """
     Combine two sheets into settled labels, refusing where the protocol is broken.
 
     An item both reviewers agreed on is `agreed`. An item they disagreed on is
     `disputed` until an adjudication for it exists, at which point it is
     `adjudicated` and carries all three names.
+
+    `min_kappa` is opt-in and defaults to no gate: passing it is what turns a
+    measured kappa below the floor into a refusal of `usable_for_scoring`
+    rather than a number a caller could choose to ignore. The measured value is
+    always preserved in `agreement["kappa"]` and in the returned `kappa_gate`
+    regardless of whether the gate is active or which way it went -- refusing
+    scoring is not the same as hiding the evidence for the refusal.
     """
     if a.reviewer.strip().lower() == b.reviewer.strip().lower():
         raise ReviewError(
@@ -236,12 +276,29 @@ def merge(a: Sheet, b: Sheet, adjudications: dict[str, Judgement] | None = None,
                             "adjudication_note": ruling.note}
 
     agreement = kappa(a, b)
+    complete = not disputed and not any(missing_from.values())
+
+    kappa_gate = None
+    if min_kappa is not None:
+        band = kappa_band(agreement["kappa"], min_kappa=min_kappa)
+        passed = band is not None and band != KAPPA_BLOCKED
+        kappa_gate = {"min_kappa": min_kappa, "observed_kappa": agreement["kappa"],
+                      "band": band, "passed": passed,
+                      "why": (
+                          "kappa is undefined; both reviewers used a single label for "
+                          "everything, so nothing has been measured about their "
+                          "agreement" if band is None else
+                          f"observed kappa {agreement['kappa']:.3f} is below the "
+                          f"{min_kappa:.2f} floor" if not passed else "")}
+        complete = complete and passed
+
     return {"agreement": agreement,
             "settled": settled,
             "disputed": disputed,
             "unanswered": missing_from,
             "counts": dict(Counter(v["label_status"] for v in settled.values())),
-            "usable_for_scoring": not disputed and not any(missing_from.values())}
+            "kappa_gate": kappa_gate,
+            "usable_for_scoring": complete}
 
 
 def render(result: dict) -> str:
@@ -266,5 +323,12 @@ def render(result: dict) -> str:
         if items:
             lines.append(f"{reviewer} has not answered {len(items)} item(s)")
     lines.append("")
+    gate = result.get("kappa_gate")
+    if gate is not None:
+        lines.append("")
+        lines.append(f"kappa gate: min {gate['min_kappa']:.2f}"
+                     + (f", observed {gate['observed_kappa']:.3f} ({gate['band']})"
+                        if gate["observed_kappa"] is not None else ", observed undefined"))
+        lines.append("  " + ("PASSED" if gate["passed"] else "BLOCKED: " + gate["why"]))
     lines.append("usable for scoring: " + ("yes" if result["usable_for_scoring"] else "no"))
     return "\n".join(lines)

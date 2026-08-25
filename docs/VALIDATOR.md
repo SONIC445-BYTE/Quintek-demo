@@ -424,6 +424,42 @@ answered the experiment question yes regardless of how it scores alone.
 The model conclusion is stated as deferred rather than omitted, because an
 omitted conclusion is one the reader supplies.
 
+## Phase 3: the kappa gate is enforced, not advisory
+
+`review.merge(..., min_kappa=review.MIN_KAPPA_PHASE_3)` refuses
+`usable_for_scoring` when Cohen's kappa is below 0.67 — the remediation-band
+floor below which two reviewers are not reliably labelling the same thing, and
+a corpus scored against their labels measures the labelling, not the
+validator. This used to be a printed warning below 0.6; it is now a refusal at
+0.67, matching the Phase 3 specification exactly:
+
+| observed kappa | band | passes the gate |
+|---|---|---|
+| < 0.67 | blocked | no |
+| = 0.67 | acceptable | yes |
+| 0.67 – 0.80 | acceptable | yes |
+| ≥ 0.80 | strong | yes |
+
+The 0.80 band is descriptive only — nothing in the current specification
+defines it as a second, separate gate, so it labels a passing kappa rather
+than raising the bar.
+
+The gate is **opt-in at the library level** (`min_kappa=None` by default, so
+every existing caller of `merge()` is unaffected) and **on by default at the
+CLI level** — `tools_validator_review.py merge` and `apply` both default
+`--min-kappa` to 0.67. `apply` **refuses to write settled output** when kappa
+is below the floor, exactly as it already refuses on a disputed or unanswered
+item; pass `--min-kappa -1` to disable the gate and inspect what would have
+been written anyway. The measured kappa is always preserved in the report,
+whichever way the gate goes — refusing to score is not the same as hiding the
+number that caused the refusal.
+
+The gate does not override the existing dispute machinery: a fully-agreed,
+high-kappa review set with one unresolved disagreement is still blocked by
+that disagreement, not waived by good agreement elsewhere. And the gate never
+touches `kappa()` itself, `load_sheet`, `template`, or how a disagreement is
+adjudicated — it only decides whether a measured, unmodified kappa is acted on.
+
 ## Running it
 
 ```bash

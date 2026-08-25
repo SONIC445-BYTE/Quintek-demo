@@ -707,6 +707,7 @@ import importlib
 import pathlib
 
 track_d = importlib.import_module("tools_track_d_status")
+review_cli = importlib.import_module("tools_validator_review")
 
 
 def _run(kind, *, oracle, sensitivity=1.0, specificity=1.0, gate=metrics.PASS):
@@ -1455,3 +1456,210 @@ def test_the_experiments_run_stops_starting_new_experiments_past_the_ceiling(
     # past its ceiling before the second (C) would start.
     assert len(recorded) == 1
     assert recorded[0].config == "v0.2.0[ABD]"
+
+
+# ------------------------------------------------- Phase 3: the kappa gate
+
+def test_the_default_gate_is_off_so_every_existing_caller_is_unaffected():
+    """merge() without min_kappa behaves exactly as it did before this gate existed."""
+    a = review.Sheet("Dr A", {"x": review.Judgement("x", review.USABLE)})
+    b = review.Sheet("Dr B", {"x": review.Judgement("x", review.USABLE)})
+    result = review.merge(a, b)
+    assert result["kappa_gate"] is None
+    assert result["usable_for_scoring"] is True
+
+
+@pytest.mark.parametrize("value,expected_band,expected_pass", [
+    (0.0, review.KAPPA_BLOCKED, False),
+    (0.669, review.KAPPA_BLOCKED, False),
+    (0.67, review.KAPPA_ACCEPTABLE, True),          # kappa = 0.67 -> accepted
+    (0.75, review.KAPPA_ACCEPTABLE, True),          # 0.67 < kappa < 0.80 -> accepted, not strong
+    (0.7999, review.KAPPA_ACCEPTABLE, True),
+    (0.80, review.KAPPA_STRONG, True),              # kappa >= 0.80 -> accepted and strong
+    (0.95, review.KAPPA_STRONG, True),
+    (1.0, review.KAPPA_STRONG, True),
+])
+def test_kappa_band_matches_the_phase_3_specification_exactly(value, expected_band,
+                                                               expected_pass):
+    band = review.kappa_band(value)
+    assert band == expected_band
+    assert (band != review.KAPPA_BLOCKED) == expected_pass
+
+
+def test_kappa_below_067_is_blocked():
+    band = review.kappa_band(0.5)
+    assert band == review.KAPPA_BLOCKED
+
+
+def test_kappa_undefined_never_passes_the_gate():
+    """Both reviewers using one label for everything is not measured agreement."""
+    assert review.kappa_band(None) is None
+
+
+def test_the_min_kappa_default_constant_is_the_phase_3_floor():
+    assert review.MIN_KAPPA_PHASE_3 == 0.67
+    assert review.STRONG_KAPPA == 0.80
+
+
+def _balanced_sheets(n_pairs: int, n_swaps_each_direction: int):
+    """
+    Sheets with BALANCED marginals -- n_pairs items rated USABLE by Dr A,
+    n_pairs rated BROKEN -- so kappa varies with agreement instead of
+    collapsing to raw agreement, which is what happens whenever one rater uses
+    only a single label (as an earlier, wrong version of this helper did: it
+    made every disagreement a Dr-A-only-ever-says-USABLE split, which forces
+    kappa to exactly 0.0 regardless of how much they actually disagreed).
+
+    Returns (sheet_a, sheet_b, disagreeing_item_ids), so a caller can adjudicate
+    every disagreement and isolate the kappa gate from the dispute gate --
+    merge() already treats an unresolved same-item mismatch as `disputed`,
+    which would otherwise block `usable_for_scoring` for a reason that has
+    nothing to do with kappa.
+    """
+    U, B = review.USABLE, review.BROKEN
+    a_labels = [U] * n_pairs + [B] * n_pairs
+    b_labels = ([U] * (n_pairs - n_swaps_each_direction) + [B] * n_swaps_each_direction
+               + [B] * (n_pairs - n_swaps_each_direction) + [U] * n_swaps_each_direction)
+    a_j, b_j, disagree = {}, {}, []
+    for k, (al, bl) in enumerate(zip(a_labels, b_labels)):
+        item = f"i{k}"
+        a_j[item] = review.Judgement(item, al, defect_class=("wrong_key" if al == B else ""))
+        b_j[item] = review.Judgement(item, bl, defect_class=("wrong_key" if bl == B else ""))
+        if al != bl:
+            disagree.append(item)
+    return review.Sheet("Dr A", a_j), review.Sheet("Dr B", b_j), disagree
+
+
+def _adjudicate_all(disagreeing_ids):
+    return {item: review.Judgement(item, review.USABLE, note="ruled by Dr C")
+           for item in disagreeing_ids}
+
+
+def test_merge_blocks_usable_for_scoring_when_kappa_is_below_the_floor():
+    # Balanced marginals, half the items swapped between raters: raw agreement
+    # exactly matches chance expectation, so kappa is 0.0 -- clearly below the
+    # 0.67 floor without being a degenerate all-one-label construction.
+    a, b, disagree = _balanced_sheets(n_pairs=10, n_swaps_each_direction=5)
+    result = review.merge(a, b, _adjudicate_all(disagree), adjudicator="Dr C",
+                          min_kappa=review.MIN_KAPPA_PHASE_3)
+    assert result["disputed"] == [], "every disagreement was adjudicated"
+    assert result["agreement"]["kappa"] == pytest.approx(0.0)
+    assert result["kappa_gate"]["passed"] is False
+    assert result["kappa_gate"]["band"] == review.KAPPA_BLOCKED
+    # The dispute machinery is fully satisfied; only the kappa gate blocks this.
+    assert result["usable_for_scoring"] is False
+
+
+def test_merge_permits_usable_for_scoring_when_kappa_clears_the_floor():
+    # One swap in each direction out of ten pairs: kappa 0.8, comfortably above
+    # the 0.67 floor.
+    a, b, disagree = _balanced_sheets(n_pairs=10, n_swaps_each_direction=1)
+    result = review.merge(a, b, _adjudicate_all(disagree), adjudicator="Dr C",
+                          min_kappa=review.MIN_KAPPA_PHASE_3)
+    assert result["disputed"] == []
+    assert result["agreement"]["kappa"] >= review.MIN_KAPPA_PHASE_3
+    assert result["kappa_gate"]["passed"] is True
+    assert result["usable_for_scoring"] is True
+
+
+def test_the_kappa_gate_does_not_override_the_dispute_gate():
+    """High agreement does not waive an unresolved disagreement on a shared item."""
+    a = review.Sheet("Dr A", {f"i{n}": review.Judgement(f"i{n}", review.USABLE)
+                              for n in range(20)})
+    b_j = {f"i{n}": review.Judgement(f"i{n}", review.USABLE) for n in range(19)}
+    b_j["i19"] = review.Judgement("i19", review.UNSURE)      # one real disagreement
+    b = review.Sheet("Dr B", b_j)
+    result = review.merge(a, b, min_kappa=0.0)                # gate itself would pass
+    assert result["kappa_gate"]["passed"] is True
+    assert result["usable_for_scoring"] is False              # but the dispute still blocks
+    assert result["disputed"] == ["i19"]
+
+
+def test_the_measured_kappa_is_preserved_whichever_way_the_gate_goes():
+    for n_pairs, n_swaps in ((10, 5), (10, 1)):
+        a, b, disagree = _balanced_sheets(n_pairs, n_swaps)
+        result = review.merge(a, b, _adjudicate_all(disagree), adjudicator="Dr C",
+                              min_kappa=review.MIN_KAPPA_PHASE_3)
+        assert result["agreement"]["kappa"] == result["kappa_gate"]["observed_kappa"]
+
+
+def test_rendering_a_blocked_gate_names_the_reason():
+    a, b, disagree = _balanced_sheets(n_pairs=10, n_swaps_each_direction=5)
+    result = review.merge(a, b, _adjudicate_all(disagree), adjudicator="Dr C",
+                          min_kappa=review.MIN_KAPPA_PHASE_3)
+    text = review.render(result)
+    assert "kappa gate" in text
+    assert "BLOCKED" in text
+
+
+def test_review_data_and_kappa_computation_are_unchanged_by_the_gate():
+    """
+    The gate must not touch what is being measured, only whether the result is
+    acted on. Same sheets, same raw agreement and kappa, gate on or off.
+    """
+    a, b, disagree = _balanced_sheets(n_pairs=10, n_swaps_each_direction=1)
+    adjudications = _adjudicate_all(disagree)
+    ungated = review.merge(a, b, adjudications, adjudicator="Dr C")
+    gated = review.merge(a, b, adjudications, adjudicator="Dr C",
+                         min_kappa=review.MIN_KAPPA_PHASE_3)
+    assert ungated["agreement"] == gated["agreement"]
+    assert ungated["settled"] == gated["settled"]
+    assert ungated["counts"] == gated["counts"]
+
+
+def test_the_cli_defaults_min_kappa_to_the_phase_3_floor(tmp_path):
+    a_path = tmp_path / "a.jsonl"
+    b_path = tmp_path / "b.jsonl"
+    ids = [f"i{n}" for n in range(10)]
+    with a_path.open("w") as fh:
+        for i in ids:
+            fh.write(json.dumps({"item_id": i, "reviewer": "Dr A", "label": "USABLE"}) + "\n")
+    with b_path.open("w") as fh:
+        for i in ids:
+            fh.write(json.dumps({"item_id": i, "reviewer": "Dr B",
+                                 "label": "BROKEN", "defect_class": "wrong_key"}) + "\n")
+    code = review_cli.main(["merge", "--a", str(a_path), "--b", str(b_path)])
+    assert code == 0  # merge only reports; it does not refuse
+
+    out_path = tmp_path / "settled.jsonl"
+    code = review_cli.main(["apply", "--a", str(a_path), "--b", str(b_path),
+                            "--out", str(out_path)])
+    assert code == 2, "total disagreement must be blocked by the default 0.67 floor"
+    assert not out_path.exists()
+
+
+def test_the_cli_min_kappa_flag_can_disable_the_gate(tmp_path):
+    """
+    --min-kappa with a negative value opts out, for inspecting what apply would
+    write. Every disagreement is pre-adjudicated so the dispute gate is
+    satisfied and the kappa gate is the only thing left that could block this.
+    """
+    a_path = tmp_path / "a.jsonl"
+    b_path = tmp_path / "b.jsonl"
+    adj_path = tmp_path / "adj.jsonl"
+    out_path = tmp_path / "out.jsonl"
+    ids = [f"i{n}" for n in range(10)]
+    with a_path.open("w") as fh:
+        for i in ids:
+            fh.write(json.dumps({"item_id": i, "reviewer": "Dr A", "label": "USABLE"}) + "\n")
+    with b_path.open("w") as fh:
+        for i in ids:
+            fh.write(json.dumps({"item_id": i, "reviewer": "Dr B",
+                                 "label": "BROKEN", "defect_class": "wrong_key"}) + "\n")
+    with adj_path.open("w") as fh:
+        for i in ids:
+            fh.write(json.dumps({"item_id": i, "label": "USABLE",
+                                 "note": "ruled by Dr C"}) + "\n")
+
+    blocked = review_cli.main(["apply", "--a", str(a_path), "--b", str(b_path),
+                               "--adjudications", str(adj_path), "--adjudicator", "Dr C",
+                               "--out", str(out_path)])
+    assert blocked == 2, "kappa here is 0.0, well below the default 0.67 floor"
+    assert not out_path.exists()
+
+    code = review_cli.main(["apply", "--a", str(a_path), "--b", str(b_path),
+                            "--adjudications", str(adj_path), "--adjudicator", "Dr C",
+                            "--out", str(out_path), "--min-kappa", "-1"])
+    assert code == 0, "a negative --min-kappa disables the gate entirely"
+    assert out_path.exists()
+    assert len(out_path.read_text().splitlines()) == 10
