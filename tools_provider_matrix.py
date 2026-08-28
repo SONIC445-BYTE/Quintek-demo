@@ -41,14 +41,49 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 print = functools.partial(print, flush=True)
 
-# provider -> (model_id, key_env). Deliberately explicit: guessing a model id
-# for a provider would misattribute every result it produced.
-DEFAULT_MODELS = {
-    "nvidia": ("meta/llama-3.1-8b-instruct", "NVIDIA_API_KEY"),
-    "cerebras": ("llama3.1-8b", "CEREBRAS_API_KEY"),
-    "openrouter": ("meta-llama/llama-3.1-8b-instruct", "OPENROUTER_API_KEY"),
-    "scripted": ("scripted/model", ""),
+# provider -> key_env. The MODEL is resolved from the discovery registry at
+# run time, not written here.
+#
+# This table used to name a model per provider, and named
+# `meta/llama-3.1-8b-instruct` for NVIDIA. That model was retired on
+# 2026-08-26, so every run of this tool afterwards would have spent its call
+# budget collecting 410s and reported them as a provider comparison. A model
+# id in Python source is a claim that goes stale silently; the registry is an
+# observation with a timestamp.
+KEY_ENVS = {
+    "nvidia": "NVIDIA_API_KEY",
+    "cerebras": "CEREBRAS_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+    "scripted": "",
 }
+
+#: The scripted double is not discovered -- it is a deterministic fixture with
+#: no catalogue, and resolving it would be a category error.
+SCRIPTED_MODEL = "scripted/model"
+
+
+def resolve_model(provider: str) -> tuple[str | None, str]:
+    """
+    Which model to compare this provider on, and where the answer came from.
+
+    Returns (model_id, provenance). `None` means nothing in the registry
+    currently qualifies, which is a real answer: this tool spends real credits
+    and must refuse rather than guess.
+    """
+    if provider == "scripted":
+        return SCRIPTED_MODEL, "fixture"
+    from benchmark.discovery import DEFAULT_REGISTRY_PATH, DynamicModelRegistry
+    if not Path(DEFAULT_REGISTRY_PATH).exists():
+        return None, ("no model registry on disk; run "
+                      "`tools_discovery.py catalogue` then `probe` first")
+    record = DynamicModelRegistry(DEFAULT_REGISTRY_PATH).resolve(
+        "any", provider=provider)
+    if record is None:
+        return None, (f"no {provider} model is currently AVAILABLE in the registry; "
+                      "run `tools_discovery.py probe` or check "
+                      "`tools_discovery.py status`")
+    return record.model_id, (f"resolved from the model registry, last verified "
+                             f"{record.last_verified or 'never'}")
 
 
 def main() -> int:
@@ -82,7 +117,7 @@ def main() -> int:
 
     specs, unusable = {}, {}
     for provider in [p.strip() for p in args.providers.split(",") if p.strip()]:
-        model, _ = DEFAULT_MODELS.get(provider, (None, ""))
+        model, _provenance = resolve_model(provider)
         model = overrides.get(provider, model)
         spec = {"provider": provider, "model_id": model, "timeout_seconds": args.timeout}
         report = describe(spec)

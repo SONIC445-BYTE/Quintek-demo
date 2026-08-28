@@ -30,6 +30,12 @@ paying 180 seconds to learn what the last three calls already established.
 After a cooldown the breaker goes HALF_OPEN and lets exactly one probe
 through: success closes it, failure reopens it with a longer cooldown.
 
+Three is the threshold for a failure that MIGHT be a blip. A failure the
+provider has already called final -- 410 gone, 401 rejected, 402 unpaid, a
+CONNECT denied by policy -- opens the circuit on the first observation, via
+`open_now`. Which failures those are is read from the status policy
+(`open_circuit and not retryable`), never decided here.
+
 Timeouts count double toward opening, because a timeout costs the full
 timeout budget while an error is usually instant. Ten timeouts is a much
 worse morning than ten 400s.
@@ -128,6 +134,29 @@ class CircuitBreaker:
                 self.state = CLOSED
                 self.opened_at = None
                 self.current_cooldown = None
+
+    def open_now(self, *, error: str = "", now: float | None = None) -> None:
+        """
+        Open on ONE observation, because one is conclusive.
+
+        `record_failure` counts toward a threshold, which is right for a
+        failure that might be a blip: three timeouts mean something one does
+        not. It is wrong for a failure the provider has already told us is
+        final. A 410 says the weights are gone; a 401 says the credential is
+        rejected; a 402 says the account cannot pay. Waiting for two more
+        identical answers spends two more calls to learn what the first one
+        said, every time the breaker's window resets.
+
+        The distinction is carried by the status policy -- `open_circuit and
+        not retryable` -- so this is never a judgement made here about a
+        particular status.
+        """
+        now = now if now is not None else time.monotonic()
+        with self._lock:
+            self.consecutive_successes = 0
+            self.last_error = error or "conclusive failure"
+            self.failure_weight = self.policy.failure_threshold
+            self._maybe_open(now, self.last_error)
 
     def record_failure(self, *, timeout: bool = False, error: str = "",
                        now: float | None = None) -> None:
@@ -236,6 +265,14 @@ class HealthRegistry:
         breaker = self.breaker(key)
         if success and verdict.ok:
             breaker.record_success(latency_ms=latency_ms)
+        elif verdict.policy.open_circuit and not verdict.policy.retryable:
+            # Conclusive on one observation -- see `open_now`. The threshold
+            # exists for failures that might be a blip; these are not.
+            breaker.open_now(error=verdict.detail or verdict.status)
+            if verdict.policy.circuit_seconds is None:
+                breaker.current_cooldown = float("inf")
+            else:
+                breaker.current_cooldown = verdict.policy.circuit_seconds
         elif verdict.policy.open_circuit:
             breaker.record_failure(
                 timeout=timeout or verdict.status == ProviderStatus.TIMEOUT,
@@ -258,7 +295,9 @@ class HealthRegistry:
                  "environmental": verdict.environmental})
             if verdict.status in (ProviderStatus.EGRESS_BLOCKED,
                                   ProviderStatus.AUTH_FAILED,
-                                  ProviderStatus.MODEL_UNAVAILABLE):
+                                  ProviderStatus.MODEL_UNAVAILABLE,
+                                  ProviderStatus.MODEL_RETIRED,
+                                  ProviderStatus.BILLING_BLOCKED):
                 self._states[key] = UNAVAILABLE
         return verdict.as_dict()
 

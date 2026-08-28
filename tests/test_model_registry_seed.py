@@ -39,12 +39,21 @@ def test_no_seeded_candidate_is_fabricated_eligible():
     may be ELIGIBLE or PRODUCTION without a real benchmark run, because none
     has happened yet -- see tools_seed_model_registry.py's module docstring
     and README.md's "the corpus does not exist."
+
+    DEPRECATED is allowed alongside REGISTERED, and is not a loosening: it is
+    the terminal, unselectable state a candidate moves to when the provider
+    withdraws its model, which NVIDIA did to meta/llama-3.3-70b-instruct on
+    2026-08-26. This assertion used to demand exactly REGISTERED, which was
+    tighter than its own stated purpose and left a withdrawn model no state to
+    move to. What is checked is the property that matters -- and
+    `eligible_candidates()` below is the guarantee, not the status spelling.
     """
     registry = Registry(REGISTRY_PATH)
+    allowed = {Status.REGISTERED, Status.DEPRECATED}
     for c in registry.all():
-        assert c.status == Status.REGISTERED, (
-            f"{c.candidate_id} ({c.model_id}) is {c.status}, not REGISTERED -- "
-            "no candidate may be marked eligible without a real benchmark run"
+        assert c.status in allowed, (
+            f"{c.candidate_id} ({c.model_id}) is {c.status} -- no candidate may be "
+            "marked eligible without a real benchmark run"
         )
     assert registry.eligible_candidates() == []
 

@@ -61,6 +61,25 @@ from pathlib import Path
 
 from .provider_status import ProviderStatus, classify
 
+#: What each role needs, in ONE place, as declared requirements rather than a
+#: list of models. `discovery/shortlists.json` used to spell out which models
+#: served which role; a retirement made the file wrong and nothing said so.
+#: Every tool that needs a model for a role resolves it from here plus the
+#: registry, so there is one answer and it moves when the catalogue does.
+ROLE_REQUIREMENTS = {
+    "generation": {"required_capabilities": ("structured_output",),
+                   "min_context": 32_000},
+    # Reasoning is required because the measured failure was a validator with
+    # none: llama-3.1-8b approved a question that contradicted its own source
+    # passage. See docs/VALIDATOR.md.
+    "validation": {"required_capabilities": ("structured_output", "reasoning"),
+                   "min_context": 32_000},
+    "vision": {"required_capabilities": ("structured_output", "vision")},
+    # The floor: it answers, in text. For tools that need *a* working model
+    # rather than a qualified one -- a smoke test, a provider comparison.
+    "any": {"required_capabilities": ()},
+}
+
 DEFAULT_REGISTRY_PATH = Path("discovery/model_registry.json")
 DEFAULT_POLICY_PATH = Path("configs/discovery.json")
 
@@ -121,6 +140,109 @@ FROM_PROVIDER_STATUS = {
 }
 
 
+class Lifecycle:
+    """
+    Where a model stands on the road to serving production traffic.
+
+    DERIVED, never stored. `benchmark/registry.py` has a written state machine
+    for the promotion decision, which is right there because a promotion is a
+    decision somebody makes. This is not a decision -- it is a summary of what
+    is currently known -- and a stored summary drifts from the facts it
+    summarises. Compute it and it cannot.
+
+        UNVERIFIED -> PROBED -> QUALIFIED -> EVALUATED -> PRODUCTION_ELIGIBLE
+                        |           |
+                        |           +-> DISQUALIFIED  (probe showed it cannot)
+                        +-> TEMPORARILY_UNAVAILABLE -> (recovers, resumes)
+                        +-> RETIRED (terminal)
+    """
+
+    UNVERIFIED = "UNVERIFIED"
+    PROBED = "PROBED"
+    QUALIFIED = "QUALIFIED"
+    DISQUALIFIED = "DISQUALIFIED"
+    EVALUATED = "EVALUATED"
+    PRODUCTION_ELIGIBLE = "PRODUCTION_ELIGIBLE"
+    TEMPORARILY_UNAVAILABLE = "TEMPORARILY_UNAVAILABLE"
+    RETIRED = "RETIRED"
+
+
+class Provenance:
+    """
+    Where a capability claim came from. The distinction the whole
+    qualification step exists to make.
+
+    `DECLARED`  the provider's catalogue said so. Cheap, broad, and only as
+                good as the provider's metadata.
+    `OBSERVED`  a probe sent a real request and inspected the reply. The only
+                source that can contradict a catalogue.
+    `UNKNOWN`   nobody has said or shown anything. Not False.
+
+    A name is never a source. "It is called `-vision-`" is not evidence that
+    it accepts an image, and nothing in this repository treats it as any.
+    """
+
+    DECLARED = "DECLARED"
+    OBSERVED = "OBSERVED"
+    UNKNOWN = "UNKNOWN"
+
+
+ALL_PROVENANCE = (Provenance.DECLARED, Provenance.OBSERVED, Provenance.UNKNOWN)
+
+
+@dataclass
+class CapabilityClaim:
+    """
+    One capability, what is believed about it, and on what basis.
+
+    `value` is tri-state on purpose: True, False, and None for "not
+    established". A probe that could not run -- the model 410'd, the endpoint
+    timed out -- leaves None, because a failure to observe is not an
+    observation of failure. Recording it as False would permanently disqualify
+    a model for an outage.
+    """
+
+    value: bool | None = None
+    source: str = Provenance.UNKNOWN
+    at: str = ""
+    evidence: str = ""
+    probe_version: str = ""
+
+    @property
+    def observed(self) -> bool:
+        return self.source == Provenance.OBSERVED
+
+    @property
+    def known(self) -> bool:
+        return self.value is not None and self.source != Provenance.UNKNOWN
+
+    def as_dict(self) -> dict:
+        return {"value": self.value, "source": self.source, "at": self.at,
+                "evidence": self.evidence, "probe_version": self.probe_version}
+
+    @classmethod
+    def coerce(cls, raw) -> "CapabilityClaim":
+        """
+        Accept a stored claim, a `CapabilityClaim`, or a bare bool.
+
+        The bare bool is what a catalogue parser produces, and it is read as
+        DECLARED without a timestamp -- which is exactly what it is. Being
+        able to write `capabilities={"vision": True}` keeps catalogue adapters
+        and tests readable; the provenance is still recorded, not lost.
+        """
+        if isinstance(raw, cls):
+            return raw
+        if isinstance(raw, dict):
+            return cls(value=raw.get("value"),
+                       source=raw.get("source", Provenance.UNKNOWN),
+                       at=raw.get("at", ""), evidence=raw.get("evidence", ""),
+                       probe_version=raw.get("probe_version", ""))
+        if isinstance(raw, bool):
+            return cls(value=raw, source=Provenance.DECLARED,
+                       evidence="provider catalogue")
+        return cls()
+
+
 class Pricing:
     """
     Four states, because `price == 0.0` answers three different questions and
@@ -153,6 +275,7 @@ EVENT_ABSENT = "ABSENT_FROM_CATALOGUE"
 EVENT_RETIRED = "RETIRED"
 EVENT_METADATA_CHANGED = "METADATA_CHANGED"
 EVENT_PROBED = "PROBED"
+EVENT_CAPABILITY_PROBED = "CAPABILITY_PROBED"
 
 #: Metadata fields a change to which is worth an event. Deliberately not
 #: everything: `last_seen` moves on every discovery and an event per model per
@@ -335,6 +458,16 @@ class ModelRecord:
     retirement_reason: str = ""
     source: str = ""
     credential_ref: str = ""
+    #: When a capability probe last ran, and which version of it. Separate
+    #: from `last_verified` (availability) because the two answer different
+    #: questions and go stale at different rates: a model that answers today
+    #: may have been capability-probed a month ago, and that is fine.
+    capabilities_probed_at: str = ""
+    capability_probe_version: str = ""
+    #: How many capability probes could not be run because the model was
+    #: unreachable. Distinguishes "we tried and it cannot" from "we tried and
+    #: could not find out".
+    capability_probes_inconclusive: int = 0
     metadata_version: int = METADATA_VERSION
     history: list = field(default_factory=list)
 
@@ -354,6 +487,74 @@ class ModelRecord:
     @property
     def priced(self) -> bool:
         return self.pricing_status not in NOT_A_PRICE
+
+    def lifecycle(self, *, requirements=None, evaluated: bool = False) -> str:
+        """
+        The derived stage, against a role's requirements if one is given.
+
+        `evaluated` comes from the caller because benchmark evidence lives in
+        `benchmark/inference_log.py`, not here -- a registry that also counted
+        observations would be a second, disagreeing source for the number the
+        scoreboard already owns.
+        """
+        if self.retired:
+            return Lifecycle.RETIRED
+        if self.availability in (Availability.TEMPORARILY_UNAVAILABLE,
+                                 Availability.RATE_LIMITED,
+                                 Availability.BILLING_BLOCKED,
+                                 Availability.AUTH_FAILED,
+                                 Availability.NOT_SERVING):
+            return Lifecycle.TEMPORARILY_UNAVAILABLE
+        if self.availability != Availability.AVAILABLE:
+            return Lifecycle.UNVERIFIED
+        if requirements is None:
+            return Lifecycle.PROBED
+        unmet = self.unmet(requirements)
+        if any("unknown" in reason for reason in unmet):
+            return Lifecycle.PROBED
+        if unmet:
+            return Lifecycle.DISQUALIFIED
+        if not evaluated:
+            return Lifecycle.QUALIFIED
+        return Lifecycle.PRODUCTION_ELIGIBLE
+
+    def capability(self, name: str) -> CapabilityClaim:
+        """
+        What is believed about one capability, and why. Never a bare bool.
+
+        An absent entry returns an UNKNOWN claim rather than None, so every
+        call site handles "nobody has established this" the same way instead
+        of each inventing its own default.
+        """
+        return CapabilityClaim.coerce(self.capabilities.get(name))
+
+    def set_capability(self, name: str, claim: CapabilityClaim) -> None:
+        self.capabilities[name] = claim.as_dict()
+
+    @property
+    def probed_capabilities(self) -> list[str]:
+        return sorted(n for n in self.capabilities if self.capability(n).observed)
+
+    def unmet(self, required, *, require_observed: bool = False) -> list[str]:
+        """
+        Which of `required` this record cannot be shown to have, and why.
+
+        Two failures kept apart in the wording, because they need different
+        actions: "unknown" is fixed by running a probe, "does not support" is
+        fixed by choosing another model.
+        """
+        out = []
+        for name in required:
+            claim = self.capability(name)
+            if claim.value is True:
+                if require_observed and not claim.observed:
+                    out.append(f"{name} is {claim.source.lower()}, not observed")
+                continue
+            if claim.value is None:
+                out.append(f"{name} unknown, and unknown is not yes")
+            else:
+                out.append(f"does not support {name}")
+        return out
 
     def note(self, kind: str, detail: str = "", *, at: str = "") -> Event:
         event = Event(at=at or now_iso(), kind=kind, key=self.key, detail=detail)
@@ -587,8 +788,14 @@ class DynamicModelRegistry:
                                (observation.output_price or 0) >= 0 else None)
         record.pricing_status = price_state(observation.input_price,
                                             stated=observation.price_stated)
-        if observation.capabilities:
-            record.capabilities = dict(observation.capabilities)
+        for name, raw in (observation.capabilities or {}).items():
+            existing = record.capability(name)
+            if existing.observed:
+                # A catalogue may not overwrite a probe. The catalogue is what
+                # the provider says; the probe is what happened. When they
+                # disagree the probe is the one that sent a request.
+                continue
+            record.set_capability(name, CapabilityClaim.coerce(raw))
         if observation.source:
             record.source = observation.source
         return [f"{f}: {before[f]!r} -> {getattr(record, f)!r}"
@@ -658,6 +865,78 @@ class DynamicModelRegistry:
             at=at))
         return record
 
+    def record_capability_probe(self, key: str, results, *, at: str = "",
+                                probe_version: str = "") -> ModelRecord:
+        """
+        Fold the result of a capability probe run onto the record.
+
+        `results` maps a capability name to a `CapabilityClaim`. A claim whose
+        value is None -- the probe could not run -- is counted as inconclusive
+        and does NOT overwrite an existing claim. Letting an outage erase a
+        good observation is how a model gets disqualified for a bad afternoon.
+        """
+        record = self._records.get(key)
+        if record is None:
+            raise KeyError(
+                f"no record for {key!r}. A capability probe is folded onto a model "
+                "the registry has already seen, so the observation has provenance.")
+        at = at or now_iso()
+        observed, inconclusive = [], []
+        for name, claim in results.items():
+            claim = CapabilityClaim.coerce(claim)
+            if claim.value is None:
+                inconclusive.append(name)
+                continue
+            record.set_capability(name, CapabilityClaim(
+                value=claim.value, source=Provenance.OBSERVED, at=at,
+                evidence=claim.evidence, probe_version=probe_version))
+            observed.append(f"{name}={claim.value}")
+        record.capability_probes_inconclusive += len(inconclusive)
+        if observed:
+            record.capabilities_probed_at = at
+            record.capability_probe_version = probe_version
+        detail = ", ".join(observed) or "nothing established"
+        if inconclusive:
+            detail += f"; inconclusive: {', '.join(sorted(inconclusive))}"
+        self.events.append(record.note(EVENT_CAPABILITY_PROBED, detail, at=at))
+        return record
+
+    def due_for_capability_probe(self, requirements, *, providers=None,
+                                 limit: int | None = None) -> list[ModelRecord]:
+        """
+        The funnel, as a query: which models is it worth spending capability
+        probes on right now?
+
+        Cheap filters first, and every one of them is a reason NOT to spend a
+        call:
+
+            AVAILABLE            an unreachable model teaches nothing
+            not a router         a router is not a single model
+            has an unknown among the capabilities this role needs
+            has not already been shown to lack one of them
+
+        The last two are what stop this probing 83 models to re-learn 83
+        answers. A model whose reasoning claim is already False stays out;
+        a model whose claim is unknown is exactly what a probe is for.
+        """
+        required = tuple(requirements)
+        out = []
+        for record in self.all():
+            if providers and record.provider not in providers:
+                continue
+            if record.availability != Availability.AVAILABLE:
+                continue
+            if record.entry_kind in ("ROUTER", "AGGREGATOR"):
+                continue
+            claims = [record.capability(name) for name in required]
+            if any(c.value is False for c in claims):
+                continue
+            if not any(c.value is None for c in claims):
+                continue
+            out.append(record)
+        out.sort(key=self.sort_key)
+        return out[:limit] if limit else out
+
     # ---------- scheduling ----------
 
     def due_for_recheck(self, *, now: datetime | None = None,
@@ -711,7 +990,7 @@ class DynamicModelRegistry:
     def eligible(self, *, required_capabilities=(), min_context: int | None = None,
                  max_input_price: float | None = None,
                  allow_unknown_capabilities: bool = False,
-                 allow_unpriced: bool = False,
+                 allow_unpriced: bool = False, require_observed: bool = False,
                  providers=None) -> tuple[list[ModelRecord], list[dict]]:
         """
         The production funnel: which records may serve work right now.
@@ -743,15 +1022,10 @@ class DynamicModelRegistry:
                        if record.availability_detail else ""))
             if record.entry_kind in ("ROUTER", "AGGREGATOR"):
                 reasons.append(f"is a {record.entry_kind.lower()}, not a single model")
-            for capability in required:
-                claim = record.capabilities.get(capability)
-                if claim is True:
+            for reason in record.unmet(required, require_observed=require_observed):
+                if "unknown" in reason and allow_unknown_capabilities:
                     continue
-                if claim is None:
-                    if not allow_unknown_capabilities:
-                        reasons.append(f"{capability} unknown, and unknown is not yes")
-                else:
-                    reasons.append(f"does not support {capability}")
+                reasons.append(reason)
             if min_context is not None:
                 if record.context_window is None:
                     if not allow_unknown_capabilities:
@@ -800,6 +1074,44 @@ class DynamicModelRegistry:
         """
         kept, _dropped = self.eligible(**requirements)
         return sorted(kept, key=self.sort_key)[:limit]
+
+    def resolve(self, role: str = "any", *, provider: str | None = None,
+                require_observed: bool = False,
+                exclude=()) -> ModelRecord | None:
+        """
+        The best currently-eligible model for a role, or None.
+
+        This is what replaces a hard-coded model id in a tool. None is a real
+        answer and callers must handle it: "nothing currently qualifies" is
+        the correct output when a provider has retired everything that did,
+        and inventing a default there is how a tool spends a budget calling a
+        model that answers 410.
+        """
+        if role not in ROLE_REQUIREMENTS:
+            raise ValueError(
+                f"unknown role {role!r}; known roles: "
+                f"{', '.join(sorted(ROLE_REQUIREMENTS))}")
+        requirements = dict(ROLE_REQUIREMENTS[role])
+        if provider:
+            requirements["providers"] = (provider,)
+        requirements["require_observed"] = require_observed
+        excluded = set(exclude)
+        for record in self.shortlist(**requirements):
+            if record.key not in excluded:
+                return record
+        return None
+
+    def named_retired(self, text: str) -> list[str]:
+        """
+        Which retired model ids appear in a blob of text.
+
+        Used by the repository guard test. Substring matching is crude and
+        deliberately so: the question is not "does this parse as a model
+        reference" but "could a reader or a default value hand this id to a
+        provider", and a retired id in a string literal can.
+        """
+        return sorted(record.model_id for record in self.retired()
+                      if record.model_id and record.model_id in text)
 
     # ---------- the one place production and experiments meet ----------
 

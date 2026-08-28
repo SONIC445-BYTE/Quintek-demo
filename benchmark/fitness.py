@@ -101,6 +101,24 @@ TASK_PROFILES: dict[str, str] = {
     "EXPLANATION": "interactive",
 }
 
+# Below this fraction of the profile's intended weighting, a fitness score is
+# reported but must not OUTRANK a fully-measured one.
+#
+# `blend` renormalises over the components that were actually measured, which
+# is right -- treating "no cost data" as "infinitely expensive" would bury an
+# unpriced model for a reason that has nothing to do with the model. But it
+# makes scores from different coverage incomparable, and nothing read the
+# `weight_covered` it recorded. Measured: a candidate with no quality
+# evidence and a price of zero scored 1.000 from 20% coverage and beat a
+# candidate measured across 200 observations at 0.936 from 100%. Production
+# picked the cheap one, which is exactly "selected solely because it is
+# cheap".
+#
+# The candidate stays ELIGIBLE, so exploration and evaluation mode can still
+# reach it -- a new model that can never be picked can never be measured.
+# It simply cannot lead the ranking on a partial score.
+MIN_WEIGHT_COVERAGE = 0.5
+
 # Below this many comparable observations, a performance figure is reported
 # but must not drive routing. See `ModelFitness.evidence_sufficient`.
 MIN_OBSERVATIONS = 30
@@ -235,6 +253,30 @@ class ModelFitness:
     def evidence_sufficient(self) -> bool:
         return self.performance.evidence_sufficient
 
+    @property
+    def weight_covered(self) -> float:
+        return float(self.detail.get("weight_covered", 0.0) or 0.0)
+
+    @property
+    def thinly_evidenced(self) -> bool:
+        """
+        Was this score computed from too little of the intended weighting to
+        be compared with a full one? Sorted on, not filtered on.
+        """
+        return (self.fitness is not None
+                and self.weight_covered < MIN_WEIGHT_COVERAGE)
+
+    def rank_key(self) -> tuple:
+        """
+        The one ordering every ranking in this repository uses.
+
+        Unscored last, thinly-evidenced below fully-evidenced, then by score,
+        then by key for determinism. Written here rather than in each caller
+        so two rankings cannot disagree about what "best" means.
+        """
+        return (self.fitness is None, self.thinly_evidenced,
+                -(self.fitness or 0.0), self.key)
+
     def as_dict(self) -> dict:
         return {
             "key": self.key, "task_type": self.task_type, "profile": self.profile,
@@ -242,6 +284,7 @@ class ModelFitness:
             "capability": self.capability.as_dict() if self.capability else None,
             "performance": self.performance.as_dict(),
             "health": self.health, "detail": self.detail,
+            "thinly_evidenced": self.thinly_evidenced,
             "weights_version": WEIGHTS_VERSION,
             # Said on every score, so it cannot be quoted without the caveat.
             "calibrated": False,
@@ -308,10 +351,11 @@ def score_fitness(key: str, *, task_type: str, performance: PerformanceScore,
         reasons.append(
             f"only {performance.n} observation(s); {MIN_OBSERVATIONS} are required before "
             "this figure may drive routing")
-    if detail.get("weight_covered", 0) < 0.5 and fitness is not None:
+    if detail.get("weight_covered", 0) < MIN_WEIGHT_COVERAGE and fitness is not None:
         reasons.append(
             f"computed from {detail['weight_covered']:.0%} of the intended weighting "
-            f"(missing: {', '.join(detail['dropped'])})")
+            f"(missing: {', '.join(detail['dropped'])}), so it ranks below any "
+            "fully-measured candidate however high the number is")
 
     return ModelFitness(key=key, task_type=task_type, profile=chosen, fitness=fitness,
                         capability=capability, performance=performance, health=health,

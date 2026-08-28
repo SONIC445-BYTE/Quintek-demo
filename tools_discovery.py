@@ -14,6 +14,13 @@ already knew.
         Spends one call per model, so it works from `due_for_recheck` rather
         than probing everything every time.
 
+    python3 tools_discovery.py capability-probe --providers nvidia --role validation
+        Find out empirically what a model can do, when its provider will not
+        say. Sends the smallest request that settles each capability the role
+        requires, and records the answer with its provenance and a timestamp.
+        Only models a probe could tell us something new about, so the funnel
+        does the work rather than the budget.
+
     python3 tools_discovery.py status [--provider nvidia]
         The registry as a table.
 
@@ -52,22 +59,10 @@ from pathlib import Path
 
 from benchmark import provider_catalogue as catalogue_mod
 from benchmark.discovery import (DEFAULT_POLICY_PATH, DEFAULT_REGISTRY_PATH,
-                                 Availability, DiscoveryPolicy,
+                                 ROLE_REQUIREMENTS, Availability, DiscoveryPolicy,
                                  DynamicModelRegistry, now_iso)
 
 SNAPSHOT_DIR = Path("discovery/snapshots")
-
-#: Requirements per role, as declared filters. The role's members are NOT
-#: listed here -- that is the whole point. `discovery/shortlists.json` spelled
-#: out which models served which role, so a retirement made the file wrong and
-#: nothing said so.
-ROLE_REQUIREMENTS = {
-    "generation": dict(required_capabilities=("structured_output",), min_context=32_000),
-    "validation": dict(required_capabilities=("structured_output", "reasoning"),
-                       min_context=32_000),
-    "vision": dict(required_capabilities=("structured_output", "vision")),
-}
-
 
 def _registry(args) -> DynamicModelRegistry:
     policy = DiscoveryPolicy.load(args.policy or DEFAULT_POLICY_PATH)
@@ -137,6 +132,63 @@ def run_probe(args) -> int:
               + (f"{result.latency_ms:>8.0f}ms" if result.latency_ms else ""))
         if updated.retired:
             print(f"      RETIRED: {updated.retirement_reason[:120]}")
+    registry.save()
+    print(f"\nregistry {registry.path}")
+    return 0
+
+
+def run_capability_probe(args) -> int:
+    """
+    The empirical qualification step.
+
+    Prints the forecast before spending, exactly as `validator/forecast.py`
+    does: calls are exact, tokens are estimates, and a `--dry-run` stops after
+    the forecast. A tool that discovers its own cost halfway through is what
+    the forecast exists to prevent.
+    """
+    from benchmark import capability_probe as probe_mod
+
+    registry = _registry(args)
+    if args.role not in ROLE_REQUIREMENTS:
+        raise SystemExit(f"unknown role {args.role!r}; "
+                         f"known: {', '.join(sorted(ROLE_REQUIREMENTS))}")
+    required = ROLE_REQUIREMENTS[args.role]["required_capabilities"]
+    if not required:
+        raise SystemExit(
+            f"role {args.role!r} requires no capabilities, so there is nothing to "
+            "probe for it.")
+    by_provider = {s.name: s for s in _sources(args.providers)}
+    due = [r for r in registry.due_for_capability_probe(required, limit=args.limit or None)
+           if r.provider in by_provider]
+
+    plan = probe_mod.forecast(due, required, include_opt_in=args.include_opt_in)
+    print(f"role {args.role}: needs {', '.join(required)}")
+    print(f"  models due          {plan['models']:>6}")
+    print(f"  probes per model    {plan['probes_per_model']:>6}  "
+          f"({', '.join(plan['probes'])})")
+    print(f"  CALLS (exact)       {plan['calls']:>6}")
+    print(f"  input tokens (est)  {plan['approx_input_tokens']:>6}")
+    print(f"  output tokens (max) {plan['max_output_tokens']:>6}")
+    print(f"  {plan['note']}\n")
+    if not due:
+        print("nothing is due: every model either already has these answers, is "
+              "already known to lack one, or is not currently AVAILABLE.")
+        return 0
+    if args.dry_run:
+        for record in due:
+            print(f"  would probe {record.key}")
+        return 0
+
+    for record in due:
+        run = probe_mod.run_probes(by_provider[record.provider], record.model_id,
+                                   required, include_opt_in=args.include_opt_in)
+        registry.record_capability_probe(record.key, run.claims(),
+                                         probe_version=probe_mod.PROBE_VERSION)
+        updated = registry.get(record.key)
+        marks = " ".join(
+            f"{name}={updated.capability(name).value}" for name in required)
+        print(f"  {record.key:<52} {marks}"
+              + (f"   [{run.stopped_early}]" if run.stopped_early else ""))
     registry.save()
     print(f"\nregistry {registry.path}")
     return 0
@@ -230,6 +282,17 @@ def main(argv=None) -> int:
     prb.add_argument("--limit", type=int, default=0,
                      help="probe at most this many models this run")
 
+    cap = sub.add_parser("capability-probe")
+    cap.add_argument("--providers", default="nvidia")
+    cap.add_argument("--role", default="validation")
+    cap.add_argument("--limit", type=int, default=0,
+                     help="probe at most this many models this run")
+    cap.add_argument("--include-opt-in", action="store_true",
+                     help="also run the long-context probe, whose input is "
+                          "measured in thousands of tokens rather than tens")
+    cap.add_argument("--dry-run", action="store_true",
+                     help="print the forecast and stop")
+
     sts = sub.add_parser("status")
     sts.add_argument("--provider", default="")
     sts.add_argument("--json", action="store_true")
@@ -245,7 +308,7 @@ def main(argv=None) -> int:
 
     args = parser.parse_args(argv)
     return {"catalogue": run_catalogue, "probe": run_probe, "status": run_status,
-            "shortlist": run_shortlist,
+            "capability-probe": run_capability_probe, "shortlist": run_shortlist,
             "check-experiment": run_check_experiment}[args.mode](args)
 
 

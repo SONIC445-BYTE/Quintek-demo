@@ -3,9 +3,31 @@ Orchestration layer: the one place a production call site should ever touch.
 
     task -> Router.select() -> provider.generate() -> provenance record
                                        |
-                                  on failure -> exclude, re-route, retry
+                                  on failure -> classify, record health,
+                                                exclude, re-route, retry
                                        |
                                   every attempt logged, nothing silent
+
+HEALTH IS SHARED, NOT LOCAL
+---------------------------
+This loop used to keep its `tried` set in a local variable and nowhere else.
+Within one `generate()` a failed candidate was excluded correctly; the NEXT
+independent call started from a clean slate and selected it again. A model
+answering 410 was therefore re-selected on every request, forever, while
+`benchmark/batch.py` -- which does consult `health.allows()` -- stopped after
+three.
+
+So the orchestrator now reads and writes the same `HealthRegistry` the router
+and the batch runner use. A failure is classified through
+`provider_status.assess`, recorded against `provider:model`, and the breaker
+decides whether the next request may reach that candidate at all. Conclusive
+failures (410, 401, 402, a denied CONNECT) open the circuit on the first
+observation; a timeout still needs the threshold, because one timeout is not
+evidence of anything.
+
+Supplying a `DynamicModelRegistry` as well makes a retirement survive the
+process: a 410 seen in production is written to the registry as RETIRED, so a
+restart does not rediscover it the hard way.
 
 This is the piece the actual Quintek product backend (a separate
 repository -- this repo is the benchmark harness, see README.md's scope
@@ -31,6 +53,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import analytics as an
+from .provider_status import ProviderStatus, assess
 from .providers.base import GenerationRequest, GenerationResponse, ModelProvider
 from .registry import ModelCandidate, Registry
 from .router import Router, RoutingPolicy
@@ -59,6 +82,11 @@ class ExecutionRecord:
     fallback: bool = False
     fallback_reason: str | None = None
     attempt_number: int = 1
+    #: The classified failure, e.g. MODEL_RETIRED. Defaulted so records
+    #: written before this field existed still load. "error" is a sentence;
+    #: this is the category the retry and circuit decisions were made on, and
+    #: a record that keeps only the sentence cannot explain either.
+    failure_status: str = ""
 
     def as_dict(self) -> dict:
         return dict(
@@ -69,7 +97,7 @@ class ExecutionRecord:
             input_tokens=self.input_tokens, output_tokens=self.output_tokens,
             status=self.status, error=self.error, routing_policy=self.routing_policy,
             fallback=self.fallback, fallback_reason=self.fallback_reason,
-            attempt_number=self.attempt_number,
+            attempt_number=self.attempt_number, failure_status=self.failure_status,
         )
 
 
@@ -158,6 +186,7 @@ class Orchestrator:
         provider_factory: Callable[[ModelCandidate], ModelProvider],
         execution_log: ExecutionLog, routing_log: an.RoutingLog,
         call_limiter: CallLimiter | None = None,
+        health=None, model_registry=None,
     ):
         self.router = Router(registry, archive)
         self.registry = registry
@@ -165,6 +194,14 @@ class Orchestrator:
         self.execution_log = execution_log
         self.routing_log = routing_log
         self.call_limiter = call_limiter or CallLimiter()
+        # The SAME HealthRegistry the router and batch runner use. Optional so
+        # every existing caller is unaffected, but a production wiring that
+        # omits it gets the old behaviour: a failure this call remembers and
+        # the next call does not.
+        self.health = health
+        # Optional `benchmark.discovery.DynamicModelRegistry`. Makes a
+        # retirement observed in production outlive the process.
+        self.model_registry = model_registry
 
     def generate(
         self, task, prompt: str, *,
@@ -179,7 +216,9 @@ class Orchestrator:
         record = None
 
         for _ in range(max_fallbacks + 1):
-            result = self.router.select(task, policy=policy, exclude=tried, **router_kwargs)
+            barred = self._barred_candidates()
+            result = self.router.select(task, policy=policy,
+                                        exclude=tried | set(barred), **router_kwargs)
             execution_id = f"exec-{uuid.uuid4().hex[:12]}"
 
             self.routing_log.record(an.RoutingDecision(
@@ -192,12 +231,20 @@ class Orchestrator:
             ))
 
             if result.selected_candidate is None:
+                reason = result.reason
+                if barred:
+                    # Otherwise "no candidate is capability-matched" is the
+                    # only thing on the record, when the real answer is that
+                    # every capable candidate is circuit-broken.
+                    reason += ("; health excluded " +
+                               ", ".join(f"{cid} ({why})"
+                                         for cid, why in sorted(barred.items())))
                 record = ExecutionRecord(
                     execution_id=execution_id, task_type=getattr(task, "value", str(task)),
                     candidate_id=None, provider=None, model=None, model_version=None,
                     prompt_version=prompt_version, timestamp=_now(), latency_ms=None,
                     input_tokens=None, output_tokens=None, status="no_eligible_candidate",
-                    error=result.reason, routing_policy=policy.value,
+                    error=reason, routing_policy=policy.value,
                     fallback=is_fallback, fallback_reason=fallback_reason,
                 )
                 self.execution_log.record(record)
@@ -228,6 +275,7 @@ class Orchestrator:
             finally:
                 self.call_limiter.release()
 
+            verdict = self._observe(candidate, response)
             record = ExecutionRecord(
                 execution_id=execution_id, task_type=getattr(task, "value", str(task)),
                 candidate_id=candidate.candidate_id, provider=candidate.provider,
@@ -237,6 +285,7 @@ class Orchestrator:
                 status="ok" if response.ok else "error", error=response.error,
                 routing_policy=policy.value, fallback=is_fallback,
                 fallback_reason=fallback_reason, attempt_number=len(tried) + 1,
+                failure_status="" if response.ok else verdict.status,
             )
             self.execution_log.record(record)
 
@@ -244,9 +293,66 @@ class Orchestrator:
                 return response, record
 
             # Never silently switch models -- record exactly why, then retry
-            # through the router with this candidate excluded.
+            # through the router with this candidate excluded. The exclusion
+            # now also lives in the health registry, so the NEXT independent
+            # call sees it too.
             tried.add(candidate.candidate_id)
             is_fallback = True
-            fallback_reason = f"{candidate.candidate_id} failed: {response.error}"
+            fallback_reason = (f"{candidate.candidate_id} failed "
+                               f"[{verdict.status}]: {response.error}")
 
         return None, record
+
+    # ---------- health ----------
+
+    def _barred_candidates(self) -> dict[str, str]:
+        """
+        Candidate ids the shared health state says must not be called, mapped
+        to why.
+
+        Read fresh on every routing attempt rather than cached, because the
+        whole point is that another worker's failure a second ago changes this
+        request's answer.
+        """
+        barred: dict[str, str] = {}
+        if self.health is None and self.model_registry is None:
+            return barred
+        for candidate in self.registry.eligible_candidates():
+            key = f"{candidate.provider}:{candidate.model_id}"
+            if self.model_registry is not None:
+                record = self.model_registry.get(key)
+                if record is not None and record.retired:
+                    barred[candidate.candidate_id] = (
+                        f"{key} retired: {record.retirement_reason or 'withdrawn'}")
+                    continue
+            if self.health is not None and not self.health.allows(key):
+                barred[candidate.candidate_id] = self.health.refusal_reason(key)
+        return barred
+
+    def _observe(self, candidate: ModelCandidate, response: GenerationResponse):
+        """
+        Classify one outcome and write it everywhere it has to be known.
+
+        Classification happens once, here, and the same verdict drives the
+        execution record, the breaker and the model registry. Classifying
+        separately in each place is how two of them end up disagreeing about
+        whether a model is usable.
+        """
+        key = f"{candidate.provider}:{candidate.model_id}"
+        verdict = assess(None if response.ok else (response.error or "unspecified error"),
+                         latency_ms=response.latency_ms)
+        if self.health is not None:
+            self.health.observe(
+                key, success=bool(response.ok), latency_ms=response.latency_ms,
+                timeout=verdict.status == ProviderStatus.TIMEOUT,
+                error="" if response.ok else (response.error or ""),
+                status=None if response.ok else verdict.status)
+        if (self.model_registry is not None
+                and verdict.status == ProviderStatus.MODEL_RETIRED
+                and self.model_registry.get(key) is not None):
+            # A retirement learned in production, persisted, so a restart does
+            # not have to learn it again by spending another call.
+            self.model_registry.record_probe(
+                key, error=response.error, latency_ms=response.latency_ms)
+            self.model_registry.save()
+        return verdict

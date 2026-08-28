@@ -284,8 +284,11 @@ class QuintekRouter:
 
         # Unscored candidates sort last but are NOT dropped: a candidate with
         # no evidence is exactly what exploration exists to fix, and dropping
-        # it would make that impossible.
-        eligible.sort(key=lambda s: (s.fitness is None, -(s.fitness or 0.0), s.key))
+        # it would make that impossible. A THINLY-evidenced one -- scored from
+        # under half the profile's weighting -- sorts below every fully
+        # measured candidate for the same reason a 1.000 from cost alone is
+        # not better than a 0.936 from everything. See fitness.rank_key.
+        eligible.sort(key=lambda s: s.rank_key())
         ranked = [s.key for s in eligible]
         observations = {s.key: s.performance.n for s in eligible}
         by_key = {s.key: s for s in eligible}
@@ -343,8 +346,7 @@ class QuintekRouter:
         to mean anything.
         """
         scored = self._score(list(self.candidates.values()), task_type, profile)
-        scored.sort(key=lambda s: (not s.eligible, s.fitness is None,
-                                   -(s.fitness or 0.0), s.key))
+        scored.sort(key=lambda s: (not s.eligible,) + s.rank_key())
         under = [s.key for s in scored if not s.performance.evidence_sufficient]
         return {
             "task_type": task_type,

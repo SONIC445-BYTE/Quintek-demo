@@ -28,18 +28,73 @@ sys.path.insert(0, str(ROOT))
 print = functools.partial(print, flush=True)
 
 
+def _resolve_seats(provider: str, validator: str, generator: str) -> tuple[str, str]:
+    """
+    Fill in whichever seats were not named, from the discovery registry.
+
+    The two must differ: a model marking its own work is not a check, which is
+    the same rule `tools_validator_eval.py` enforces for candidate and judge.
+    Refuses rather than reusing one model for both, and refuses rather than
+    inventing a default, because this tool spends real credits.
+    """
+    from benchmark.discovery import DEFAULT_REGISTRY_PATH, DynamicModelRegistry
+    from pathlib import Path as _Path
+
+    if not _Path(DEFAULT_REGISTRY_PATH).exists():
+        raise SystemExit(
+            "no discovery registry on disk, so there is no model to resolve. Run "
+            "`python3 tools_discovery.py catalogue --providers "
+            f"{provider}` then `probe`, or pass --validator and --generator.")
+    registry = DynamicModelRegistry(DEFAULT_REGISTRY_PATH)
+    if not validator:
+        record = registry.resolve("any", provider=provider)
+        if record is None:
+            raise SystemExit(
+                f"no {provider} model is currently AVAILABLE, so there is nothing to "
+                "run the battery against. See `tools_discovery.py status`.")
+        validator = record.model_id
+        print(f"validator resolved from the registry: {validator}")
+    if not generator:
+        record = registry.resolve("any", provider=provider,
+                                  exclude={f"{provider}:{validator}"})
+        if record is None:
+            raise SystemExit(
+                f"only one {provider} model is currently AVAILABLE, so the generator "
+                "would be the validator. A model marking its own work is not a check; "
+                "name a --generator on another provider or wait for discovery to find "
+                "a second.")
+        generator = record.model_id
+        print(f"generator resolved from the registry: {generator}")
+    if validator == generator:
+        raise SystemExit(
+            "--validator and --generator are the same model. The independence check "
+            "has nothing to be independent of.")
+    return validator, generator
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Adversarial battery against a real validator")
     parser.add_argument("--provider", default="nvidia")
-    parser.add_argument("--validator", default="meta/llama-3.1-8b-instruct")
-    parser.add_argument("--generator", default="meta/llama-3.1-70b-instruct",
+    # No literal model defaults. Both used to name llama-3.1 models, which the
+    # provider retired on 2026-08-26 -- so the default invocation of a tool
+    # that spends real credits would have collected 410s and reported them as
+    # a validator's adversarial performance. Unset means "resolve from the
+    # discovery registry", and no resolvable model means refuse, not guess.
+    parser.add_argument("--validator", default="",
+                        help="model id; defaults to the best currently-AVAILABLE model "
+                             "for this provider in the discovery registry")
+    parser.add_argument("--generator", default="",
                         help="the candidate recorded as having written each question, so the "
-                             "validator's independence check has something to be independent of")
+                             "validator's independence check has something to be independent "
+                             "of. Defaults to a DIFFERENT resolved model than the validator")
     parser.add_argument("--controls", type=int, default=10,
                         help="how many sound items to run as the control arm")
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--out", default="alpha0_runs")
     args = parser.parse_args()
+    if not args.validator or not args.generator:
+        args.validator, args.generator = _resolve_seats(
+            args.provider, args.validator, args.generator)
 
     from benchmark.adversarial import AdversarialRun, load_battery, write_report
     from benchmark.providers.registry import build_provider, describe

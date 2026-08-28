@@ -10,7 +10,12 @@ Lifecycle (section 10 of the architecture spec this implements):
 
     REGISTERED -> BENCHMARK_REQUIRED -> EVALUATING -> ELIGIBLE -> PRODUCTION
                                                     \\-> FAILED
-    ELIGIBLE/PRODUCTION -> DEPRECATED
+    any non-terminal state -> DEPRECATED
+
+DEPRECATED is reachable from anywhere because a provider can withdraw a
+model at any point, including while it is sitting here REGISTERED and
+unevaluated. That is an exit, not a promotion: the route INTO ELIGIBLE is
+unchanged and still runs only through EVALUATING.
 
 Only ELIGIBLE or PRODUCTION candidates may ever be returned by the router
 (benchmark/router.py) -- this module is where that rule is structurally
@@ -48,10 +53,21 @@ ALL_STATUSES = {
 # registration as a new candidate (a failed candidate is not "retried" in
 # place -- see docs/CANDIDATE_DEFINITION.md: a materially different config
 # is a different candidate).
+#
+# DEPRECATED is reachable from every non-terminal state, and only DEPRECATED
+# is. A provider can withdraw a model at any point in its life -- NVIDIA
+# retired two on 2026-08-26 while they sat here REGISTERED -- and a registry
+# with nowhere to put that fact either keeps offering a model that no longer
+# exists or has the row deleted, which loses the history. Neither is
+# acceptable, and neither was avoidable before this line existed.
+#
+# This widens only the exit. The guarded transition is the one INTO
+# ELIGIBLE, which still comes solely from EVALUATING: nothing here makes it
+# one typo easier to mark a candidate eligible without a benchmark run.
 VALID_TRANSITIONS: dict[str, set[str]] = {
-    Status.REGISTERED: {Status.BENCHMARK_REQUIRED},
-    Status.BENCHMARK_REQUIRED: {Status.EVALUATING},
-    Status.EVALUATING: {Status.ELIGIBLE, Status.FAILED},
+    Status.REGISTERED: {Status.BENCHMARK_REQUIRED, Status.DEPRECATED},
+    Status.BENCHMARK_REQUIRED: {Status.EVALUATING, Status.DEPRECATED},
+    Status.EVALUATING: {Status.ELIGIBLE, Status.FAILED, Status.DEPRECATED},
     Status.ELIGIBLE: {Status.PRODUCTION, Status.DEPRECATED, Status.EVALUATING},
     Status.PRODUCTION: {Status.DEPRECATED, Status.EVALUATING},
     Status.DEPRECATED: set(),
