@@ -179,6 +179,13 @@ class ProviderRegistry:
             entry.live_ok = None            # never reached / never authorised
             if verdict.status == ProviderStatus.EGRESS_BLOCKED:
                 entry.blocked_host = host or entry.blocked_host
+        elif verdict.status in (ProviderStatus.MODEL_RETIRED,
+                                ProviderStatus.BILLING_BLOCKED):
+            # Facts about ONE model, or about the account's balance. Neither is
+            # evidence about the provider's reachability, so `live_ok` is left
+            # exactly as it was rather than flipped to "failed" -- a provider
+            # whose catalogue lost one model has not stopped working.
+            pass
         else:
             entry.live_ok = False
         return entry
@@ -196,7 +203,8 @@ class ProviderRegistry:
         """
         blocked = set(exclude_statuses) or {
             ProviderStatus.EGRESS_BLOCKED, ProviderStatus.AUTH_FAILED,
-            ProviderStatus.MODEL_UNAVAILABLE}
+            ProviderStatus.MODEL_UNAVAILABLE, ProviderStatus.MODEL_RETIRED,
+            ProviderStatus.BILLING_BLOCKED}
         required = tuple(required_capabilities)
 
         kept, dropped = [], []
@@ -263,22 +271,26 @@ def default_registry() -> ProviderRegistry:
     The providers this repository has adapters for, with what is known about
     each as of the last probe. Statuses are set by `record_probe`, not here --
     this only declares what exists.
+
+    `default_model` is deliberately left empty for every real provider. It
+    used to name `meta/llama-3.1-8b-instruct` for NVIDIA, which the provider
+    retired on 2026-08-26 -- and because the id lived in Python source, the
+    only way to notice or fix that was to edit and redeploy this file. Which
+    model a provider should serve is an observation, and it lives in
+    `benchmark/discovery.py` where a discovery run can change it.
     """
     registry = ProviderRegistry()
     registry.add_provider(ProviderEntry(
-        "nvidia", mock_tested=True, default_model="meta/llama-3.1-8b-instruct",
-        api_key_env="NVIDIA_API_KEY",
+        "nvidia", mock_tested=True, api_key_env="NVIDIA_API_KEY",
         base_url="https://integrate.api.nvidia.com/v1/chat/completions",
         notes="Serverless. Single requests fine; 70B endpoints show severe latency spikes."))
     registry.add_provider(ProviderEntry(
-        "cerebras", mock_tested=True, default_model="llama3.1-8b",
-        api_key_env="CEREBRAS_API_KEY",
+        "cerebras", mock_tested=True, api_key_env="CEREBRAS_API_KEY",
         base_url="https://api.cerebras.ai/v1/chat/completions",
         notes="Speed-oriented host; directly tests whether the quality/latency tension is "
               "inherent or an artefact of one endpoint."))
     registry.add_provider(ProviderEntry(
-        "openrouter", mock_tested=True, default_model="meta-llama/llama-3.1-8b-instruct",
-        api_key_env="OPENROUTER_API_KEY",
+        "openrouter", mock_tested=True, api_key_env="OPENROUTER_API_KEY",
         base_url="https://openrouter.ai/api/v1/chat/completions",
         notes="Several model families behind one key -- the cheapest route to satisfying "
               "judge independence properly."))

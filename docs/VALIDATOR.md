@@ -460,6 +460,35 @@ that disagreement, not waived by good agreement elsewhere. And the gate never
 touches `kappa()` itself, `load_sheet`, `template`, or how a disagreement is
 adjudicated — it only decides whether a measured, unmodified kappa is acted on.
 
+## Phase 0 is BLOCKED: the frozen pairing was retired
+
+Measured 2026-08-28, against the live endpoint:
+
+```
+meta/llama-3.1-8b-instruct    HTTP 410  end of life 2026-08-26T09:00:00Z
+meta/llama-3.1-70b-instruct   HTTP 410  end of life 2026-08-26T09:00:00Z
+```
+
+Both seats of "the first set is 8B candidate, 70B judge" are gone. The
+credential works — a 410 is the host answering — and no experiment has been
+run, no configuration has been frozen, and the holdout has not been touched.
+
+Nothing here picks a replacement. The experiment set exists to make three rows
+comparable; an arm run against a substituted model is not the arm the other
+rows were measured with, so establishing a new pairing is an explicit decision
+recorded with `--refreeze` and a `--note` saying which models and why. That is
+the existing mechanism and it is deliberately manual.
+
+`tools_validator_eval.py experiments` now refuses to start against a seat the
+provider has withdrawn, naming the seat and the evidence, before any budget is
+committed. The check reads `benchmark/discovery.py`'s registry and says nothing
+when no registry exists on disk — a missing registry means discovery has not
+run here, which is not evidence that the models are fine. See
+`docs/MODEL_DISCOVERY.md`.
+
+The scientific question is unchanged by the retirement: does Layer C earn its
+place as the independent component of the complete validator?
+
 ## Running it
 
 ```bash

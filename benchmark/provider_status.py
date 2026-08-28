@@ -9,6 +9,9 @@ identical to a `try/except` demand opposite responses:
     429 (rate limited)           -> will succeed later, and retrying NOW makes
                                     it worse. Back off, keep the provider.
     504 (gateway timeout)        -> might succeed immediately. Retry once.
+    410 (model retired)          -> will never succeed again, anywhere, for
+                                    anyone. Stop calling it, and record that
+                                    it is gone rather than re-probing forever.
 
 Treating all three as "error, retry twice, open the circuit" is how this
 project spent an hour hammering an endpoint that was never going to answer,
@@ -22,6 +25,16 @@ An adapter that is correct, tested, and cannot reach its host from this
 network has not failed. `EGRESS_BLOCKED` says exactly that, and it is
 deliberately not a quality signal: nothing in `benchmark/fitness.py` may read
 it as evidence about the model.
+
+A FOURTH DISTINCTION, ADDED FROM AN INCIDENT
+--------------------------------------------
+    NOT ENTITLED  (404)   !=   WITHDRAWN  (410)
+
+On 2026-08-28 both models frozen into the validator's Phase 0 experiment
+answered 410 "has reached its end of life on 2026-08-26". A 404 from the same
+host means "not found for this account" and a billing or entitlement change
+reverses it; a 410 means the weights are gone. Collapsing them puts a dead
+model on a permanent re-probe schedule and keeps it in the routable set.
 
 Classification is from observable evidence -- exception type, HTTP status,
 response body -- never from a provider's own claim about itself.
@@ -41,6 +54,16 @@ class ProviderStatus:
     AUTH_FAILED = "AUTH_FAILED"
     INVALID_RESPONSE = "INVALID_RESPONSE"
     MODEL_UNAVAILABLE = "MODEL_UNAVAILABLE"
+    # The model existed and has been withdrawn by the provider. Permanent in a
+    # way MODEL_UNAVAILABLE is not: a 404 on NVIDIA means "not entitled for
+    # this account", which a billing change can reverse; a 410 means the
+    # weights are gone for everybody. Measured 2026-08-28:
+    # meta/llama-3.1-8b-instruct and meta/llama-3.1-70b-instruct both answered
+    # 410 "has reached its end of life on 2026-08-26". Before this status
+    # existed both classified as UNKNOWN_ERROR -- retryable, circuit reopening
+    # every 60s, forever.
+    MODEL_RETIRED = "MODEL_RETIRED"
+    BILLING_BLOCKED = "BILLING_BLOCKED"
     EGRESS_BLOCKED = "EGRESS_BLOCKED"
     UNKNOWN_ERROR = "UNKNOWN_ERROR"
 
@@ -48,7 +71,8 @@ class ProviderStatus:
 ALL_STATUSES = (
     ProviderStatus.AVAILABLE, ProviderStatus.DEGRADED, ProviderStatus.RATE_LIMITED,
     ProviderStatus.TIMEOUT, ProviderStatus.AUTH_FAILED, ProviderStatus.INVALID_RESPONSE,
-    ProviderStatus.MODEL_UNAVAILABLE, ProviderStatus.EGRESS_BLOCKED,
+    ProviderStatus.MODEL_UNAVAILABLE, ProviderStatus.MODEL_RETIRED,
+    ProviderStatus.BILLING_BLOCKED, ProviderStatus.EGRESS_BLOCKED,
     ProviderStatus.UNKNOWN_ERROR,
 )
 
@@ -103,6 +127,24 @@ POLICIES: dict[str, StatusPolicy] = {
         "This provider does not serve that model id. Another attempt cannot conjure it, and "
         "the model may be excellent elsewhere -- this is a routing fact, not a quality one."),
 
+    ProviderStatus.MODEL_RETIRED: StatusPolicy(
+        # The one failure no amount of waiting, paying or re-authenticating
+        # fixes. circuit_seconds=None so the breaker never re-probes: the
+        # model is not coming back, and a re-probe schedule for a retired
+        # model is a permanent low-grade waste with no reachable success.
+        ProviderStatus.MODEL_RETIRED, False, 0, 0.0, True, None, False, True,
+        "The provider has withdrawn this model. It will not return, so retrying and "
+        "re-probing are both pointless; route to a different model and record the "
+        "retirement. This says nothing about how good the model was."),
+
+    ProviderStatus.BILLING_BLOCKED: StatusPolicy(
+        # A billing state, not a model property, and not a credential problem
+        # either -- the key is valid, the account cannot pay. Recheckable, but
+        # only after a human acts, so the circuit stays open until then.
+        ProviderStatus.BILLING_BLOCKED, False, 0, 0.0, True, None, False, True,
+        "The account cannot pay for this call. The key is valid and the model is fine; "
+        "retrying spends attempts on a state only a human can change."),
+
     ProviderStatus.RATE_LIMITED: StatusPolicy(
         # Retrying immediately is what caused the limit. Back off, and do not
         # open the circuit -- the provider is healthy, we are being greedy.
@@ -152,6 +194,18 @@ _EGRESS_PATTERNS = (
     r"egress",
     r"blocked by (?:the )?(?:organization|org|firewall)",
 )
+# Retirement, checked before the 404 patterns: a withdrawn model and one this
+# account cannot see are both "you may not call this", and only one of them
+# can ever come back.
+_RETIRED_PATTERNS = (r"\b410\b", r"end[ -]of[ -]life", r"\beol\b",
+                     r"has been retired", r"\bis retired\b", r"no longer available",
+                     r"no longer served", r"\bsunset(?:ted|ting)?\b",
+                     r"deprecated and removed", r"410 gone")
+# Payment, checked before the rate patterns because a 402 body sometimes
+# mentions quota and the two demand different responses -- one needs a card,
+# the other needs patience.
+_BILLING_PATTERNS = (r"\b402\b", r"payment[ _]required", r"insufficient (?:credit|credits|balance|funds)",
+                     r"billing (?:is )?(?:required|blocked)", r"no active subscription")
 _AUTH_PATTERNS = (r"\b401\b", r"\b403\b(?!.*connect)", r"unauthorized", r"invalid api key",
                   r"authentication", r"api key not (?:found|valid)", r"forbidden")
 _RATE_PATTERNS = (r"\b429\b", r"rate.?limit", r"too many requests", r"quota exceeded")
@@ -187,6 +241,10 @@ def classify(error: str | BaseException | None = None, *, http_status: int | Non
     if text:
         if _matches(text, _EGRESS_PATTERNS):
             return ProviderStatus.EGRESS_BLOCKED
+        if _matches(text, _RETIRED_PATTERNS) or http_status == 410:
+            return ProviderStatus.MODEL_RETIRED
+        if _matches(text, _BILLING_PATTERNS) or http_status == 402:
+            return ProviderStatus.BILLING_BLOCKED
         if _matches(text, _RATE_PATTERNS) or http_status == 429:
             return ProviderStatus.RATE_LIMITED
         if _matches(text, _TIMEOUT_PATTERNS) or isinstance(error, TimeoutError):
@@ -201,6 +259,7 @@ def classify(error: str | BaseException | None = None, *, http_status: int | Non
 
     if http_status is not None and http_status >= 400:
         return {429: ProviderStatus.RATE_LIMITED, 404: ProviderStatus.MODEL_UNAVAILABLE,
+                410: ProviderStatus.MODEL_RETIRED, 402: ProviderStatus.BILLING_BLOCKED,
                 401: ProviderStatus.AUTH_FAILED, 403: ProviderStatus.AUTH_FAILED,
                 408: ProviderStatus.TIMEOUT, 504: ProviderStatus.TIMEOUT,
                 }.get(http_status, ProviderStatus.UNKNOWN_ERROR)

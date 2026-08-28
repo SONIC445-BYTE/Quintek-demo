@@ -13,6 +13,9 @@ only ever REMOVE candidates, and then chooses among what is left:
     task
       |
       v
+    retirement filter      has the provider withdrawn it since we last looked?
+      |
+      v
     capability filter      does it claim to do this at all?
       |
       v
@@ -125,13 +128,21 @@ class QuintekRouter:
     def __init__(self, candidates: list[Candidate], *, performance_for=None,
                  health_for=None, capability_for=None,
                  exploration: ExplorationPolicy | None = None,
-                 required_capabilities=None, provider_registry=None):
+                 required_capabilities=None, provider_registry=None,
+                 model_registry=None):
         # LAYER 1's source of truth, when one is supplied: reachability,
         # credentials, model existence and declared capability all come from
         # the provider registry rather than being inferred from call history.
         # A provider blocked by egress policy has no call history to infer
         # from, which is precisely when guessing goes wrong.
         self.provider_registry = provider_registry
+        # LAYER 0, when one is supplied: has the provider withdrawn this model
+        # since we last looked? A `benchmark.discovery.DynamicModelRegistry`.
+        # Checked before anything else because a retired model cannot be
+        # scored, cannot be probed, and cannot become available again -- and
+        # because the alternative is what happened on 2026-08-26, when a model
+        # died and every part of this system went on offering it.
+        self.model_registry = model_registry
         self.candidates = {c.key: c for c in candidates}
         self.performance_for = performance_for or (lambda key, task: PerformanceScore(key))
         self.health_for = health_for or (lambda key: {"usable_now": True})
@@ -164,6 +175,16 @@ class QuintekRouter:
             allowed = None
 
         for candidate in self.candidates.values():
+            withdrawn = self._withdrawn(candidate.key)
+            if withdrawn is not None:
+                dropped.append({
+                    "key": candidate.key, "dropped_at": "layer0_retired", "layer": 1,
+                    "reason": withdrawn, "status": "RETIRED",
+                    # Not a quality signal, and flagged as such: a model is not
+                    # worse for having been withdrawn, and every historical
+                    # number it earned stays valid.
+                    "environmental": True})
+                continue
             if allowed is not None and candidate.key not in allowed:
                 entry = registry_status.get(candidate.key, {})
                 dropped.append({
@@ -181,6 +202,24 @@ class QuintekRouter:
             else:
                 kept.append(candidate)
         return kept, dropped
+
+    def _withdrawn(self, key: str) -> str | None:
+        """
+        The reason this model is gone, or None.
+
+        Only terminal states are checked here. A rate-limited or
+        billing-blocked model is temporarily unusable and belongs to the
+        health filter, which knows about cooldowns; a retired one will never
+        be usable again and must leave the candidate set entirely.
+        """
+        if self.model_registry is None:
+            return None
+        record = self.model_registry.get(key)
+        if record is None or not record.retired:
+            return None
+        return (f"retired by the provider: "
+                f"{record.retirement_reason or 'withdrawn'}"
+                + (f" (recorded {record.retired_at})" if record.retired_at else ""))
 
     def _health_filter(self, candidates: list[Candidate]) -> tuple[list[Candidate], list[dict]]:
         kept, dropped = [], []

@@ -42,6 +42,7 @@ narrating history or is a defect — report it.
 | 24 | `docs/IMPLEMENTATION_ACCEPTANCE.md` | definition of done |
 | 25 | `docs/DECISION_LOG.md` | architecture decisions |
 | 26 | `docs/V0_4_CHANGELOG.md` | what changed and why |
+| 27 | `docs/MODEL_DISCOVERY.md` | dynamic provider/model discovery, and why it is not the freeze |
 
 ## New in v0.4
 

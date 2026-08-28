@@ -326,6 +326,32 @@ def _select_experiments(only: str | None):
             if layers.upper() in requested]
 
 
+def _withdrawn_seats(args) -> list[dict]:
+    """
+    Seats whose model the provider has withdrawn since the set was frozen.
+
+    Consults `benchmark.discovery`'s registry when one exists on disk and says
+    nothing when it does not -- a missing registry means discovery has not run
+    here, which is not evidence that the models are fine. The check is
+    deliberately one-directional: it can stop a run, never start one, and it
+    never proposes a replacement.
+    """
+    try:
+        from benchmark.discovery import DynamicModelRegistry, DEFAULT_REGISTRY_PATH
+    except ImportError:
+        return []
+    if not Path(DEFAULT_REGISTRY_PATH).exists():
+        return []
+    registry = DynamicModelRegistry(DEFAULT_REGISTRY_PATH)
+    seats = []
+    for seat, spec in (("candidate", args.candidate), ("judge", args.judge)):
+        provider, _, model_id = (spec or "").partition(":")
+        if model_id:
+            seats.append({"seat": seat, "provider": provider.strip(),
+                          "model": model_id.strip()})
+    return [row for row in registry.blocked_experiment_models(seats) if row["terminal"]]
+
+
 def run_experiments(args):
     """
     The three measurements, in order, against one frozen configuration.
@@ -351,6 +377,22 @@ def run_experiments(args):
               "exists to supply a judgement the candidate did not produce, and a second "
               "opinion from the same weights is the first opinion again.", file=sys.stderr)
         return 2
+    blocked = _withdrawn_seats(args)
+    if blocked:
+        print("refusing to start: EXPERIMENT BLOCKED -- a model this set is frozen "
+              "against can no longer be called.", file=sys.stderr)
+        for row in blocked:
+            print(f"  {row['seat'] or 'seat'}: {row['key']} is {row['availability']}",
+                  file=sys.stderr)
+            if row["detail"]:
+                print(f"      {row['detail'][:180]}", file=sys.stderr)
+        print("\nThe frozen configuration is what makes the runs in a set comparable, "
+              "so nothing here will pick a replacement for you: an arm run against a "
+              "substituted model is not the arm the other rows were measured with. "
+              "Establishing a new pairing is an explicit decision -- rerun with "
+              "--refreeze and a --note saying which models and why.", file=sys.stderr)
+        return 2
+
     conform = ground
     seats = {"grounding": (ground, runs.SEAT_CANDIDATE),
              "judge": (judge_provider, runs.SEAT_JUDGE),
