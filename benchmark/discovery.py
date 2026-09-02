@@ -379,6 +379,14 @@ class DiscoveryPolicy:
     #: One absence is a listing quirk -- measured on this account, see the
     #: module docstring. Two consecutive absences is a signal.
     absences_before_retired: int = 2
+    #: Hard ceiling on OUTBOUND PROBE CALLS per invocation. Configuration, not
+    #: a constant and not a judgement call made at the keyboard: external
+    #: spend has to be bounded by a number somebody wrote down in advance,
+    #: the same reason `tools_validator_eval.py` refuses to start without
+    #: --max-calls. A forecast above this refuses rather than truncating
+    #: silently, because a half-probed provider read as a complete picture is
+    #: how "no model qualifies" becomes a conclusion instead of a budget.
+    probe_call_ceiling: int = 60
 
     @classmethod
     def load(cls, path: str | Path = DEFAULT_POLICY_PATH) -> "DiscoveryPolicy":

@@ -162,6 +162,8 @@ def run_capability_probe(args) -> int:
            if r.provider in by_provider]
 
     plan = probe_mod.forecast(due, required, include_opt_in=args.include_opt_in)
+    ceiling = (args.max_calls if args.max_calls is not None
+               else registry.policy.probe_call_ceiling)
     print(f"role {args.role}: needs {', '.join(required)}")
     print(f"  models due          {plan['models']:>6}")
     print(f"  probes per model    {plan['probes_per_model']:>6}  "
@@ -169,7 +171,16 @@ def run_capability_probe(args) -> int:
     print(f"  CALLS (exact)       {plan['calls']:>6}")
     print(f"  input tokens (est)  {plan['approx_input_tokens']:>6}")
     print(f"  output tokens (max) {plan['max_output_tokens']:>6}")
+    print(f"  CEILING (configured)  {ceiling:>6}  "
+          f"[{'within' if plan['calls'] <= ceiling else 'EXCEEDED'}]")
     print(f"  {plan['note']}\n")
+    if plan["calls"] > ceiling:
+        print(f"refusing to start: the forecast of {plan['calls']} call(s) exceeds the "
+              f"configured ceiling of {ceiling}. Raise probe_call_ceiling in "
+              f"{DEFAULT_POLICY_PATH}, pass --max-calls, or narrow the run with "
+              "--limit. Truncating silently would leave a half-probed provider "
+              "looking like a complete picture.", file=sys.stderr)
+        return 2
     if not due:
         print("nothing is due: every model either already has these answers, is "
               "already known to lack one, or is not currently AVAILABLE.")
@@ -179,9 +190,15 @@ def run_capability_probe(args) -> int:
             print(f"  would probe {record.key}")
         return 0
 
+    spent = 0
     for record in due:
+        if spent >= ceiling:
+            print(f"\nstopping at the configured ceiling of {ceiling} call(s); "
+                  f"{len(due) - due.index(record)} model(s) not probed this run.")
+            break
         run = probe_mod.run_probes(by_provider[record.provider], record.model_id,
                                    required, include_opt_in=args.include_opt_in)
+        spent += run.calls
         # A capability pass that gets a 410 has discovered a retirement, and
         # throwing that away leaves the registry saying AVAILABLE about a model
         # the provider just refused. Five models hit exactly this on
@@ -203,7 +220,8 @@ def run_capability_probe(args) -> int:
         print(f"  {record.key:<52} {marks}"
               + (f"   [{run.stopped_early}]" if run.stopped_early else ""))
     registry.save()
-    print(f"\nregistry {registry.path}")
+    print(f"\nCALLS SPENT {spent} of a {ceiling} ceiling")
+    print(f"registry {registry.path}")
     return 0
 
 
@@ -303,6 +321,9 @@ def main(argv=None) -> int:
     cap.add_argument("--include-opt-in", action="store_true",
                      help="also run the long-context probe, whose input is "
                           "measured in thousands of tokens rather than tens")
+    cap.add_argument("--max-calls", type=int, default=None,
+                     help="override configs/discovery.json's probe_call_ceiling "
+                          "for this invocation")
     cap.add_argument("--dry-run", action="store_true",
                      help="print the forecast and stop")
 

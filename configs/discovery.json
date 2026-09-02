@@ -6,5 +6,6 @@
   "failed_backoff_multiplier": 2.0,
   "failed_backoff_max_seconds": 86400,
   "health_probe_seconds": 3600,
-  "absences_before_retired": 2
+  "absences_before_retired": 2,
+  "probe_call_ceiling": 60
 }

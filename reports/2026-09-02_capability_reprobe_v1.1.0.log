@@ -1,0 +1,30 @@
+role validation: needs structured_output, reasoning
+  models due              14
+  probes per model         3  (text_output, structured_output, reasoning)
+  CALLS (exact)           42
+  input tokens (est)    2240
+  output tokens (max)   2464
+  CEILING (configured)      60  [within]
+  calls are exact; token figures are estimates and are here to separate a trivial pass from an expensive one, not to bill
+
+  nvidia:deepseek-ai/deepseek-v4-flash-0731            structured_output=True reasoning=True
+  nvidia:google/diffusiongemma-26b-a4b-it              structured_output=None reasoning=None   [the text-output prerequisite came back False (returned no text in any of content, reasoning_content, text (finish_reason=stop)); nothing further was sent]
+  nvidia:moonshotai/kimi-k3                            structured_output=True reasoning=None
+  nvidia:nvidia/llama-3.1-nemoguard-8b-topic-control   structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run [UNKNOWN_ERROR] HTTP 500: HTTP 500: {"error":"Error during inference of request chat-a7dca60950914d04952a5450098008c4 -- Encountered an error in forwardAsync function: [TensorRT-LLM][ERROR] CUDA runtime error in cudaMemcpyAsyn); nothing further was sent]
+  nvidia:nvidia/llama-3.1-nemotron-nano-vl-8b-v1       structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run [MODEL_RETIRED] HTTP 410: HTTP 410: {"type":"about:blank","title":"Gone","status":410,"detail":"The model 'nvidia/llama-3.1-nemotron-nano-vl-8b-v1' has reached its end of life on 2026-08-26T09:00:00Z and is no longer available); nothing further was sent]
+  nvidia:nvidia/llama-3.3-nemotron-super-49b-v1.5      structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run [MODEL_RETIRED] HTTP 410: HTTP 410: {"type":"about:blank","title":"Gone","status":410,"detail":"The model 'nvidia/llama-3.3-nemotron-super-49b-v1.5' has reached its end of life on 2026-08-26T09:00:00Z and is no longer availabl); nothing further was sent]
+  nvidia:nvidia/nemotron-3-nano-30b-a3b                structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run [MODEL_RETIRED] HTTP 410: HTTP 410: {"type":"about:blank","title":"Gone","status":410,"detail":"The model 'nvidia/nemotron-3-nano-30b-a3b' has reached its end of life on 2026-09-01T09:00:00Z and is no longer available."}
+); nothing further was sent]
+  nvidia:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning structured_output=None reasoning=True
+  nvidia:nvidia/nemotron-3-super-120b-a12b             structured_output=True reasoning=True
+  nvidia:nvidia/riva-translate-4b-instruct-v1.1        structured_output=True reasoning=None
+  nvidia:nvidia/riva-translate-4b-instruct-v2          structured_output=True reasoning=None
+  nvidia:openai/gpt-oss-20b                            structured_output=True reasoning=True
+  nvidia:stepfun-ai/step-3.7-flash                     structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run [MODEL_RETIRED] HTTP 410: HTTP 410: {"type":"about:blank","title":"Gone","status":410,"detail":"The model 'stepfun-ai/step-3.7-flash' has reached its end of life on 2026-08-28T08:00:00Z and is no longer available."}
+); nothing further was sent]
+  nvidia:thinkingmachines/inkling                      structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run [MODEL_RETIRED] HTTP 410: HTTP 410: {"type":"about:blank","title":"Gone","status":410,"detail":"The model 'thinkingmachines/inkling' has reached its end of life on 2026-08-25T08:00:00Z and is no longer available."}
+); nothing further was sent]
+
+CALLS SPENT 28 of a 60 ceiling
+registry discovery/model_registry.json
+EXIT=0

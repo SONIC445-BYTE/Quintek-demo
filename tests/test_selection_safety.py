@@ -283,3 +283,85 @@ def test_every_adversarial_scenario_has_a_named_home():
     """
     assert len(SCENARIOS) == 15
     assert all(value for value in SCENARIOS.values())
+
+
+# ---------------------------------------------------------------------------
+# External registries: what a catalogue may and may not establish
+# ---------------------------------------------------------------------------
+
+def test_a_declared_capability_never_reaches_qualified(tmp_path):
+    """
+    OpenRouter publishes capability metadata for 421 models and charges for
+    inference. Without OPENROUTER_API_KEY the catalogue is readable and the
+    models are not callable, so 267 of them DECLARE both validation
+    capabilities and none can be QUALIFIED. That gap is the whole point of
+    keeping DECLARED and OBSERVED apart: a registry that let a vendor's own
+    metadata qualify a model would have produced a Phase 0 pairing out of
+    nothing.
+    """
+    reg = DynamicModelRegistry(tmp_path / "r.json")
+    reg.reconcile("openrouter", [Observation(
+        provider="openrouter", model_id="vendor/m", context_window=128_000,
+        capabilities={"structured_output": True, "reasoning": True})], at=T0)
+    record = reg.get("openrouter:vendor/m")
+    assert record.capability("structured_output").source == "DECLARED"
+    assert record.availability == Availability.UNVERIFIED
+
+    # Declared is enough for a permissive view...
+    kept, _ = reg.eligible(required_capabilities=("structured_output", "reasoning"))
+    assert kept == []           # still not AVAILABLE, so still not eligible
+
+    reg.record_probe("openrouter:vendor/m", http_status=200, at=T0)
+    kept, _ = reg.eligible(required_capabilities=("structured_output", "reasoning"))
+    assert [r.key for r in kept] == ["openrouter:vendor/m"]
+
+    # ...and never enough for qualification, which requires observation.
+    kept, dropped = reg.eligible(required_capabilities=("structured_output", "reasoning"),
+                                 require_observed=True)
+    assert kept == []
+    assert all("declared, not observed" in r for r in dropped[0]["reasons"])
+
+
+def test_the_probe_ceiling_is_configuration_not_a_constant(tmp_path):
+    """
+    External spend must be bounded by a number somebody wrote down in advance,
+    the same reason tools_validator_eval.py refuses to start without
+    --max-calls.
+    """
+    from benchmark.discovery import DiscoveryPolicy
+
+    assert DiscoveryPolicy().probe_call_ceiling > 0
+    path = tmp_path / "discovery.json"
+    path.write_text('{"probe_call_ceiling": 9}')
+    assert DiscoveryPolicy.load(path).probe_call_ceiling == 9
+
+
+def test_a_forecast_over_the_ceiling_refuses_rather_than_truncating(tmp_path,
+                                                                    monkeypatch,
+                                                                    capsys):
+    """
+    Truncating silently would leave a half-probed provider looking like a
+    complete picture, and "no model qualifies" would then be a budget rather
+    than a finding.
+    """
+    import tools_discovery
+
+    reg_path = tmp_path / "models.json"
+    reg = DynamicModelRegistry(reg_path)
+    reg.reconcile("nvidia", [Observation(provider="nvidia", model_id=f"m{i}")
+                             for i in range(10)], at=T0)
+    for i in range(10):
+        reg.record_probe(f"nvidia:m{i}", http_status=200, at=T0)
+    reg.save()
+    (tmp_path / "policy.json").write_text('{"probe_call_ceiling": 5}')
+
+    class Args:
+        registry, policy = str(reg_path), str(tmp_path / "policy.json")
+        role, providers = "validation", "nvidia"
+        limit, max_calls = 0, None
+        include_opt_in = dry_run = False
+
+    assert tools_discovery.run_capability_probe(Args()) == 2
+    out = capsys.readouterr()
+    assert "EXCEEDED" in out.out
+    assert "exceeds the configured ceiling" in out.err

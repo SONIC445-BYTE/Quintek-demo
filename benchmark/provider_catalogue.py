@@ -140,28 +140,43 @@ class CatalogueSource:
     #: capability and price fields stay unknown rather than defaulting to
     #: False, which would be inventing a measurement.
     bare_catalogue: bool = True
+    #: Does LISTING require the key, as opposed to INFERENCE? OpenRouter
+    #: publishes its catalogue publicly and charges for completions, so the
+    #: two answers differ -- and collapsing them would make an entire external
+    #: registry unreachable for want of a credential it does not need.
+    #: Inference always requires the key; only the listing is in question.
+    catalogue_requires_key: bool = True
     extra_headers: dict = field(default_factory=dict)
 
-    def headers(self, env: dict | None = None) -> dict:
+    def headers(self, env: dict | None = None, *,
+                optional: bool = False) -> tuple[dict, bool]:
         """
-        Built fresh per call, from the environment, by name.
+        Built fresh per call, from the environment, by name. Returns the
+        headers and whether a credential went into them.
 
         Raises rather than sending an unauthenticated request: a 401 recorded
         as the model's availability, when the real cause is an unset variable,
         is a wrong fact that persists in the registry.
+
+        `optional=True` is for an endpoint that works without a key -- a
+        public catalogue. The key is still attached when it IS available,
+        because a listing scoped to an account and a listing scoped to nobody
+        are different observations, and the caller records which it got.
         """
         env = os.environ if env is None else env
         headers = {"Accept": "application/json", **self.extra_headers}
         if not self.api_key_env:
-            return headers
+            return headers, False
         key = env.get(self.api_key_env)
         if not key:
+            if optional:
+                return headers, False
             raise MissingCredential(
                 f"{self.api_key_env} is not set, so {self.name} cannot be discovered. "
                 "The key is read from the environment by name and never stored; set "
                 "the variable rather than passing a value.")
         headers["Authorization"] = f"Bearer {key}"
-        return headers
+        return headers, True
 
     def parse(self, body: str) -> list[Observation]:
         """OpenAI-compatible `{"data": [...]}`; overridden where it is not."""
@@ -280,7 +295,10 @@ SOURCES = {
         name="openrouter",
         catalogue_url="https://openrouter.ai/api/v1/models",
         completions_url="https://openrouter.ai/api/v1/chat/completions",
-        api_key_env="OPENROUTER_API_KEY", bare_catalogue=False),
+        api_key_env="OPENROUTER_API_KEY", bare_catalogue=False,
+        # Public listing, paid inference. Measured 2026-09-02: 421 entries
+        # returned with no Authorization header at all.
+        catalogue_requires_key=False),
     "cerebras": CatalogueSource(
         name="cerebras",
         catalogue_url="https://api.cerebras.ai/v1/models",
@@ -297,11 +315,16 @@ class CatalogueResult:
     error: str = ""
     http_status: int | None = None
     latency_ms: float | None = None
+    #: Whether a credential was attached. Part of the provenance: a public
+    #: listing and an account-scoped listing can differ, and a snapshot that
+    #: cannot say which it is cannot be compared with the next one.
+    credential_used: bool = False
 
     def as_dict(self) -> dict:
         return {"provider": self.provider, "count": len(self.observations),
                 "ok": self.ok, "error": self.error, "http_status": self.http_status,
-                "latency_ms": self.latency_ms}
+                "latency_ms": self.latency_ms,
+                "credential_used": self.credential_used}
 
 
 def fetch_catalogue(source: CatalogueSource, *, transport: Transport | None = None,
@@ -320,10 +343,11 @@ def fetch_catalogue(source: CatalogueSource, *, transport: Transport | None = No
     transport = transport or UrllibTransport()
     result = CatalogueResult(provider=source.name)
     try:
-        headers = source.headers(env)
+        headers, used = source.headers(env, optional=not source.catalogue_requires_key)
     except MissingCredential as exc:
         result.error = str(exc)
         return result
+    result.credential_used = used
     response = transport.get(source.catalogue_url, headers=headers, timeout=timeout)
     result.http_status = response.status
     result.latency_ms = response.latency_ms
@@ -363,7 +387,10 @@ def probe(source: CatalogueSource, model_id: str, *, transport: Transport | None
     transport = transport or UrllibTransport()
     key = f"{source.name}:{model_id}"
     try:
-        headers = source.headers(env)
+        # Never optional. Inference is what a credential is for, and a probe
+        # that quietly went out unauthenticated would record a 401 as the
+        # model's availability.
+        headers, _used = source.headers(env)
     except MissingCredential as exc:
         return ProbeResult(key=key, error=str(exc))
     response = transport.post_json(source.completions_url, headers=headers,
