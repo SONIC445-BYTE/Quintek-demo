@@ -94,9 +94,9 @@
     "retry_max_retries": 2,
     "budget_max_calls": 2400,
     "budget_max_judge_calls": 600,
-    "max_wall_minutes": 480.0
+    "max_wall_minutes": 1200.0
   },
-  "note": "Phase 0 attempt 2. NEW freeze: validator fingerprint moved because benchmark/providers is now inside it (D013 defect 2), so this set is deliberately non-comparable with 3bca900de60e. Pairing unchanged and re-derived by the D011 rule. Adapter defect fixed: providers/nvidia.py read only message.content, so a reasoning candidate's null content raised in the JSON extractor and each such item burned 3 retries before being recorded as an outage. Wall-clock ceiling raised 180->480 min: an operational bound on completion, not a scientific threshold; it changes nothing about what is measured, and the call budget 2400/600 is unchanged.",
-  "created_at": "2026-09-02T19:35:21Z",
-  "digest": "c2955816b918bb5d6fc4091e9d75ae62eb77151b7ef60c89cd2f99ed579cd991"
+  "note": "Phase 0, complete three-arm set. Pairing re-derived by the D011 rule and unchanged. Adapter defect D013.1 fixed: providers/nvidia.py read only message.content, so a reasoning candidate's null content raised in the JSON extractor and burned three retries per item before being recorded as an outage; the fix moved the fingerprint to 2b8e15b6f390 because benchmark/providers is now inside it (D013.2), so this set is deliberately non-comparable with 3bca900de60e. Every reply is journalled and fsynced before use, so a container restart resumes rather than restarts (D014); a recorded outage replays as that outage and is never re-asked, each arm pays for its own calls, and spend and elapsed carry across resumes so the frozen ceilings bound the set. Wall-clock ceiling 1200 min set from a measured 75.2 s per logical call over 8 journalled replies of this exact configuration, decided before any arm finished and before any score existed (D015); it is an operational bound on completion, not a gating threshold, and the 2400/600 call budget is unchanged.",
+  "created_at": "2026-09-02T21:55:37Z",
+  "digest": "919cd25bc30618b8bb6ace38526724fad07a8ed9d22b0f4a32fe4b15921ddffb"
 }
