@@ -79,23 +79,41 @@ def corpus_hash(root: str | Path = HOLDOUT_ROOT) -> str:
     return sha256_text("\n".join(parts))
 
 
+#: Hashed alongside `validator/` because it decides what the validator SEES.
+#: `providers/nvidia.py` read only `message.content`; against a reasoning
+#: candidate that field is null, the JSON extractor was handed None, and every
+#: such item became a backend outage. Phase 0 on 2026-09-02 lost items to it.
+#:
+#: Before this, that file was outside the fingerprint: fixing it changed what a
+#: run measures while leaving the digest identical, so the repaired run and the
+#: broken one would have been stamped the same and read as comparable. A
+#: fingerprint that excludes the code turning an HTTP reply into a parsed
+#: answer is not fingerprinting the validator.
+ADAPTER_SOURCES = (Path("benchmark/providers"),)
+
+
 def validator_fingerprint(config_label: str = "",
-                          source: str | Path = VALIDATOR_SOURCE) -> str:
+                          source: str | Path = VALIDATOR_SOURCE,
+                          adapters=ADAPTER_SOURCES) -> str:
     """
-    A hash of the validator's source and configuration.
+    A hash of the validator's source, its provider adapters, and its
+    configuration.
 
     Two runs with the same fingerprint are the same validator, and scoring the
     same validator twice against the holdout adds no information while spending
-    a use. Changing a prompt, a threshold or which layers run changes the
-    fingerprint, which is the point.
+    a use. Changing a prompt, a threshold, which layers run, or how a reply is
+    unpacked changes the fingerprint, which is the point.
     """
-    source = Path(source)
     parts = [config_label]
-    for path in sorted(source.rglob("*.py")):
-        if "__pycache__" in path.parts:
+    roots = [Path(source)] + [Path(a) for a in (adapters or ())]
+    for root in roots:
+        if not root.exists():
             continue
-        parts.append(str(path.relative_to(source)))
-        parts.append(path.read_text(encoding="utf-8"))
+        for path in sorted(root.rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            parts.append(str(path))
+            parts.append(path.read_text(encoding="utf-8"))
     return sha256_text("\n".join(parts))
 
 

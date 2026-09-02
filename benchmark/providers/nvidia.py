@@ -27,7 +27,7 @@ from dataclasses import replace
 import urllib.error
 import urllib.request
 
-from .base import BaseProvider, GenerationRequest
+from .base import BaseProvider, GenerationRequest, content_of
 
 NIM_CHAT_COMPLETIONS_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
@@ -159,7 +159,11 @@ class NVIDIAProvider(BaseProvider):
         raw = raw_bytes.decode("utf-8")
         payload = json.loads(raw)
         choice = payload["choices"][0]
-        content = choice["message"]["content"]
+        # Not choice["message"]["content"]: a reasoning model leaves that null
+        # and puts its reply in `reasoning_content`, and handing None to the
+        # JSON extractor raises rather than failing to parse. See
+        # `providers/base.content_of`.
+        content = content_of(choice.get("message") or {})
         usage = payload.get("usage") or {}
         tin = usage.get("prompt_tokens")
         tout = usage.get("completion_tokens")

@@ -1,0 +1,277 @@
+{
+  "at": "2026-09-02T17:27:19Z",
+  "kind": "development",
+  "corpus": "corpus/validator_dev",
+  "corpus_hash": "4da47a68fce97b8dd9a74f4386c45be967cd27823e383282748bd18eb32bf057",
+  "validator_version": "0.2.0",
+  "config": "v0.2.0[ABD]",
+  "providers": [
+    {
+      "seat": "candidate",
+      "role": "grounding",
+      "provider": "nvidia",
+      "model": "deepseek-ai/deepseek-v4-flash-0731",
+      "model_family": "deepseek",
+      "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions",
+      "credential_ref": "NVIDIA_API_KEY",
+      "is_oracle": false,
+      "is_model": true
+    },
+    {
+      "seat": "judge",
+      "role": "judge",
+      "provider": "nvidia",
+      "model": "nvidia/ising-calibration-1.5-31b",
+      "model_family": "ising",
+      "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions",
+      "credential_ref": "NVIDIA_API_KEY",
+      "is_oracle": false,
+      "is_model": true
+    },
+    {
+      "seat": "candidate",
+      "role": "conformance",
+      "provider": "nvidia",
+      "model": "deepseek-ai/deepseek-v4-flash-0731",
+      "model_family": "deepseek",
+      "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions",
+      "credential_ref": "NVIDIA_API_KEY",
+      "is_oracle": false,
+      "is_model": true
+    }
+  ],
+  "used_an_oracle": false,
+  "used_a_test_double": false,
+  "is_real": true,
+  "counts": {
+    "true_positive": 4,
+    "false_negative": 0,
+    "true_negative": 0,
+    "false_positive": 24,
+    "abstained_defective": 0,
+    "abstained_clean": 0
+  },
+  "sensitivity": 1.0,
+  "specificity": 0.0,
+  "gate": "INSUFFICIENT_EVIDENCE",
+  "outages": 71,
+  "analysis": {
+    "false_positives": {
+      "count": 24,
+      "by_check": [
+        {
+          "layer": "grounding",
+          "check": "not_answerable_from_passage",
+          "items": 24,
+          "examples": [
+            {
+              "id": "vd-clean-001",
+              "subject": "Physiology",
+              "detail": [
+                "[grounding] the passage does not support any of the options as the answer, so the item cannot be answered from the evidence supplied with it"
+              ]
+            },
+            {
+              "id": "vd-clean-002",
+              "subject": "Physiology",
+              "detail": [
+                "[grounding] the passage does not support any of the options as the answer, so the item cannot be answered from the evidence supplied with it"
+              ]
+            },
+            {
+              "id": "vd-clean-003",
+              "subject": "Physiology",
+              "detail": [
+                "[grounding] the passage does not support any of the options as the answer, so the item cannot be answered from the evidence supplied with it"
+              ]
+            }
+          ]
+        }
+      ],
+      "worst_check": "grounding/not_answerable_from_passage",
+      "concentrated": true
+    },
+    "false_negatives": {
+      "count": 0,
+      "by_defect_class": [],
+      "classes_never_caught": []
+    },
+    "abstentions": {
+      "by_label": {},
+      "by_check": {}
+    },
+    "edge_behaviour": {
+      "total": 20,
+      "by_verdict": {
+        "FLAGGED": 1,
+        "no layer ran that could have seen this": 19
+      },
+      "abstention_rate": 0.0,
+      "decided_without_hesitation": 1,
+      "items": [
+        {
+          "id": "vd-edge-001",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "Negatively phrased stem. Item-writing guidance discourages 'NOT' stems because candidates misread them under time pressure, but the item is factually correct and has one defensible answer. A validator applying style rules flags it; one applying correctness rules passes it."
+        },
+        {
+          "id": "vd-edge-002",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "The keyed answer is correct only relative to the guideline supplied. Other major guidelines name a calcium channel blocker or an ACE inhibitor first for the same patient. The item is grounded in its passage but a validator judging against general medical knowledge will reasonably dispute the key."
+        },
+        {
+          "id": "vd-edge-003",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "The passage supports the key by inference rather than by restatement: it never uses the word prevalence. A grounding check that demands an explicit supporting sentence flags this; one that permits a single deductive step passes it."
+        },
+        {
+          "id": "vd-edge-004",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "Exactly-on-the-threshold values. The passage says 'greater than', so the key follows literally, but clinicians routinely treat borderline values as indeterminate and repeat them. Two reviewers can defensibly disagree."
+        },
+        {
+          "id": "vd-edge-005",
+          "verdict": "FLAGGED",
+          "checks": [
+            "structural/all_of_the_above"
+          ],
+          "why_edge": "'None of the above' is the correct key. A structural rule that rejects degenerate options flags this item automatically, yet the option is doing real clinical work here. Tests whether a validator's style rule can override a correct item."
+        },
+        {
+          "id": "vd-edge-006",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "The key is by far the longest option because the correct answer is a three-part protocol. A length-tell heuristic fires; the length is justified by the content. Tests whether the validator distinguishes a cue from a fact."
+        },
+        {
+          "id": "vd-edge-007",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "Nationally and temporally specific. The key is correct for the programme quoted and wrong elsewhere, and national protocols are revised. A validator with a general medical prior will often dispute it."
+        },
+        {
+          "id": "vd-edge-008",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "Two options are on the same causal chain: increased sympathetic outflow causes the increased heart rate. 'First' resolves it in favour of the key, but a reviewer may call the pair insufficiently distinct."
+        },
+        {
+          "id": "vd-edge-009",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "Three options rather than four. The structural minimum permits three, but a house style requiring four options would reject it. Also tests whether the validator notices that the passage itself acknowledges an alternative formula."
+        },
+        {
+          "id": "vd-edge-010",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "The assertion-reason format deliberately contains a non-explanatory true reason. A validator checking 'does the explanation support the key' may read the non-sequitur as the defect 'poor_reasoning' when it is the format working as intended."
+        },
+        {
+          "id": "vd-edge-011",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "The explanation is a four-word clause. It is not wrong and the key is correct, but it explains nothing. Whether a thin explanation constitutes a defect is a policy question, not a factual one."
+        },
+        {
+          "id": "vd-edge-012",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "The reference given for this item names a standard textbook at book level with no edition, page or chapter. That is not a fabricated citation, but it is not a checkable one either. Whether an uncheckable reference is a defect is a policy question."
+        },
+        {
+          "id": "vd-edge-013",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "The vignette omits vital signs, weight and past history. The answer is nonetheless determined by the features given. A validator that requires a complete data set in a vignette flags it as under-specified; one that asks only whether the answer follows passes it."
+        },
+        {
+          "id": "vd-edge-014",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "Arithmetic that a validator must actually perform to check. Layer A cannot do it and a judge that estimates rather than calculates will often get it wrong in either direction. Included to measure where numerical checking fails, not to be scored."
+        },
+        {
+          "id": "vd-edge-015",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "The item uses the international non-proprietary spelling 'meticillin' while most Indian textbooks and candidates use 'methicillin'. A validator matching against a term list may treat the spelling as an error; it is not one."
+        },
+        {
+          "id": "vd-edge-016",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "The key is a limit age and a distractor, 15 months, falls inside the normal range given in the passage. Ranges that overlap options make the key defensible rather than uniquely correct."
+        },
+        {
+          "id": "vd-edge-017",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "Screening intervals differ between national programmes and change as programmes migrate to HPV primary testing. The key is grounded in the passage and contradicted by other real programmes."
+        },
+        {
+          "id": "vd-edge-018",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "The passage contains a unit error in its final sentence: pressure is not measured per litre. The key does not depend on that sentence. Whether a flaw in the evidence that does not affect the answer makes the item defective is a policy question."
+        },
+        {
+          "id": "vd-edge-019",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "Pure recall of a classification, but the item is declared at foundation difficulty, where recall is the intended level. Included to check that a validator's 'trivial' rule reads the declared difficulty rather than firing on recall alone."
+        },
+        {
+          "id": "vd-edge-020",
+          "verdict": "no layer ran that could have seen this",
+          "checks": [],
+          "why_edge": "The ranking depends on the dataset, the period and whether indirect causes are counted. The passage supports the key; published sources for other populations and periods support the second option. Reviewers with different sources will key it differently."
+        }
+      ]
+    },
+    "matched_pairs": {
+      "pairs": 2,
+      "by_outcome": {
+        "both_flagged": 2
+      },
+      "discrimination_rate": 0.0,
+      "items": [
+        {
+          "defective": "vd-def-005",
+          "clean": "vd-clean-005",
+          "defect_class": "hallucinated_reference",
+          "outcome": "both_flagged"
+        },
+        {
+          "defective": "vd-def-025",
+          "clean": "vd-clean-025",
+          "defect_class": "hallucinated_reference",
+          "outcome": "both_flagged"
+        }
+      ]
+    }
+  },
+  "note": "1  A+B+D  validator without the judge; Quintek V1 Phase 0. Pair selected deterministically per DECISION_LOG D011 using DynamicModelRegistry.sort_key. Candidate deepseek-v4-flash-0731 (family deepseek), judge ising-calibration-1.5-31b (family ising). Tier-2 req 1 satisfied; req 2 (different provider) not practical, NVIDIA is the only authorized V1 provider.",
+  "freeze": "3bca900de60e57502685c619b1022869d8580691c1d290df76554d4b57b36e16",
+  "budget": {
+    "max_calls": 2400,
+    "max_judge_calls": 600,
+    "spent_total": 134,
+    "spent_by_seat": {
+      "candidate": 134
+    },
+    "boundaries": {
+      "deepseek-ai/deepseek-v4-flash-0731": "outbound_attempt",
+      "nvidia/ising-calibration-1.5-31b": "outbound_attempt"
+    },
+    "unit": "outbound attempts where the provider exposes one, otherwise logical calls; see boundaries"
+  },
+  "measurement_unit": "outbound_attempt",
+  "completeness": "INCOMPLETE",
+  "items_expected": 80,
+  "items_decided": 28
+}

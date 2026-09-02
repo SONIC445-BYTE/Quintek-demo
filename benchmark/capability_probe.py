@@ -479,28 +479,15 @@ def _run_one(source, model_id: str, probe: Probe, *, transport, headers,
                         provider_status=ProviderStatus.AVAILABLE)
 
 
-#: Where a reply's text can live. `content` is the OpenAI-compatible field;
-#: `reasoning_content` is what several NIM reasoning models fill instead, and
-#: reading only the first records "emitted no text" for a model that emitted
-#: plenty. Measured on the 2026-08-28 run: four models -- including
-#: openai/gpt-oss-20b -- came back with an empty `content`.
-TEXT_FIELDS = ("content", "reasoning_content", "text")
+#: Re-exported so this module and the production adapter cannot drift apart:
+#: they had two answers to "where is the reply's text" and one of them was
+#: wrong for a month. See `benchmark/providers/base.py`.
+from .providers.base import TEXT_FIELDS, content_of
 
 
 def _content_of(body: dict) -> str:
     choices = (body or {}).get("choices") or []
-    if not choices:
-        return ""
-    message = choices[0].get("message") or {}
-    parts = []
-    for field in TEXT_FIELDS:
-        value = message.get(field)
-        if isinstance(value, list):        # some hosts return content parts
-            parts.append("".join(part.get("text", "") for part in value
-                                 if isinstance(part, dict)))
-        elif isinstance(value, str):
-            parts.append(value)
-    return "".join(parts)
+    return content_of(choices[0].get("message") or {}) if choices else ""
 
 
 def _finish_reason(body: dict) -> str:

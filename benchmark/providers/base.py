@@ -24,6 +24,41 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 
+#: Where a chat reply's text can live, in priority order. `content` is the
+#: OpenAI-compatible field; `reasoning_content` is what several NIM reasoning
+#: models fill INSTEAD, leaving `content` null.
+#:
+#: Reading only `content` is not a cosmetic bug. `extract_json_object` regexes
+#: whatever it is handed, so a null content raised
+#: "TypeError: expected string or bytes-like object, got 'NoneType'" and the
+#: item was recorded as a backend outage. Phase 0 on 2026-09-02 lost items to
+#: exactly this against a reasoning candidate.
+#:
+#: This lives here, once, because the same bug was fixed in
+#: `benchmark/capability_probe.py` days earlier and not here -- two call sites
+#: with two answers to "where is the text" is how one of them stays wrong.
+TEXT_FIELDS = ("content", "reasoning_content", "text")
+
+
+def content_of(message: dict) -> str:
+    """
+    The text of one chat message, from wherever the host put it.
+
+    Returns "" rather than None so a caller that regexes the result cannot
+    crash on an empty reply -- an empty reply is a parse failure, which is a
+    different and much better outcome than an exception.
+    """
+    parts = []
+    for field in TEXT_FIELDS:
+        value = (message or {}).get(field)
+        if isinstance(value, list):          # some hosts return content parts
+            parts.append("".join(p.get("text", "") for p in value
+                                 if isinstance(p, dict)))
+        elif isinstance(value, str):
+            parts.append(value)
+    return "".join(parts)
+
+
 @dataclass
 class GenerationRequest:
     item_id: str

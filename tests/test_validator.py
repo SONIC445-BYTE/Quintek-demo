@@ -770,11 +770,43 @@ def test_a_passing_development_run_alone_does_not_establish_readiness():
 
 
 def test_the_status_report_separates_the_ceiling_from_the_measurement():
+    """
+    The invariant is the SEPARATION, not the absence of a run.
+
+    This used to assert `dev_metrics["status"] == NOT_RUN`, which was a fact
+    about the repository's data rather than about the code, and it stopped
+    being true the moment Phase 0 wrote a real development record on
+    2026-09-02. Pinning "no run exists" would mean this test could only pass
+    while the project had done nothing.
+
+    What must hold either way: a ceiling is never a measurement, and a
+    100% ceiling never promotes the validator to ESTABLISHED on its own.
+    """
     report = track_d.build()
     assert report["design_ceiling"]["is_a_measurement"] is False
     assert report["design_ceiling"]["sensitivity"] == 1.0
-    assert report["dev_metrics"]["status"] == runs.NOT_RUN
+    assert report["dev_metrics"]["status"] in (runs.NOT_RUN, "RUN")
+    # The ceiling is perfect and production readiness is still not established.
     assert report["validator_production_status"]["status"] == track_d.NOT_ESTABLISHED
+
+
+def test_a_ceiling_run_never_counts_as_the_measurement():
+    """
+    The actual invariant the test above was reaching for, asserted directly:
+    oracle/ceiling runs are excluded from dev metrics however many exist, so
+    "the design could score 100%" can never be read off as "it did".
+    """
+    report = track_d.build()
+    ceiling, measured = report["design_ceiling"], report["dev_metrics"]
+    assert ceiling["is_a_measurement"] is False
+    assert ceiling["sensitivity"] == 1.0 and ceiling["specificity"] == 1.0
+
+    if measured["status"] != runs.NOT_RUN:
+        # Three ceiling runs sit in reports/validator_runs/ alongside the real
+        # one. If any had leaked into the measurement, specificity would read
+        # the ceiling's 100%. Phase 0 measured 0%, so the separation held on
+        # real data rather than only in principle.
+        assert measured["specificity"] != ceiling["specificity"]
 
 
 def test_the_status_report_reads_human_review_off_the_corpus():
@@ -1663,3 +1695,31 @@ def test_the_cli_min_kappa_flag_can_disable_the_gate(tmp_path):
     assert code == 0, "a negative --min-kappa disables the gate entirely"
     assert out_path.exists()
     assert len(out_path.read_text().splitlines()) == 10
+
+
+def test_the_fingerprint_covers_the_code_that_unpacks_a_reply():
+    """
+    `validator_fingerprint` hashed only `validator/`. The provider adapter --
+    which decides whether a reply becomes a parsed answer or a crash -- sat
+    outside it, so fixing the null-content defect would have changed what a
+    run MEASURES while leaving the digest identical, and the repaired run
+    would have been stamped comparable with the broken one.
+
+    A fingerprint that excludes the code turning an HTTP reply into an answer
+    is not fingerprinting the validator.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from validator.holdout import ADAPTER_SOURCES, validator_fingerprint
+
+    assert Path("benchmark/providers") in [Path(p) for p in ADAPTER_SOURCES]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        adapter = Path(tmp) / "providers"
+        adapter.mkdir()
+        (adapter / "x.py").write_text("VERSION = 1\n")
+        before = validator_fingerprint("cfg", adapters=(adapter,))
+        (adapter / "x.py").write_text("VERSION = 2\n")
+        after = validator_fingerprint("cfg", adapters=(adapter,))
+    assert before != after, "an adapter change must move the fingerprint"

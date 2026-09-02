@@ -104,3 +104,52 @@ gate depended on them.
 `GoldChallengeLedger` stays unwired for V1 for the same reason: it is the
 Phase 3 human-review mechanism, and V1 has no qualified reviewers to operate
 it. Both are recorded as V1 limitations in docs/FINAL_STATUS.md.
+
+## D013 — Phase 0 result: INCOMPLETE. Layer C undetermined.
+Decision recorded, not made: Phase 0 ran once under freeze 3bca900de60e and
+terminated INCOMPLETE. It did not decide whether Layer C earns its place.
+
+What happened. Experiment 1 (A+B+D) consumed the whole 180-minute wall-clock
+ceiling, reached at 181.4 minutes, and experiments 2 (C) and 3 (A+B+C+D) never
+started. With no ABCD arm the incremental contribution of the judge cannot be
+computed, so the experiment conclusion is "not determined" and the model
+conclusion is DEFERRED. Both are the defined outcomes, not failures to work
+around, and no arm was retried.
+
+The arm that did run is itself INCOMPLETE: 71 of 100 items produced outages,
+leaving 28 decided against a required 30 per arm, so the gate reads
+INSUFFICIENT_EVIDENCE. Its numbers -- sensitivity 100% (4 defective),
+specificity 0% (24 clean items all flagged) -- are recorded and are NOT a
+measurement of anything. They rest on four defective items and a run that lost
+seven items in ten.
+
+Two contributing defects, both ours, both fixed:
+
+1. `benchmark/providers/nvidia.py` read only `message.content`. The candidate
+   is a reasoning model that leaves that null and puts its reply in
+   `reasoning_content`, so the JSON extractor was handed None and raised
+   "expected string or bytes-like object, got 'NoneType'". Each such item was
+   recorded as a backend outage. The identical bug had been found and fixed in
+   `benchmark/capability_probe.py` days earlier and not here; the extraction
+   now has ONE definition in `providers/base.py`.
+
+2. `validator_fingerprint` hashed only `validator/`. The provider adapter sat
+   outside it, so fixing defect 1 would have changed what a run measures while
+   leaving the digest identical -- stamping the repaired run and the broken one
+   as comparable. `benchmark/providers/` is now inside the fingerprint.
+
+A selection consequence worth stating plainly: D011's rule forbade latency as
+an input and selected the slowest of the four qualified models (8460ms best
+observed against the judge's 419ms). The 180-minute ceiling was set from a
+single-probe latency that under-predicted the real rate by roughly 3x. The
+rule was applied correctly and the ceiling was honest; together they made this
+run unable to finish. That is a fact about the configuration, not a reason to
+raise the ceiling after seeing the result.
+
+Consequence: Phase 1 does NOT open. Its entry condition is a genuinely
+complete Phase 0. The holdout remains untouched at 0 of MAX_USES 5.
+
+Any re-run is a NEW experiment under a NEW freeze: defect 2's fix moves the
+fingerprint, so the digest necessarily changes and the two runs are correctly
+non-comparable. Re-running requires explicit authorization -- it is a fresh
+spend and a refreeze, both decision gates.

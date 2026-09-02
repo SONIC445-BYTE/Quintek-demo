@@ -1,0 +1,105 @@
+EXPERIMENT FORECAST
+
+corpus                         corpus/validator_dev
+items                          100
+stopped by Layer A, free       5
+reaching the model layers      95
+
+1  A+B+D  validator without the judge
+  layer structural                  0
+  layer grounding                 190
+  layer conformance                95
+  -> candidate seat               285
+  -> judge seat                     0
+  -> total                        285
+
+2  C      the independent judge alone
+  layer structural                  0
+  layer judge                     100
+  -> candidate seat                 0
+  -> judge seat                   100
+  -> total                        100
+
+3  ABCD   the whole validator
+  layer structural                  0
+  layer grounding                 190
+  layer judge                      95
+  layer conformance                95
+  -> candidate seat               285
+  -> judge seat                    95
+  -> total                        380
+
+TOTAL PLANNED (logical calls)       765
+  candidate                         570
+  judge                             195
+
+frozen retry policy: max_retries=2, so up to 3 outbound attempts per logical call
+MAXIMUM SPENDABLE (attempts)       2295
+  candidate                        1710
+  judge                             585
+
+CONFIGURED HARD BUDGET (outbound attempts)
+  --max-calls                      2400
+  --max-judge-calls                 600
+
+RESULT: WITHIN BUDGET
+
+WALL-CLOCK CEILING: WALL-CLOCK CEILING SET
+  --max-wall-minutes            180
+
+configuration frozen as 3bca900de60e in reports/validator_runs/corpus_validator_dev_freeze.json
+
+== 1  A+B+D  validator without the judge  (v0.2.0[ABD])
+
+OUTAGES: 71 item(s) could not be validated
+  vd-clean-004: vd-clean-004: the grounding backend failed (TimeoutError: The read operation timed out). Nothing was checked, so nothing may be reported as 
+  vd-clean-006: vd-clean-006: the grounding backend returned no JSON object for explanation. An unparseable validator is an outage, not a clean item.
+  vd-clean-011: vd-clean-011: the grounding backend failed (TypeError: expected string or bytes-like object, got 'NoneType'). Nothing was checked, so nothin
+  vd-clean-014: vd-clean-014: the grounding backend failed (TypeError: expected string or bytes-like object, got 'NoneType'). Nothing was checked, so nothin
+  vd-clean-015: vd-clean-015: the grounding backend returned no JSON object for key. An unparseable validator is an outage, not a clean item.
+
+decided in arms: 28 of 28 (0 abstained)
+  sensitivity  100.0%  ci (51%, 100%)
+  specificity    0.0%  ci (0%, 14%)
+  false flags  100.0%
+
+gate: INSUFFICIENT_EVIDENCE
+  - 4 defective and 24 clean items were decided; 30 of each are required before a rate means anything
+
+FALSE POSITIVES: 24 clean item(s) flagged
+   24  grounding/not_answerable_from_passage
+  -> concentrated in grounding/not_answerable_from_passage; that check is the fix, not the validator
+
+FALSE NEGATIVES: 0 defective item(s) passed
+  none
+
+MATCHED PAIRS: 2 clean/defective pairs
+    2  both_flagged
+  discrimination rate 0%
+
+EDGE CASES: 20 items where reviewers disagree (scored in neither arm)
+    1  FLAGGED
+   19  no layer ran that could have seen this
+  abstained on 0% of them
+
+wall-clock ceiling reached at 181.4 minute(s); not starting the remaining experiment(s) in this invocation.
+==============================================================================
+ABLATION  candidate deepseek-ai/deepseek-v4-flash-0731  |  judge nvidia/ising-calibration-1.5-31b
+
+experiment                  sens    spec   FP   FN  abst  out  status
+1  A+B+D  validator without the judge    100%      0%   24    0     0   71  INCOMPLETE
+
+INCREMENTAL CONTRIBUTION OF THE INDEPENDENT JUDGE (C)
+  not computed: the run set is missing an arm
+
+EXPERIMENT CONCLUSION
+  does the independent judge add information the other layers do not already have?
+  -> not determined
+
+MODEL CONCLUSION
+  is nvidia/ising-calibration-1.5-31b fit to serve as the independent judge for candidate deepseek-ai/deepseek-v4-flash-0731?
+  -> DEFERRED
+     one model measured against one development corpus does not settle model selection. That needs the same frozen configuration run against the alternative, compared on sensitivity, specificity, false positives, false negatives, latency, cost and edge calibration -- and a poor absolute score here does not by itself disqualify a model whose contribution to the ablation was positive.
+
+written to reports/validator_runs/phase0_ablation.json
+EXIT=0

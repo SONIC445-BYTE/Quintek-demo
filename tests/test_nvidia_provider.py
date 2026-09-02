@@ -185,3 +185,63 @@ def test_extract_json_object_returns_none_for_no_json():
 
 def test_extract_json_object_returns_none_for_malformed_json():
     assert extract_json_object("{answer: B, this is not valid json}") is None
+
+
+# ---------------------------------------------------------------------------
+# The defect Phase 0 found on 2026-09-02
+# ---------------------------------------------------------------------------
+
+def test_a_reasoning_model_with_null_content_is_parsed_not_crashed():
+    """
+    NIM reasoning models leave `message.content` null and put the reply in
+    `reasoning_content`. The adapter read only `content`, handed None to
+    `extract_json_object`, and raised "expected string or bytes-like object,
+    got 'NoneType'" -- which the validator recorded as a backend OUTAGE, so
+    the item was lost rather than judged.
+
+    Phase 0 lost items to exactly this against a reasoning candidate. The same
+    bug had already been fixed in benchmark/capability_probe.py and not here,
+    which is why the extraction now has one definition in providers/base.py.
+    """
+    import json as _json
+    from benchmark.providers.base import content_of
+
+    body = {"choices": [{"message": {"role": "assistant", "content": None,
+                                     "reasoning_content": '{"answer": "B"}'}}],
+            "usage": {"prompt_tokens": 3, "completion_tokens": 4}}
+    message = body["choices"][0]["message"]
+    text = content_of(message)
+    assert text == '{"answer": "B"}'
+    assert extract_json_object(text) == {"answer": "B"}
+
+
+def test_an_entirely_empty_reply_fails_to_parse_rather_than_raising():
+    """
+    "" is the right shape for a reply with no text: a parse failure is a
+    recorded, classifiable outcome; an exception is an outage that loses the
+    item and blames the backend.
+    """
+    from benchmark.providers.base import content_of
+
+    assert content_of({"content": None}) == ""
+    assert content_of({}) == ""
+    assert extract_json_object(content_of({"content": None})) is None
+
+
+def test_content_parts_lists_are_joined():
+    from benchmark.providers.base import content_of
+
+    assert content_of({"content": [{"type": "text", "text": "a"},
+                                   {"type": "text", "text": "b"}]}) == "ab"
+
+
+def test_the_probe_and_the_adapter_share_one_definition():
+    """
+    Two call sites with two answers to "where is the reply's text" is how one
+    of them stayed wrong for a month.
+    """
+    from benchmark import capability_probe
+    from benchmark.providers import base
+
+    assert capability_probe.content_of is base.content_of
+    assert capability_probe.TEXT_FIELDS is base.TEXT_FIELDS
