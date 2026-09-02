@@ -215,3 +215,62 @@ set of evidence. The frozen ceiling still bounds what the surviving
 measurement cost, which is what it exists to guarantee; the lost invocation is
 recorded here as a known, unrecoverable overspend rather than quietly
 absorbed.
+
+## D015 -- the wall-clock ceiling is raised to 1200 minutes on a measured rate, before any result is seen
+
+Freeze `c2955816b918` is discarded and replaced. The ONLY field that changes
+is `max_wall_minutes`, 480 -> 1200. Corpus, corpus hash, pairing, prompt
+versions, temperature, retry policy, call budget, the three arms and every
+threshold are byte-identical, and the validator fingerprint is unchanged at
+`2b8e15b6f390...`.
+
+WHY
+
+The relaunched run journalled 8 replies in 10.0 minutes: 75.2 seconds per
+logical call, median 55.4s, max 158.5s. The set is 765 logical calls, so it
+projects to 16.0 hours. The 480-minute ceiling would have been crossed near
+the halfway mark and the set would have returned INCOMPLETE for the third
+time -- arm 1 alone is 285 calls, about 6 hours, which is precisely why
+attempt 1 died inside it at 181 minutes.
+
+1200 minutes is the measured 16.0 hours plus about 25% for the observed
+latency spread and for retries.
+
+WHY THIS IS NOT MOVING A GOALPOST
+
+The wall clock is an operational bound on completion. It is not one of the
+thresholds that decide the result, and none of those moved: min_sensitivity
+0.80, min_specificity 0.90, min_items_per_arm 30 and judge_confidence_floor
+0.60 are exactly as frozen. Nothing about what is measured, how it is scored,
+or what would count as a pass is different.
+
+The timing is the substance of the claim. This was decided 10 minutes and 9
+outbound attempts in, from a rate measured on this configuration, with NO arm
+finished, NO matrix computed and NO score of any kind in existence. Raising a
+ceiling after seeing a number one did not like is a different act with the
+same diff, and the record needs to show which one this was. The call budget
+was deliberately NOT touched: spend stays bounded at the forecast 2400/600.
+
+A COST WORTH NAMING
+
+The journal is bound to a freeze digest, so a refreeze discards it. The 8
+recorded replies are abandoned rather than replayed under a digest they were
+not recorded under. That is the correct trade at 8 calls and would have been a
+catastrophic one at hour 8, which is the argument for measuring the rate early
+rather than trusting the estimate.
+
+AN EARLIER ESTIMATE THAT WAS WRONG
+
+D013 recorded the 180-minute ceiling as having been set from a single-probe
+latency that under-predicted by roughly 3x. The 480-minute replacement was my
+own estimate of ~25 s/call and it under-predicted by a further 3x. Both were
+projections from too little data. This one is not an estimate: it is 8
+observations of the frozen configuration doing the actual work, and it is
+recorded here with its sample size so the next reader can weigh it properly.
+
+WHAT THE RUN ALREADY SHOWS, AND WHAT IT DOES NOT
+
+Zero outages in 8 calls, against attempt 1's 71 in 100 items. That is
+consistent with the D013 adapter defect having been the cause, and it is 8
+calls: it is an encouraging sign about the repair, not a measurement of
+anything, and no arm, gate or score is claimed from it.
