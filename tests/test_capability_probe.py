@@ -197,9 +197,13 @@ def test_text_output_separates_a_chat_model_from_an_embedder():
     assert run_probes(source(), "m", [TEXT_OUTPUT], transport=transport,
                       env=ENV).outcomes[TEXT_OUTPUT].value is True
 
+    # An embedding response to a chat-completions POST IS the answer: this
+    # endpoint does not serve chat. Leaving it UNKNOWN would re-probe an
+    # embedder forever.
     transport = ScriptedTransport({"ready": json.dumps({"data": [{"embedding": [0.1]}]})})
     run = run_probes(source(), "m", [TEXT_OUTPUT], transport=transport, env=ENV)
     assert run.outcomes[TEXT_OUTPUT].value is False
+    assert "embedding" in run.outcomes[TEXT_OUTPUT].evidence
 
 
 def test_structured_output_accepts_json_inside_a_code_fence():
@@ -436,3 +440,122 @@ def test_require_observed_rejects_a_merely_declared_capability(tmp_path):
 def test_json_scanning_survives_braces_inside_strings():
     assert _first_json_object('{"answer": "}{"}') == {"answer": "}{"}
     assert _first_json_object('prose {not json} then {"answer": "B"}') == {"answer": "B"}
+
+
+# ---------------------------------------------------------------------------
+# Defects found by the 2026-08-28 live run (capability-probe/1.0.0)
+# ---------------------------------------------------------------------------
+
+def test_text_in_reasoning_content_is_still_text():
+    """
+    DEFECT. 1.0.0 read only `message.content`. Several NIM reasoning models
+    put their reply in `reasoning_content` and leave `content` empty, so the
+    probe recorded "cannot emit text" for a model that emitted plenty. Four
+    models were marked text_output=False on the live run on that basis.
+    """
+    body = json.dumps({"choices": [{"finish_reason": "stop", "message": {
+        "role": "assistant", "content": None,
+        "reasoning_content": "Let me think. ready"}}]})
+    transport = ScriptedTransport({"ready": body})
+    run = run_probes(source(), "m", [TEXT_OUTPUT], transport=transport, env=ENV)
+    assert run.outcomes[TEXT_OUTPUT].value is True
+
+
+def test_a_reply_truncated_at_max_tokens_establishes_nothing():
+    """
+    DEFECT. An empty reply is evidence of incapability only if the model had
+    room to answer and did not. Cut off at our own `max_tokens`, it says
+    nothing -- and False there is a positive claim of incapability resting on
+    a budget decision of ours, which is the exact error the tri-state exists
+    to prevent, made one level up.
+    """
+    body = json.dumps({"choices": [{"finish_reason": "length",
+                                    "message": {"content": ""}}]})
+    transport = ScriptedTransport({"ready": body})
+    run = run_probes(source(), "m", [TEXT_OUTPUT], transport=transport, env=ENV)
+    outcome = run.outcomes[TEXT_OUTPUT]
+    assert outcome.value is None
+    assert "cut off" in outcome.evidence
+
+
+def test_an_empty_reply_with_room_to_spare_is_still_a_no():
+    """The other side of it: `stop` with nothing emitted is a real answer."""
+    body = json.dumps({"choices": [{"finish_reason": "stop",
+                                    "message": {"content": ""}}]})
+    transport = ScriptedTransport({"ready": body})
+    run = run_probes(source(), "m", [TEXT_OUTPUT], transport=transport, env=ENV)
+    assert run.outcomes[TEXT_OUTPUT].value is False
+
+
+def test_an_unreadable_reply_shape_establishes_nothing():
+    transport = ScriptedTransport({"ready": json.dumps({"unexpected": "shape"})})
+    run = run_probes(source(), "m", [TEXT_OUTPUT], transport=transport, env=ENV)
+    assert run.outcomes[TEXT_OUTPUT].value is None
+
+
+def test_an_inconclusive_probe_records_the_status_and_body_it_saw():
+    """
+    DEFECT. 1.0.0 recorded only "probe could not run (MODEL_RETIRED)". A
+    terminal-sounding classification nobody can audit afterwards is worse than
+    no classification -- five models on the live run could not be checked.
+    """
+    transport = ScriptedTransport({"ready": (410, NVIDIA_410)})
+    run = run_probes(source(), "m", [TEXT_OUTPUT], transport=transport, env=ENV)
+    outcome = run.outcomes[TEXT_OUTPUT]
+    assert outcome.value is None
+    assert outcome.http_status == 410
+    assert "MODEL_RETIRED" in outcome.evidence
+    assert "410" in outcome.evidence
+    assert "end of life" in outcome.evidence          # the provider's own words
+
+
+def test_a_capability_pass_carries_back_what_it_learned_about_availability():
+    """
+    DEFECT. A capability pass that gets a 410 has discovered a retirement.
+    1.0.0 threw it away, so five models stayed AVAILABLE in the registry after
+    the provider refused them.
+    """
+    transport = ScriptedTransport({"ready": (410, NVIDIA_410)})
+    run = run_probes(source(), "m", [STRUCTURED_OUTPUT], transport=transport, env=ENV)
+    assert run.availability["http_status"] == 410
+    assert run.availability["provider_status"] == "MODEL_RETIRED"
+
+    good = ScriptedTransport({"ready": chat("ready"),
+                              "Use the letter B": chat('{"answer":"B"}')})
+    run = run_probes(source(), "m", [STRUCTURED_OUTPUT], transport=good, env=ENV)
+    assert run.availability["provider_status"] == "AVAILABLE"
+
+
+def test_a_withdrawn_claim_returns_to_unknown_and_is_not_deleted(tmp_path):
+    """
+    A claim a later reading showed was unsound is not evidence of anything, so
+    the honest state is the one before it was made -- not the opposite value,
+    and not a deleted row.
+    """
+    reg = seeded(tmp_path, "m")
+    transport = ScriptedTransport({"ready": chat("ready"),
+                                   "Use the letter B": chat("prose, no json")})
+    run = run_probes(source(), "m", [STRUCTURED_OUTPUT], transport=transport, env=ENV)
+    reg.record_capability_probe("nvidia:m", run.claims(), at=T1,
+                                probe_version="capability-probe/1.0.0")
+    assert reg.get("nvidia:m").capability(STRUCTURED_OUTPUT).value is False
+
+    reg.withdraw_capability_claim("nvidia:m", STRUCTURED_OUTPUT,
+                                  reason="verifier was wrong in 1.0.0", at=T1)
+    claim = reg.get("nvidia:m").capability(STRUCTURED_OUTPUT)
+    assert claim.value is None
+    assert claim.source == Provenance.UNKNOWN
+    assert "withdrawn" in claim.evidence
+    # The record, and the fact that a claim was withdrawn, both survive.
+    assert reg.get("nvidia:m") is not None
+    assert any(e["kind"] == "CAPABILITY_CLAIM_WITHDRAWN"
+               for e in reg.get("nvidia:m").history)
+    # And it becomes due for a probe again, rather than being stuck.
+    assert reg.get("nvidia:m") in reg.due_for_capability_probe([STRUCTURED_OUTPUT])
+
+
+def test_withdrawing_an_unknown_claim_is_a_no_op(tmp_path):
+    reg = seeded(tmp_path, "m")
+    before = len(reg.get("nvidia:m").history)
+    reg.withdraw_capability_claim("nvidia:m", VISION, reason="nothing to withdraw")
+    assert len(reg.get("nvidia:m").history) == before

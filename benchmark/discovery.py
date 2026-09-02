@@ -276,6 +276,7 @@ EVENT_RETIRED = "RETIRED"
 EVENT_METADATA_CHANGED = "METADATA_CHANGED"
 EVENT_PROBED = "PROBED"
 EVENT_CAPABILITY_PROBED = "CAPABILITY_PROBED"
+EVENT_CLAIM_WITHDRAWN = "CAPABILITY_CLAIM_WITHDRAWN"
 
 #: Metadata fields a change to which is worth an event. Deliberately not
 #: everything: `last_seen` moves on every discovery and an event per model per
@@ -899,6 +900,42 @@ class DynamicModelRegistry:
         if inconclusive:
             detail += f"; inconclusive: {', '.join(sorted(inconclusive))}"
         self.events.append(record.note(EVENT_CAPABILITY_PROBED, detail, at=at))
+        return record
+
+    def withdraw_capability_claim(self, key: str, name: str, *, reason: str,
+                                 at: str = "") -> ModelRecord:
+        """
+        Retract a claim a later reading showed was not sound, back to UNKNOWN.
+
+        Not a delete and not an overwrite with the opposite value. A claim
+        produced by a probe we have since found to be wrong is not evidence of
+        anything, and the honest state is the one before it was made. The
+        withdrawal itself is recorded, with the reason, so the audit trail
+        shows what was believed, when, and why it stopped being believed.
+
+        Used after the 2026-08-28 run: `capability-probe/1.0.0` read an empty
+        `content` field as "cannot emit text" without checking whether the
+        reply had been truncated at max_tokens or carried its text in
+        `reasoning_content`. Four models were recorded `text_output=False` on
+        that basis. The value was a positive claim of incapability resting on
+        a budget decision of ours, so it is withdrawn rather than corrected --
+        we do not know what those models can do.
+        """
+        record = self._records.get(key)
+        if record is None:
+            raise KeyError(f"no record for {key!r}")
+        at = at or now_iso()
+        previous = record.capability(name)
+        if previous.source == Provenance.UNKNOWN:
+            return record
+        record.set_capability(name, CapabilityClaim(
+            value=None, source=Provenance.UNKNOWN, at=at,
+            evidence=f"withdrawn: {reason}",
+            probe_version=previous.probe_version))
+        self.events.append(record.note(
+            EVENT_CLAIM_WITHDRAWN,
+            f"{name}: {previous.value!r} [{previous.source}, "
+            f"{previous.probe_version or 'unversioned'}] -> UNKNOWN. {reason}", at=at))
         return record
 
     def due_for_capability_probe(self, requirements, *, providers=None,

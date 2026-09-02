@@ -1,6 +1,6 @@
 {
   "metadata_version": 1,
-  "written_at": "2026-08-28T10:59:52Z",
+  "written_at": "2026-09-02T10:34:05Z",
   "models": {
     "nvidia:01-ai/yi-large": {
       "provider": "nvidia",
@@ -30,6 +30,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -74,6 +77,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -118,6 +124,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -162,6 +171,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -206,6 +218,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -256,6 +271,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -300,6 +318,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -344,6 +365,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -373,7 +397,15 @@
       "availability": "AVAILABLE",
       "availability_detail": "",
       "last_probe_status": "AVAILABLE",
-      "capabilities": {},
+      "capabilities": {
+        "text_output": {
+          "value": null,
+          "source": "UNKNOWN",
+          "at": "2026-09-02T10:34:05Z",
+          "evidence": "withdrawn: recorded by capability-probe/1.0.0, whose text_output verifier read only message.content and did not check finish_reason. An empty content field may mean the reply was truncated at max_tokens=16 or carried its text in reasoning_content, neither of which is evidence of incapability. Not re-probed: outside the authorised 57-call budget.",
+          "probe_version": "capability-probe/1.0.0"
+        }
+      },
       "context_window": null,
       "input_price": null,
       "output_price": null,
@@ -388,6 +420,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "2026-09-02T10:30:12Z",
+      "capability_probe_version": "capability-probe/1.0.0",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -407,6 +442,18 @@
           "kind": "PROBED",
           "key": "nvidia:deepseek-ai/deepseek-v4-flash-0731",
           "detail": "AVAILABLE -> AVAILABLE (8460ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:12Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:deepseek-ai/deepseek-v4-flash-0731",
+          "detail": "text_output=False"
+        },
+        {
+          "at": "2026-09-02T10:34:05Z",
+          "kind": "CAPABILITY_CLAIM_WITHDRAWN",
+          "key": "nvidia:deepseek-ai/deepseek-v4-flash-0731",
+          "detail": "text_output: False [OBSERVED, capability-probe/1.0.0] -> UNKNOWN. recorded by capability-probe/1.0.0, whose text_output verifier read only message.content and did not check finish_reason. An empty content field may mean the reply was truncated at max_tokens=16 or carried its text in reasoning_content, neither of which is evidence of incapability. Not re-probed: outside the authorised 57-call budget."
         }
       ]
     },
@@ -438,6 +485,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -476,6 +526,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -520,6 +573,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -564,6 +620,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -593,7 +652,15 @@
       "availability": "AVAILABLE",
       "availability_detail": "",
       "last_probe_status": "AVAILABLE",
-      "capabilities": {},
+      "capabilities": {
+        "text_output": {
+          "value": null,
+          "source": "UNKNOWN",
+          "at": "2026-09-02T10:34:05Z",
+          "evidence": "withdrawn: recorded by capability-probe/1.0.0, whose text_output verifier read only message.content and did not check finish_reason. An empty content field may mean the reply was truncated at max_tokens=16 or carried its text in reasoning_content, neither of which is evidence of incapability. Not re-probed: outside the authorised 57-call budget.",
+          "probe_version": "capability-probe/1.0.0"
+        }
+      },
       "context_window": null,
       "input_price": null,
       "output_price": null,
@@ -608,6 +675,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "2026-09-02T10:30:19Z",
+      "capability_probe_version": "capability-probe/1.0.0",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -621,6 +691,18 @@
           "kind": "PROBED",
           "key": "nvidia:google/diffusiongemma-26b-a4b-it",
           "detail": "AVAILABLE -> AVAILABLE (529ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:19Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:google/diffusiongemma-26b-a4b-it",
+          "detail": "text_output=False"
+        },
+        {
+          "at": "2026-09-02T10:34:05Z",
+          "kind": "CAPABILITY_CLAIM_WITHDRAWN",
+          "key": "nvidia:google/diffusiongemma-26b-a4b-it",
+          "detail": "text_output: False [OBSERVED, capability-probe/1.0.0] -> UNKNOWN. recorded by capability-probe/1.0.0, whose text_output verifier read only message.content and did not check finish_reason. An empty content field may mean the reply was truncated at max_tokens=16 or carried its text in reasoning_content, neither of which is evidence of incapability. Not re-probed: outside the authorised 57-call budget."
         }
       ]
     },
@@ -652,6 +734,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -696,6 +781,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -746,6 +834,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -790,6 +881,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -840,6 +934,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -884,6 +981,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -928,6 +1028,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -972,6 +1075,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1016,6 +1122,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1060,6 +1169,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1104,6 +1216,9 @@
       "retirement_reason": "provider answered 410 / end-of-life: HTTP 410: The model has reached its end of life on 2026-08-26T09:00:00Z and is no longer available.",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1160,6 +1275,9 @@
       "retirement_reason": "provider answered 410 / end-of-life: HTTP 410: The model has reached its end of life on 2026-08-26T09:00:00Z and is no longer available.",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1201,7 +1319,29 @@
       "availability": "AVAILABLE",
       "availability_detail": "",
       "last_probe_status": "AVAILABLE",
-      "capabilities": {},
+      "capabilities": {
+        "text_output": {
+          "value": true,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:22Z",
+          "evidence": "returned 5 character(s) of text",
+          "probe_version": "capability-probe/1.0.0"
+        },
+        "structured_output": {
+          "value": true,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:22Z",
+          "evidence": "parsed {\"answer\": 'B'}",
+          "probe_version": "capability-probe/1.0.0"
+        },
+        "reasoning": {
+          "value": false,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:22Z",
+          "evidence": "answered 18, expected 10",
+          "probe_version": "capability-probe/1.0.0"
+        }
+      },
       "context_window": null,
       "input_price": null,
       "output_price": null,
@@ -1216,6 +1356,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "2026-09-02T10:30:22Z",
+      "capability_probe_version": "capability-probe/1.0.0",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1229,6 +1372,12 @@
           "kind": "PROBED",
           "key": "nvidia:meta/llama-3.2-11b-vision-instruct",
           "detail": "AVAILABLE -> AVAILABLE (343ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:22Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:meta/llama-3.2-11b-vision-instruct",
+          "detail": "text_output=True, structured_output=True, reasoning=False"
         }
       ]
     },
@@ -1260,6 +1409,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1310,6 +1462,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1360,6 +1515,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1404,6 +1562,9 @@
       "retirement_reason": "provider answered 410 / end-of-life: HTTP 410: The model has reached its end of life on 2026-08-26T09:00:00Z and is no longer available.",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1460,6 +1621,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1504,6 +1668,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1548,6 +1715,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1592,6 +1762,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1636,6 +1809,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1680,6 +1856,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1724,6 +1903,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1774,6 +1956,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1818,6 +2003,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1868,6 +2056,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1912,6 +2103,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -1956,6 +2150,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2000,6 +2197,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2044,6 +2244,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2073,7 +2276,15 @@
       "availability": "AVAILABLE",
       "availability_detail": "",
       "last_probe_status": "AVAILABLE",
-      "capabilities": {},
+      "capabilities": {
+        "text_output": {
+          "value": null,
+          "source": "UNKNOWN",
+          "at": "2026-09-02T10:34:05Z",
+          "evidence": "withdrawn: recorded by capability-probe/1.0.0, whose text_output verifier read only message.content and did not check finish_reason. An empty content field may mean the reply was truncated at max_tokens=16 or carried its text in reasoning_content, neither of which is evidence of incapability. Not re-probed: outside the authorised 57-call budget.",
+          "probe_version": "capability-probe/1.0.0"
+        }
+      },
       "context_window": null,
       "input_price": null,
       "output_price": null,
@@ -2088,6 +2299,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "2026-09-02T10:30:30Z",
+      "capability_probe_version": "capability-probe/1.0.0",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2101,6 +2315,18 @@
           "kind": "PROBED",
           "key": "nvidia:moonshotai/kimi-k3",
           "detail": "AVAILABLE -> AVAILABLE (490ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:30Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:moonshotai/kimi-k3",
+          "detail": "text_output=False"
+        },
+        {
+          "at": "2026-09-02T10:34:05Z",
+          "kind": "CAPABILITY_CLAIM_WITHDRAWN",
+          "key": "nvidia:moonshotai/kimi-k3",
+          "detail": "text_output: False [OBSERVED, capability-probe/1.0.0] -> UNKNOWN. recorded by capability-probe/1.0.0, whose text_output verifier read only message.content and did not check finish_reason. An empty content field may mean the reply was truncated at max_tokens=16 or carried its text in reasoning_content, neither of which is evidence of incapability. Not re-probed: outside the authorised 57-call budget."
         }
       ]
     },
@@ -2132,6 +2358,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2176,6 +2405,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2220,6 +2452,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2264,6 +2499,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2293,7 +2531,29 @@
       "availability": "AVAILABLE",
       "availability_detail": "",
       "last_probe_status": "AVAILABLE",
-      "capabilities": {},
+      "capabilities": {
+        "text_output": {
+          "value": true,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:32Z",
+          "evidence": "returned 6 character(s) of text",
+          "probe_version": "capability-probe/1.0.0"
+        },
+        "structured_output": {
+          "value": true,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:32Z",
+          "evidence": "parsed {\"answer\": 'B'}",
+          "probe_version": "capability-probe/1.0.0"
+        },
+        "reasoning": {
+          "value": true,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:32Z",
+          "evidence": "3x4-2 = 10, answered correctly",
+          "probe_version": "capability-probe/1.0.0"
+        }
+      },
       "context_window": null,
       "input_price": null,
       "output_price": null,
@@ -2308,6 +2568,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "2026-09-02T10:30:32Z",
+      "capability_probe_version": "capability-probe/1.0.0",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2321,6 +2584,12 @@
           "kind": "PROBED",
           "key": "nvidia:nvidia/ising-calibration-1.5-31b",
           "detail": "AVAILABLE -> AVAILABLE (419ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:32Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:nvidia/ising-calibration-1.5-31b",
+          "detail": "text_output=True, structured_output=True, reasoning=True"
         }
       ]
     },
@@ -2337,7 +2606,22 @@
       "availability": "AVAILABLE",
       "availability_detail": "",
       "last_probe_status": "AVAILABLE",
-      "capabilities": {},
+      "capabilities": {
+        "text_output": {
+          "value": true,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:33Z",
+          "evidence": "returned 23 character(s) of text",
+          "probe_version": "capability-probe/1.0.0"
+        },
+        "structured_output": {
+          "value": false,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:33Z",
+          "evidence": "JSON object lacked the requested key: ['User Safety']",
+          "probe_version": "capability-probe/1.0.0"
+        }
+      },
       "context_window": null,
       "input_price": null,
       "output_price": null,
@@ -2352,6 +2636,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "2026-09-02T10:30:33Z",
+      "capability_probe_version": "capability-probe/1.0.0",
+      "capability_probes_inconclusive": 1,
       "metadata_version": 1,
       "history": [
         {
@@ -2365,6 +2652,12 @@
           "kind": "PROBED",
           "key": "nvidia:nvidia/llama-3.1-nemoguard-8b-content-safety",
           "detail": "AVAILABLE -> AVAILABLE (350ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:33Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:nvidia/llama-3.1-nemoguard-8b-content-safety",
+          "detail": "text_output=True, structured_output=False; inconclusive: reasoning"
         }
       ]
     },
@@ -2396,6 +2689,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 1,
       "metadata_version": 1,
       "history": [
         {
@@ -2409,6 +2705,12 @@
           "kind": "PROBED",
           "key": "nvidia:nvidia/llama-3.1-nemoguard-8b-topic-control",
           "detail": "AVAILABLE -> AVAILABLE (291ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:34Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:nvidia/llama-3.1-nemoguard-8b-topic-control",
+          "detail": "nothing established; inconclusive: text_output"
         }
       ]
     },
@@ -2440,6 +2742,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2484,6 +2789,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2534,6 +2842,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2584,6 +2895,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 1,
       "metadata_version": 1,
       "history": [
         {
@@ -2603,6 +2917,12 @@
           "kind": "ABSENT_FROM_CATALOGUE",
           "key": "nvidia:nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
           "detail": "absent from the catalogue (1 of 2 before retirement)"
+        },
+        {
+          "at": "2026-09-02T10:30:34Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+          "detail": "nothing established; inconclusive: text_output"
         }
       ]
     },
@@ -2619,7 +2939,22 @@
       "availability": "AVAILABLE",
       "availability_detail": "",
       "last_probe_status": "AVAILABLE",
-      "capabilities": {},
+      "capabilities": {
+        "text_output": {
+          "value": true,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:35Z",
+          "evidence": "returned 23 character(s) of text",
+          "probe_version": "capability-probe/1.0.0"
+        },
+        "structured_output": {
+          "value": false,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:35Z",
+          "evidence": "JSON object lacked the requested key: ['User Safety']",
+          "probe_version": "capability-probe/1.0.0"
+        }
+      },
       "context_window": null,
       "input_price": null,
       "output_price": null,
@@ -2634,6 +2969,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "2026-09-02T10:30:35Z",
+      "capability_probe_version": "capability-probe/1.0.0",
+      "capability_probes_inconclusive": 1,
       "metadata_version": 1,
       "history": [
         {
@@ -2647,6 +2985,12 @@
           "kind": "PROBED",
           "key": "nvidia:nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
           "detail": "AVAILABLE -> AVAILABLE (330ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:35Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
+          "detail": "text_output=True, structured_output=False; inconclusive: reasoning"
         }
       ]
     },
@@ -2678,6 +3022,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2722,6 +3069,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2766,6 +3116,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2810,6 +3163,9 @@
       "retirement_reason": "provider answered 410 / end-of-life: HTTP 410: The model has reached its end of life on 2026-08-26T09:00:00Z and is no longer available.",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2866,6 +3222,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 1,
       "metadata_version": 1,
       "history": [
         {
@@ -2885,6 +3244,12 @@
           "kind": "ABSENT_FROM_CATALOGUE",
           "key": "nvidia:nvidia/llama-3.3-nemotron-super-49b-v1.5",
           "detail": "absent from the catalogue (1 of 2 before retirement)"
+        },
+        {
+          "at": "2026-09-02T10:30:36Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:nvidia/llama-3.3-nemotron-super-49b-v1.5",
+          "detail": "nothing established; inconclusive: text_output"
         }
       ]
     },
@@ -2916,6 +3281,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -2966,6 +3334,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3010,6 +3381,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3054,6 +3428,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3098,6 +3475,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3148,6 +3528,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3192,6 +3575,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 1,
       "metadata_version": 1,
       "history": [
         {
@@ -3211,6 +3597,12 @@
           "kind": "PROBED",
           "key": "nvidia:nvidia/nemotron-3-nano-30b-a3b",
           "detail": "AVAILABLE -> AVAILABLE (430ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:36Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:nvidia/nemotron-3-nano-30b-a3b",
+          "detail": "nothing established; inconclusive: text_output"
         }
       ]
     },
@@ -3242,6 +3634,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 1,
       "metadata_version": 1,
       "history": [
         {
@@ -3255,6 +3650,12 @@
           "kind": "PROBED",
           "key": "nvidia:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
           "detail": "AVAILABLE -> AVAILABLE (1246ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:36Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+          "detail": "nothing established; inconclusive: text_output"
         }
       ]
     },
@@ -3286,6 +3687,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 1,
       "metadata_version": 1,
       "history": [
         {
@@ -3305,6 +3709,12 @@
           "kind": "PROBED",
           "key": "nvidia:nvidia/nemotron-3-super-120b-a12b",
           "detail": "AVAILABLE -> AVAILABLE (430ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:37Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:nvidia/nemotron-3-super-120b-a12b",
+          "detail": "nothing established; inconclusive: text_output"
         }
       ]
     },
@@ -3336,6 +3746,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3371,7 +3784,22 @@
       "availability": "AVAILABLE",
       "availability_detail": "",
       "last_probe_status": "AVAILABLE",
-      "capabilities": {},
+      "capabilities": {
+        "text_output": {
+          "value": true,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:38Z",
+          "evidence": "returned 17 character(s) of text",
+          "probe_version": "capability-probe/1.0.0"
+        },
+        "structured_output": {
+          "value": false,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:38Z",
+          "evidence": "no JSON object in the reply: 'User Safety: safe'",
+          "probe_version": "capability-probe/1.0.0"
+        }
+      },
       "context_window": null,
       "input_price": null,
       "output_price": null,
@@ -3386,6 +3814,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "2026-09-02T10:30:38Z",
+      "capability_probe_version": "capability-probe/1.0.0",
+      "capability_probes_inconclusive": 1,
       "metadata_version": 1,
       "history": [
         {
@@ -3399,6 +3830,12 @@
           "kind": "PROBED",
           "key": "nvidia:nvidia/nemotron-3.5-content-safety",
           "detail": "AVAILABLE -> AVAILABLE (604ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:38Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:nvidia/nemotron-3.5-content-safety",
+          "detail": "text_output=True, structured_output=False; inconclusive: reasoning"
         }
       ]
     },
@@ -3430,6 +3867,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3480,6 +3920,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3530,6 +3973,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3574,6 +4020,9 @@
       "retirement_reason": "provider answered 410 / end-of-life: HTTP 410: The model has reached its end of life on 2026-08-26T09:00:00Z and is no longer available.",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3630,6 +4079,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3680,6 +4132,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3724,6 +4179,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3768,6 +4226,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3812,6 +4273,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3862,6 +4326,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3912,6 +4379,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -3962,6 +4432,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4006,6 +4479,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4050,6 +4526,9 @@
       "retirement_reason": "provider answered 410 / end-of-life: HTTP 410: The model has reached its end of life on 2026-08-26T09:00:00Z and is no longer available.",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4106,6 +4585,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4135,7 +4617,22 @@
       "availability": "AVAILABLE",
       "availability_detail": "",
       "last_probe_status": "AVAILABLE",
-      "capabilities": {},
+      "capabilities": {
+        "text_output": {
+          "value": true,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:40Z",
+          "evidence": "returned 33 character(s) of text",
+          "probe_version": "capability-probe/1.0.0"
+        },
+        "structured_output": {
+          "value": true,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:40Z",
+          "evidence": "parsed {\"answer\": 'B'}",
+          "probe_version": "capability-probe/1.0.0"
+        }
+      },
       "context_window": null,
       "input_price": null,
       "output_price": null,
@@ -4150,6 +4647,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "2026-09-02T10:30:40Z",
+      "capability_probe_version": "capability-probe/1.0.0",
+      "capability_probes_inconclusive": 1,
       "metadata_version": 1,
       "history": [
         {
@@ -4163,6 +4663,12 @@
           "kind": "PROBED",
           "key": "nvidia:nvidia/riva-translate-4b-instruct-v1.1",
           "detail": "AVAILABLE -> AVAILABLE (364ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:40Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:nvidia/riva-translate-4b-instruct-v1.1",
+          "detail": "text_output=True, structured_output=True; inconclusive: reasoning"
         }
       ]
     },
@@ -4179,7 +4685,22 @@
       "availability": "AVAILABLE",
       "availability_detail": "",
       "last_probe_status": "AVAILABLE",
-      "capabilities": {},
+      "capabilities": {
+        "text_output": {
+          "value": true,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:42Z",
+          "evidence": "returned 32 character(s) of text",
+          "probe_version": "capability-probe/1.0.0"
+        },
+        "structured_output": {
+          "value": true,
+          "source": "OBSERVED",
+          "at": "2026-09-02T10:30:42Z",
+          "evidence": "parsed {\"answer\": 'B'}",
+          "probe_version": "capability-probe/1.0.0"
+        }
+      },
       "context_window": null,
       "input_price": null,
       "output_price": null,
@@ -4194,6 +4715,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "2026-09-02T10:30:42Z",
+      "capability_probe_version": "capability-probe/1.0.0",
+      "capability_probes_inconclusive": 1,
       "metadata_version": 1,
       "history": [
         {
@@ -4207,6 +4731,12 @@
           "kind": "PROBED",
           "key": "nvidia:nvidia/riva-translate-4b-instruct-v2",
           "detail": "AVAILABLE -> AVAILABLE (376ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:42Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:nvidia/riva-translate-4b-instruct-v2",
+          "detail": "text_output=True, structured_output=True; inconclusive: reasoning"
         }
       ]
     },
@@ -4238,6 +4768,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4282,6 +4815,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4317,7 +4853,15 @@
       "availability": "AVAILABLE",
       "availability_detail": "",
       "last_probe_status": "AVAILABLE",
-      "capabilities": {},
+      "capabilities": {
+        "text_output": {
+          "value": null,
+          "source": "UNKNOWN",
+          "at": "2026-09-02T10:34:05Z",
+          "evidence": "withdrawn: recorded by capability-probe/1.0.0, whose text_output verifier read only message.content and did not check finish_reason. An empty content field may mean the reply was truncated at max_tokens=16 or carried its text in reasoning_content, neither of which is evidence of incapability. Not re-probed: outside the authorised 57-call budget.",
+          "probe_version": "capability-probe/1.0.0"
+        }
+      },
       "context_window": null,
       "input_price": null,
       "output_price": null,
@@ -4332,6 +4876,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "2026-09-02T10:30:53Z",
+      "capability_probe_version": "capability-probe/1.0.0",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4351,6 +4898,18 @@
           "kind": "PROBED",
           "key": "nvidia:openai/gpt-oss-20b",
           "detail": "AVAILABLE -> AVAILABLE (630ms)"
+        },
+        {
+          "at": "2026-09-02T10:30:53Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:openai/gpt-oss-20b",
+          "detail": "text_output=False"
+        },
+        {
+          "at": "2026-09-02T10:34:05Z",
+          "kind": "CAPABILITY_CLAIM_WITHDRAWN",
+          "key": "nvidia:openai/gpt-oss-20b",
+          "detail": "text_output: False [OBSERVED, capability-probe/1.0.0] -> UNKNOWN. recorded by capability-probe/1.0.0, whose text_output verifier read only message.content and did not check finish_reason. An empty content field may mean the reply was truncated at max_tokens=16 or carried its text in reasoning_content, neither of which is evidence of incapability. Not re-probed: outside the authorised 57-call budget."
         }
       ]
     },
@@ -4382,6 +4941,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4432,6 +4994,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4476,6 +5041,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 1,
       "metadata_version": 1,
       "history": [
         {
@@ -4495,6 +5063,12 @@
           "kind": "ABSENT_FROM_CATALOGUE",
           "key": "nvidia:stepfun-ai/step-3.7-flash",
           "detail": "absent from the catalogue (1 of 2 before retirement)"
+        },
+        {
+          "at": "2026-09-02T10:30:54Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:stepfun-ai/step-3.7-flash",
+          "detail": "nothing established; inconclusive: text_output"
         }
       ]
     },
@@ -4526,6 +5100,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 1,
       "metadata_version": 1,
       "history": [
         {
@@ -4545,6 +5122,12 @@
           "kind": "ABSENT_FROM_CATALOGUE",
           "key": "nvidia:thinkingmachines/inkling",
           "detail": "absent from the catalogue (1 of 2 before retirement)"
+        },
+        {
+          "at": "2026-09-02T10:30:54Z",
+          "kind": "CAPABILITY_PROBED",
+          "key": "nvidia:thinkingmachines/inkling",
+          "detail": "nothing established; inconclusive: text_output"
         }
       ]
     },
@@ -4576,6 +5159,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4620,6 +5206,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4664,6 +5253,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4708,6 +5300,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4758,6 +5353,9 @@
       "retirement_reason": "",
       "source": "discovery/nvidia_inference.json",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {
@@ -4808,6 +5406,9 @@
       "retirement_reason": "",
       "source": "https://integrate.api.nvidia.com/v1/models",
       "credential_ref": "NVIDIA_API_KEY",
+      "capabilities_probed_at": "",
+      "capability_probe_version": "",
+      "capability_probes_inconclusive": 0,
       "metadata_version": 1,
       "history": [
         {

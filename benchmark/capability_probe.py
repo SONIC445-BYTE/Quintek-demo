@@ -61,7 +61,7 @@ from .provider_status import ProviderStatus, classify
 #: Bumped when a probe's prompt or verifier changes. Stored on every claim,
 #: because a claim produced by a different question is a different claim and a
 #: registry that cannot tell them apart cannot be re-based after a fix.
-PROBE_VERSION = "capability-probe/1.0.0"
+PROBE_VERSION = "capability-probe/1.1.0"
 
 TEXT_OUTPUT = "text_output"
 STRUCTURED_OUTPUT = "structured_output"
@@ -158,7 +158,32 @@ class TextOutputProbe(Probe):
     def verify(self, body, text):
         if text.strip():
             return True, f"returned {len(text.strip())} character(s) of text"
-        return False, "returned no text content (embedding or non-chat model)"
+        # An empty reply is only evidence of incapability if the model was
+        # given room to answer and chose not to. Cut off at max_tokens, it
+        # says nothing -- and recording False there is a positive claim of
+        # incapability built on a budget decision of ours. This is the exact
+        # error the tri-state exists to prevent, made one level up: the 1.0.0
+        # probe recorded False for four models on 2026-08-28 without checking.
+        reason = _finish_reason(body)
+        if reason == "length":
+            return None, ("reply was cut off at max_tokens before any text was "
+                          "emitted, so this establishes nothing")
+        if not (body or {}).get("choices"):
+            # No `choices` at all. If the body is a recognisable NON-CHAT
+            # success shape -- an embedding or reranking response -- that IS
+            # the answer: this endpoint does not serve chat completions, and
+            # leaving it UNKNOWN would re-probe an embedder forever. A body
+            # that fits no shape we know is genuinely unreadable, and
+            # unreadable is not a finding.
+            for shape, label in (("data", "an embedding/reranking response"),
+                                 ("embedding", "an embedding response"),
+                                 ("rankings", "a reranking response")):
+                if shape in (body or {}):
+                    return False, f"answered with {label}, not a chat completion"
+            return None, ("reply carried no choices and matched no shape this "
+                          "probe can read; nothing was established")
+        return False, (f"returned no text in any of {', '.join(TEXT_FIELDS)} "
+                       f"(finish_reason={reason or 'unstated'})")
 
 
 class StructuredOutputProbe(Probe):
@@ -329,6 +354,12 @@ class ProbeRun:
     calls: int = 0
     inconclusive: list = field(default_factory=list)
     stopped_early: str = ""
+    #: What the probe learned about REACHABILITY, as opposed to capability.
+    #: A capability pass that gets a 410 has discovered a retirement, and
+    #: version 1.0.0 threw that away: five models answered with a
+    #: MODEL_RETIRED-classified error on 2026-08-28 and stayed AVAILABLE in
+    #: the registry, because nothing carried the finding across.
+    availability: dict = field(default_factory=dict)
 
     def claims(self) -> dict:
         return {name: outcome.as_claim() for name, outcome in self.outcomes.items()}
@@ -337,7 +368,8 @@ class ProbeRun:
         return {"key": self.key, "calls": self.calls,
                 "outcomes": {n: o.as_dict() for n, o in self.outcomes.items()},
                 "inconclusive": list(self.inconclusive),
-                "stopped_early": self.stopped_early}
+                "stopped_early": self.stopped_early,
+                "availability": dict(self.availability)}
 
 
 def run_probes(source, model_id: str, capabilities, *, transport: Transport | None = None,
@@ -380,6 +412,14 @@ def run_probes(source, model_id: str, capabilities, *, transport: Transport | No
         outcome = _run_one(source, model_id, probe, transport=transport,
                            headers=headers, timeout=timeout)
         run.calls += 1
+        # First real answer of the pass decides what we learned about
+        # reachability. Later probes cannot improve on it and a later failure
+        # should not overwrite a successful first contact.
+        if not run.availability:
+            run.availability = {"http_status": outcome.http_status,
+                                "provider_status": outcome.provider_status,
+                                "latency_ms": outcome.latency_ms,
+                                "detail": outcome.evidence}
         if name in wanted or name == PREREQUISITE:
             run.outcomes[name] = outcome
         if not outcome.conclusive:
@@ -404,8 +444,17 @@ def _run_one(source, model_id: str, probe: Probe, *, transport, headers,
                           http_status=response.status)
         # An availability failure is NOT a capability answer. This is the whole
         # reason `value` is tri-state.
+        #
+        # The status AND an excerpt of what the provider said are carried on
+        # the outcome and into the stored claim. Version 1.0.0 recorded only
+        # "probe could not run (MODEL_RETIRED)", which made it impossible to
+        # audit afterwards whether the 410 was real -- and a terminal-sounding
+        # classification nobody can check is worse than no classification.
+        detail = (str(response.error) if response.error
+                  else f"HTTP {response.status}")
         return ProbeOutcome(probe.capability, None,
-                            f"probe could not run ({status})",
+                            f"probe could not run [{status}] "
+                            f"HTTP {response.status}: {detail[:200]}",
                             http_status=response.status,
                             latency_ms=response.latency_ms, provider_status=status)
     try:
@@ -430,16 +479,33 @@ def _run_one(source, model_id: str, probe: Probe, *, transport, headers,
                         provider_status=ProviderStatus.AVAILABLE)
 
 
+#: Where a reply's text can live. `content` is the OpenAI-compatible field;
+#: `reasoning_content` is what several NIM reasoning models fill instead, and
+#: reading only the first records "emitted no text" for a model that emitted
+#: plenty. Measured on the 2026-08-28 run: four models -- including
+#: openai/gpt-oss-20b -- came back with an empty `content`.
+TEXT_FIELDS = ("content", "reasoning_content", "text")
+
+
 def _content_of(body: dict) -> str:
     choices = (body or {}).get("choices") or []
     if not choices:
         return ""
     message = choices[0].get("message") or {}
-    content = message.get("content")
-    if isinstance(content, list):          # some hosts return content parts
-        return "".join(part.get("text", "") for part in content
-                       if isinstance(part, dict))
-    return content or ""
+    parts = []
+    for field in TEXT_FIELDS:
+        value = message.get(field)
+        if isinstance(value, list):        # some hosts return content parts
+            parts.append("".join(part.get("text", "") for part in value
+                                 if isinstance(part, dict)))
+        elif isinstance(value, str):
+            parts.append(value)
+    return "".join(parts)
+
+
+def _finish_reason(body: dict) -> str:
+    choices = (body or {}).get("choices") or []
+    return str((choices[0].get("finish_reason") if choices else "") or "")
 
 
 def _first_json_object(text: str) -> dict | None:

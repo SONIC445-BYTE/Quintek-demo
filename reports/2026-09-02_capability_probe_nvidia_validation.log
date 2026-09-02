@@ -1,0 +1,30 @@
+role validation: needs structured_output, reasoning
+  models due              19
+  probes per model         3  (text_output, structured_output, reasoning)
+  CALLS (exact)           57
+  input tokens (est)    3040
+  output tokens (max)   3344
+  calls are exact; token figures are estimates and are here to separate a trivial pass from an expensive one, not to bill
+
+  nvidia:deepseek-ai/deepseek-v4-flash-0731            structured_output=None reasoning=None   [the text-output prerequisite came back False (returned no text content (embedding or non-chat model)); nothing further was sent]
+  nvidia:google/diffusiongemma-26b-a4b-it              structured_output=None reasoning=None   [the text-output prerequisite came back False (returned no text content (embedding or non-chat model)); nothing further was sent]
+  nvidia:meta/llama-3.2-11b-vision-instruct            structured_output=True reasoning=False
+  nvidia:moonshotai/kimi-k3                            structured_output=None reasoning=None   [the text-output prerequisite came back False (returned no text content (embedding or non-chat model)); nothing further was sent]
+  nvidia:nvidia/ising-calibration-1.5-31b              structured_output=True reasoning=True
+  nvidia:nvidia/llama-3.1-nemoguard-8b-content-safety  structured_output=False reasoning=None
+  nvidia:nvidia/llama-3.1-nemoguard-8b-topic-control   structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run (UNKNOWN_ERROR)); nothing further was sent]
+  nvidia:nvidia/llama-3.1-nemotron-nano-vl-8b-v1       structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run (MODEL_RETIRED)); nothing further was sent]
+  nvidia:nvidia/llama-3.1-nemotron-safety-guard-8b-v3  structured_output=False reasoning=None
+  nvidia:nvidia/llama-3.3-nemotron-super-49b-v1.5      structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run (MODEL_RETIRED)); nothing further was sent]
+  nvidia:nvidia/nemotron-3-nano-30b-a3b                structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run (MODEL_RETIRED)); nothing further was sent]
+  nvidia:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run (UNKNOWN_ERROR)); nothing further was sent]
+  nvidia:nvidia/nemotron-3-super-120b-a12b             structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run (UNKNOWN_ERROR)); nothing further was sent]
+  nvidia:nvidia/nemotron-3.5-content-safety            structured_output=False reasoning=None
+  nvidia:nvidia/riva-translate-4b-instruct-v1.1        structured_output=True reasoning=None
+  nvidia:nvidia/riva-translate-4b-instruct-v2          structured_output=True reasoning=None
+  nvidia:openai/gpt-oss-20b                            structured_output=None reasoning=None   [the text-output prerequisite came back False (returned no text content (embedding or non-chat model)); nothing further was sent]
+  nvidia:stepfun-ai/step-3.7-flash                     structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run (MODEL_RETIRED)); nothing further was sent]
+  nvidia:thinkingmachines/inkling                      structured_output=None reasoning=None   [the text-output prerequisite came back None (probe could not run (MODEL_RETIRED)); nothing further was sent]
+
+registry discovery/model_registry.json
+EXIT=0

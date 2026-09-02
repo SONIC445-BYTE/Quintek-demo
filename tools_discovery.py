@@ -182,6 +182,19 @@ def run_capability_probe(args) -> int:
     for record in due:
         run = probe_mod.run_probes(by_provider[record.provider], record.model_id,
                                    required, include_opt_in=args.include_opt_in)
+        # A capability pass that gets a 410 has discovered a retirement, and
+        # throwing that away leaves the registry saying AVAILABLE about a model
+        # the provider just refused. Five models hit exactly this on
+        # 2026-08-28. Availability comes from the FIRST answer of the pass,
+        # which is the same evidence `probe` would have recorded.
+        if run.availability.get("http_status") is not None:
+            registry.record_probe(
+                record.key,
+                error=None if run.availability["provider_status"] == "AVAILABLE"
+                      else run.availability["detail"],
+                http_status=run.availability["http_status"],
+                latency_ms=run.availability.get("latency_ms"),
+                credential_ref=by_provider[record.provider].api_key_env)
         registry.record_capability_probe(record.key, run.claims(),
                                          probe_version=probe_mod.PROBE_VERSION)
         updated = registry.get(record.key)
