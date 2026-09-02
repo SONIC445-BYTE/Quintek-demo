@@ -183,3 +183,96 @@ def test_real_http_server_round_trip(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+# ---------------------------------------------------------------------------
+# The discovery registry on the admin surface
+# ---------------------------------------------------------------------------
+
+def test_admin_can_inspect_the_discovery_registry(tmp_path):
+    """
+    Availability, capability evidence and retirement lived only in
+    `tools_discovery.py status`. That meant the console could show a benchmark
+    run for a model the provider had withdrawn and nothing on the screen would
+    say so -- an admin auditing "what is serving" had no way to see it.
+    """
+    from benchmark.analytics_api import AnalyticsAPI
+    from benchmark.discovery import DynamicModelRegistry, Observation
+
+    path = tmp_path / "models.json"
+    reg = DynamicModelRegistry(path)
+    reg.reconcile("nvidia", [Observation(provider="nvidia", model_id="alive",
+                                         capabilities={"reasoning": True}),
+                             Observation(provider="nvidia", model_id="gone")])
+    reg.record_probe("nvidia:alive", http_status=200, latency_ms=42.0,
+                     credential_ref="NVIDIA_API_KEY")
+    reg.record_probe("nvidia:gone", http_status=410,
+                     error="HTTP 410: end of life 2026-08-26")
+    reg.save()
+
+    api = AnalyticsAPI(tmp_path / "runs", model_registry_path=path)
+    status, body = api.handle("/ai/discovery", {})
+    assert status == 200
+    rows = {r["key"]: r for r in body["models"]}
+    assert rows["nvidia:alive"]["availability"] == "AVAILABLE"
+    assert rows["nvidia:gone"]["retired"] is True
+    assert rows["nvidia:alive"]["credential_ref"] == "NVIDIA_API_KEY"
+
+
+def test_the_admin_view_carries_capability_provenance_not_a_bare_boolean(tmp_path):
+    """
+    An admin deciding whether to trust a capability needs to know whether a
+    vendor asserted it or a probe demonstrated it. `true` alone cannot say.
+    """
+    from benchmark.analytics_api import AnalyticsAPI
+    from benchmark.discovery import DynamicModelRegistry, Observation
+
+    path = tmp_path / "models.json"
+    reg = DynamicModelRegistry(path)
+    reg.reconcile("nvidia", [Observation(provider="nvidia", model_id="m",
+                                         capabilities={"reasoning": True})])
+    reg.record_probe("nvidia:m", http_status=200)
+    reg.save()
+
+    api = AnalyticsAPI(tmp_path / "runs", model_registry_path=path)
+    _status, body = api.handle("/ai/discovery", {})
+    claim = body["models"][0]["capabilities"]["reasoning"]
+    assert claim["value"] is True
+    assert claim["source"] == "DECLARED"          # the catalogue said so
+    assert "source" in claim and "at" in claim and "evidence" in claim
+
+
+def test_retired_models_stay_visible_with_the_providers_own_words(tmp_path):
+    """History is not tidied away: a withdrawn model keeps its record."""
+    from benchmark.analytics_api import AnalyticsAPI
+    from benchmark.discovery import DynamicModelRegistry, Observation
+
+    path = tmp_path / "models.json"
+    reg = DynamicModelRegistry(path)
+    reg.reconcile("nvidia", [Observation(provider="nvidia", model_id="gone")])
+    reg.record_probe("nvidia:gone", http_status=200)          # it worked once
+    reg.record_probe("nvidia:gone", http_status=410,
+                     error="HTTP 410: reached its end of life on 2026-08-26")
+    reg.save()
+
+    api = AnalyticsAPI(tmp_path / "runs", model_registry_path=path)
+    status, body = api.handle("/ai/discovery/retired", {})
+    assert status == 200
+    row = body["retired"][0]
+    assert row["key"] == "nvidia:gone"
+    assert "410" in row["reason"]
+    assert row["probe_successes"] == 1        # the good day survives the retirement
+    assert row["first_seen"]
+
+
+def test_no_discovery_registry_is_an_explicit_error_not_an_empty_list(tmp_path):
+    """
+    An empty list would read as "no models", which is a different and much
+    worse claim than "discovery has not run here".
+    """
+    from benchmark.analytics_api import AnalyticsAPI
+
+    api = AnalyticsAPI(tmp_path / "runs", model_registry_path=tmp_path / "absent.json")
+    status, body = api.handle("/ai/discovery", {})
+    assert status == 400
+    assert "no discovery registry" in body["error"]

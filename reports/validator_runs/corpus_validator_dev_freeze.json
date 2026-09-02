@@ -1,0 +1,102 @@
+{
+  "validator_version": "0.2.0",
+  "validator_fingerprint": "5b0549c28ac5ea937e94885f57fbc2d5e6aaaee268a5d79f3d84930ef76a5cf1",
+  "corpus": "corpus/validator_dev",
+  "corpus_hash": "4da47a68fce97b8dd9a74f4386c45be967cd27823e383282748bd18eb32bf057",
+  "prompt_versions": {
+    "grounding": "grounding/0.1.0",
+    "judge": "judge/0.1.0",
+    "conformance": "conformance/0.1.0"
+  },
+  "thresholds": {
+    "min_sensitivity": 0.8,
+    "min_specificity": 0.9,
+    "min_items_per_arm": 30,
+    "judge_confidence_floor": 0.6
+  },
+  "models": [
+    {
+      "seat": "candidate",
+      "role": "grounding",
+      "credential_ref": "NVIDIA_API_KEY",
+      "provider": "nvidia",
+      "model": "deepseek-ai/deepseek-v4-flash-0731",
+      "model_version": "unknown",
+      "model_family": "deepseek",
+      "is_model": true,
+      "is_oracle": false,
+      "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions",
+      "temperature": 0.0
+    },
+    {
+      "seat": "judge",
+      "role": "judge",
+      "credential_ref": "NVIDIA_API_KEY",
+      "provider": "nvidia",
+      "model": "nvidia/ising-calibration-1.5-31b",
+      "model_version": "unknown",
+      "model_family": "ising",
+      "is_model": true,
+      "is_oracle": false,
+      "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions",
+      "temperature": 0.0
+    },
+    {
+      "seat": "candidate",
+      "role": "conformance",
+      "credential_ref": "NVIDIA_API_KEY",
+      "provider": "nvidia",
+      "model": "deepseek-ai/deepseek-v4-flash-0731",
+      "model_version": "unknown",
+      "model_family": "deepseek",
+      "is_model": true,
+      "is_oracle": false,
+      "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions",
+      "temperature": 0.0
+    }
+  ],
+  "sampling": {
+    "temperature": 0.0
+  },
+  "experiments": [
+    {
+      "name": "1  A+B+D  validator without the judge",
+      "layers": "ABD",
+      "config": {
+        "structural": true,
+        "grounding": true,
+        "judge": false,
+        "conformance": true
+      }
+    },
+    {
+      "name": "2  C      the independent judge alone",
+      "layers": "C",
+      "config": {
+        "structural": false,
+        "grounding": false,
+        "judge": true,
+        "conformance": false
+      }
+    },
+    {
+      "name": "3  ABCD   the whole validator",
+      "layers": "ABCD",
+      "config": {
+        "structural": true,
+        "grounding": true,
+        "judge": true,
+        "conformance": true
+      }
+    }
+  ],
+  "extra": {
+    "retry_max_retries": 2,
+    "budget_max_calls": 2400,
+    "budget_max_judge_calls": 600,
+    "max_wall_minutes": 180.0
+  },
+  "note": "Quintek V1 Phase 0. Pair selected deterministically per DECISION_LOG D011 using DynamicModelRegistry.sort_key. Candidate deepseek-v4-flash-0731 (family deepseek), judge ising-calibration-1.5-31b (family ising). Tier-2 req 1 satisfied; req 2 (different provider) not practical, NVIDIA is the only authorized V1 provider.",
+  "created_at": "2026-09-02T14:25:55Z",
+  "digest": "3bca900de60e57502685c619b1022869d8580691c1d290df76554d4b57b36e16"
+}

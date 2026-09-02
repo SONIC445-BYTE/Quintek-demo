@@ -32,6 +32,9 @@ didn't need):
   GET /ai/leaderboard?task=<TASK_TYPE>     -> overall leaderboard, or task-specific if `task` given
   GET /ai/routing/current                  -> every task type's current routing decision (section 17)
   GET /ai/how-it-works                     -> static description of the selection architecture
+  GET /ai/discovery                        -> the model registry: availability, capability
+                                              evidence with provenance, retirements
+  GET /ai/discovery/retired                -> withdrawn models and the provider's own words
 
 Every response is computed server-side from what's already on disk under
 `runs/` (and the registry file, for the registry-aware endpoints). Nothing
@@ -100,8 +103,22 @@ class AnalyticsAPI:
                  run_launcher=None,
                  execution_log_path: str | Path | None = None,
                  costs_path: str | Path | None = None,
-                 student_db_path: str | Path | None = None):
+                 student_db_path: str | Path | None = None,
+                 model_registry_path: str | Path | None = None):
         self.archive = an.RunArchive(runs_root)
+        # The discovery registry, so an admin can see what the CLI sees.
+        # Availability, capability evidence and retirement all lived only in
+        # `tools_discovery.py status` -- which meant the console could show a
+        # benchmark run for a model the provider had withdrawn and nothing on
+        # the screen would say so.
+        self.model_registry = None
+        try:
+            from .discovery import DEFAULT_REGISTRY_PATH, DynamicModelRegistry
+            candidate_path = Path(model_registry_path or DEFAULT_REGISTRY_PATH)
+            if candidate_path.exists():
+                self.model_registry = DynamicModelRegistry(candidate_path)
+        except Exception:                      # a malformed registry is not fatal
+            self.model_registry = None
         self._failures = failures or []
         self.routing_log = an.RoutingLog(routing_log_path) if routing_log_path else None
         self.registry = Registry(registry_path) if registry_path else None
@@ -239,6 +256,43 @@ class AnalyticsAPI:
                     d["model"] = manifest.get("model_id")
                     enriched.append(d)
                 return 200, {"leaderboard": enriched}
+
+            if path in ("/ai/discovery", "/ai/discovery/retired"):
+                if self.model_registry is None:
+                    return 400, {"error": "no discovery registry on disk; run "
+                                          "tools_discovery.py catalogue"}
+                if path.endswith("/retired"):
+                    return 200, {"retired": [
+                        {"key": r.key, "provider": r.provider, "model_id": r.model_id,
+                         "family": r.family, "retired_at": r.retired_at,
+                         "reason": r.retirement_reason,
+                         "first_seen": r.first_seen,
+                         "probe_successes": r.probe_successes}
+                        for r in self.model_registry.retired()]}
+                rows = []
+                for record in self.model_registry.all():
+                    rows.append({
+                        "key": record.key, "provider": record.provider,
+                        "model_id": record.model_id, "family": record.family,
+                        "availability": record.availability,
+                        "availability_detail": record.availability_detail,
+                        "retired": record.retired,
+                        "pricing_status": record.pricing_status,
+                        "context_window": record.context_window,
+                        "latency_ms_best": record.latency_ms_best,
+                        "last_verified": record.last_verified,
+                        "credential_ref": record.credential_ref,
+                        # Provenance, not a bare boolean: an admin deciding
+                        # whether to trust a capability needs to know whether
+                        # a vendor asserted it or a probe demonstrated it.
+                        "capabilities": {
+                            name: record.capability(name).as_dict()
+                            for name in record.capabilities},
+                        "capabilities_probed_at": record.capabilities_probed_at,
+                        "capability_probe_version": record.capability_probe_version,
+                    })
+                report = self.model_registry.report()
+                return 200, {"models": rows, "summary": report}
 
             if path == "/ai/routing/current":
                 if self.router is None:
