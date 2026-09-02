@@ -80,6 +80,7 @@ from pathlib import Path
 
 from validator import (ablation, analysis, budget as budget_mod, forecast as forecast_mod,
                        freeze as freeze_mod, metrics, pipeline, runs, scripted, wallclock)
+from benchmark import journal as journal_mod
 from validator.devset import CLEAN, DEFECTIVE, load
 from validator.conformance import ConformanceUnavailable
 from validator.grounding import GroundingUnavailable
@@ -482,12 +483,47 @@ def run_experiments(args):
     else:
         print(f"running under frozen configuration {in_force.digest()[:12]}\n")
 
+    # The journal is opened only once the freeze is settled, because it is
+    # bound to that digest: a journal recorded under a different configuration
+    # is refused rather than spliced onto this one.
+    book = None
+    if args.journal:
+        try:
+            book = journal_mod.Journal.open(args.journal, in_force.digest())
+        except journal_mod.JournalMismatch as exc:
+            print(f"refusing to start: {exc}", file=sys.stderr)
+            return 2
+        # Spend and elapsed bound the SET. Carrying them forward is what stops
+        # a restart from silently reissuing the whole frozen budget.
+        spend.spent.update(book.spent)
+        if clock is not None and book.elapsed_seconds:
+            clock.started_at -= book.elapsed_seconds
+        if book.replies:
+            print(f"resuming from {args.journal}: {len(book.replies)} recorded repl"
+                  f"{'y' if len(book.replies) == 1 else 'ies'}, carried spend "
+                  f"{dict(book.spent)}, carried elapsed "
+                  f"{book.elapsed_seconds / 60.0:.1f} min\n")
+        else:
+            print(f"journalling every reply to {args.journal}\n")
+
     arms = []
     for title, layers, flags in selected:
         config = pipeline.Config(**flags)
-        verdicts, outages = evaluate(devset.cases, grounding_provider=ground,
-                                     judge_provider=judge_provider,
-                                     conformance_provider=conform, config=config)
+        # Wrapped per arm and per role. Per arm because a reply recorded for
+        # one arm is never served to another -- sharing would strip between-arm
+        # sampling variation out of ABCD - ABD. Outside the meter, because a
+        # replay makes no outbound attempt and must not be charged as one.
+        ground_p, judge_p, conform_p = ground, judge_provider, conform
+        if book is not None:
+            def _wrap(inner, role, _layers=layers):
+                return journal_mod.JournalledProvider(
+                    inner, book, arm=_layers, role=role, budget=spend, clock=clock)
+            ground_p = _wrap(ground, "grounding")
+            judge_p = _wrap(judge_provider, "judge")
+            conform_p = _wrap(conform, "conformance")
+        verdicts, outages = evaluate(devset.cases, grounding_provider=ground_p,
+                                     judge_provider=judge_p,
+                                     conformance_provider=conform_p, config=config)
         matrix = score(devset.cases, verdicts)
         edge = analysis.edge_behaviour(devset.cases, verdicts)
         used_fake = any(p.is_oracle or not p.is_model for p in provider_records)
@@ -503,6 +539,8 @@ def run_experiments(args):
             analysis=analysis.report(devset.cases, verdicts)))
         print(render(title, devset.cases, verdicts, outages,
                      oracle_used=used_fake, config=config))
+        if book is not None:
+            print(book.summary())
         print()
         # The arm that just ran is recorded and reported above regardless --
         # it may itself be INCOMPLETE if the ceiling was crossed partway
@@ -676,6 +714,12 @@ def main(argv=None):
                                   "frozen configuration still covers all three")
     experiments.add_argument("--note", default="")
     experiments.add_argument("--temperature", type=float, default=0.0)
+    experiments.add_argument("--journal", default="",
+                             help="append-only record of every reply, fsynced as it is "
+                                  "received, so an interrupted set resumes instead of "
+                                  "starting over. A replay costs nothing against the "
+                                  "budget; a recorded outage replays as that outage and "
+                                  "is never re-asked")
     experiments.add_argument("--refreeze", action="store_true",
                              help="start a new experiment set, discarding the frozen "
                                   "configuration; requires --note")

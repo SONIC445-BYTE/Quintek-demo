@@ -153,3 +153,65 @@ Any re-run is a NEW experiment under a NEW freeze: defect 2's fix moves the
 fingerprint, so the digest necessarily changes and the two runs are correctly
 non-comparable. Re-running requires explicit authorization -- it is a fresh
 spend and a refreeze, both decision gates.
+
+## D014 -- Phase 0 attempt 2 was destroyed by a container restart, and the runner now journals every reply
+
+Attempt 2 started 2026-09-02T19:35:21Z under freeze `c2955816b918`. At roughly
+118 minutes, still inside arm 1 (A+B+D), the container running the session was
+restarted and the process was killed. The runner flushes at experiment
+boundaries, so an arm that has not finished has written nothing: no
+`phase0_ablation_v2.json`, no arm record, no partial matrix. The API spend was
+real and the evidence is gone in its entirety.
+
+CLASSIFICATION: attempt 2 is INCOMPLETE, terminated by infrastructure rather
+than by any defined outcome. It is not INSUFFICIENT_EVIDENCE -- that is a
+statement about a measurement that happened. Nothing here was measured. No
+number from it is quoted anywhere, because none exists.
+
+WHAT CHANGED, AND WHY IT IS NOT A CHANGE TO THE EXPERIMENT
+
+A third attempt that is another uninterrupted five-hour process is the same
+gamble again: the set needs ~765 logical calls at a measured 25s or worse, and
+the environment has now demonstrated it will not reliably hold a process that
+long. So the runner gained `--journal`: every reply is written to an
+append-only file and fsynced BEFORE it is used, and a resumed invocation
+replays what is on disk and pays only for what was never asked.
+
+`benchmark/journal.py` sits outside `validator/` and `benchmark/providers/`,
+the two trees `validator_fingerprint` hashes. Verified rather than assumed:
+the fingerprint is `2b8e15b6f390...` before and after, identical to the value
+in the freeze, so freeze `c2955816b918` remains in force and this is the same
+experiment continued, not a new one. No refreeze; the digest does not move.
+
+THE THREE RULES THAT KEEP A RESUME FROM BECOMING A DIFFERENT EXPERIMENT
+
+1. A recorded outage replays as that outage. The model is not re-asked.
+   Replaying successes while re-asking failures is selective retry, and it
+   converts an outage rate into whatever the operator has patience for. This
+   is the rule that mattered most: attempt 1 had 71 outages in 100 items, and
+   a resume that "just retried the failures" would have manufactured a clean
+   arm out of a broken run.
+2. Each arm pays for its own calls. The journal key includes the arm, so a
+   reply recorded for A+B+D is never served to A+B+C+D even when the request
+   is byte-identical. Sharing would strip between-arm sampling variation out
+   of `ABCD - ABD`, which is a quieter experiment than the frozen one.
+3. Spend and elapsed time carry across resumes, so the frozen
+   `budget_max_calls: 2400` and `max_wall_minutes: 480` bound the SET.
+   Resetting them at each restart would turn the ceiling into 2400 per crash.
+
+Verdicts are recomputed by the real pipeline from the real replies; nothing is
+rehydrated from a summary, because a lossily reconstructed verdict is
+fabricated evidence. `tests/test_journal.py` asserts that an interrupted-then-
+resumed arm reaches the same verdicts as an uninterrupted one, field for
+field, and asserts each refusal above separately.
+
+AN OVERSPEND THAT IS ON THE RECORD RATHER THAN HIDDEN
+
+Attempt 2's spend was not journalled -- there was no journal yet -- so it
+cannot be carried forward, and the relaunch begins its accounting at zero
+against the same frozen ceiling. Across both invocations the set will
+therefore have cost more than `budget_max_calls: 2400` while producing one
+set of evidence. The frozen ceiling still bounds what the surviving
+measurement cost, which is what it exists to guarantee; the lost invocation is
+recorded here as a known, unrecoverable overspend rather than quietly
+absorbed.
