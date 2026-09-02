@@ -43,6 +43,23 @@ THE THREE RULES THAT KEEP A RESUME HONEST
    counters at each restart would turn a 2400-attempt ceiling into 2400 per
    crash.
 
+4. A REQUEST THAT NEVER REACHED THE PROVIDER IS NOT WRITTEN DOWN. Rule 1
+   makes a recorded outage permanent, which is right for an outage that is an
+   observation of the run and catastrophic for one that is not. "Connection
+   refused" at 0.1s while this container's network is being torn down is not
+   the model failing to answer; it is us failing to ask. Freezing those into
+   the journal would make a fact about the harness permanent as a fact about
+   the model.
+
+   The line between the two is drawn narrowly, by `ProviderStatus.UNREACHED`:
+   only failures that PROVE the TCP connection never came up. A timeout is
+   ambiguous -- the request may have arrived -- so a timeout is recorded. The
+   conservative direction is always to record.
+
+   Rows already written under an earlier rule are skipped at load rather than
+   deleted, so the file remains a complete and auditable account of what
+   happened, and the rule that filters it is the one under test.
+
 A replay makes no outbound attempt, so it is not charged: the journal wraps
 the metered provider from outside, and on a hit the meter is never reached.
 """
@@ -57,6 +74,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from benchmark.provider_status import ProviderStatus, classify
 from benchmark.providers.base import GenerationResponse
 
 #: Bumped when a recorded line stops meaning what it meant. A journal written
@@ -66,6 +84,21 @@ JOURNAL_VERSION = "journal/1.0.0"
 
 class JournalMismatch(RuntimeError):
     """The journal on disk belongs to a different run than the one starting."""
+
+
+def reached_provider(response) -> bool:
+    """
+    Did this request actually get to the provider?
+
+    A success obviously did. A failure did unless it proves otherwise: the
+    burden is on the evidence to show the connection never came up, so
+    anything ambiguous counts as reached and is recorded.
+    """
+    error = getattr(response, "error", None) if not isinstance(response, dict) \
+        else response.get("error")
+    if not error:
+        return True
+    return classify(error=error) != ProviderStatus.UNREACHED
 
 
 def key_for(*, arm: str, role: str, model: str, request) -> str:
@@ -100,6 +133,8 @@ class Journal:
     elapsed_seconds: float = 0.0
     replayed: int = 0
     recorded: int = 0
+    unreached: int = 0
+    skipped_unreached: int = 0
 
     @classmethod
     def open(cls, path, freeze: str) -> "Journal":
@@ -132,10 +167,19 @@ class Journal:
                     "replayed.")
             if row.get("freeze") != freeze:
                 raise JournalMismatch(
+                    # Both digests in full: truncating them is how two
+                    # different configurations print as the same string and a
+                    # real mismatch reads as a nonsense message.
                     f"{path} was recorded under frozen configuration "
-                    f"{str(row.get('freeze'))[:12]}, and this run is {freeze[:12]}. "
+                    f"{row.get('freeze')!r}, and this run is {freeze!r}. "
                     "Resuming across a refreeze would join two different experiments and "
                     "report the seam as one measurement. Start a new journal.")
+            if not reached_provider(row["response"]):
+                # Written under an earlier rule, or by an older version. Left
+                # in the file and skipped here, so nothing is destroyed and
+                # the item is simply asked for the first time.
+                journal.skipped_unreached += 1
+                continue
             journal.replies[row["key"]] = row["response"]
             journal.spent = Counter(row.get("spent") or {})
             journal.elapsed_seconds = float(row.get("elapsed_seconds") or 0.0)
@@ -153,6 +197,12 @@ class Journal:
         a buffer when the container restarts is a reply that was paid for and
         lost.
         """
+        if not reached_provider(response):
+            # Not an observation of the model. Deliberately left absent, so a
+            # resumed run asks this item for the first time rather than
+            # replaying our own network failure as the model's silence.
+            self.unreached += 1
+            return
         row = {"version": JOURNAL_VERSION, "freeze": self.freeze, "key": key,
                "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                "response": response.as_dict(),
@@ -169,9 +219,13 @@ class Journal:
 
     def summary(self) -> str:
         total = self.replayed + self.recorded
+        unreached = ""
+        if self.unreached or self.skipped_unreached:
+            unreached = (f"; {self.unreached} never reached the provider and were not "
+                         f"recorded, {self.skipped_unreached} such rows skipped at load")
         return (f"journal {self.path}: {self.replayed} replayed, {self.recorded} newly "
                 f"recorded, {total} total; carried spend {dict(self.spent)}, carried "
-                f"elapsed {self.elapsed_seconds / 60.0:.1f} min")
+                f"elapsed {self.elapsed_seconds / 60.0:.1f} min{unreached}")
 
 
 class JournalledProvider:

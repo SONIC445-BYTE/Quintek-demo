@@ -274,3 +274,72 @@ Zero outages in 8 calls, against attempt 1's 71 in 100 items. That is
 consistent with the D013 adapter defect having been the cause, and it is 8
 calls: it is an encouraging sign about the repair, not a measurement of
 anything, and no arm, gate or score is claimed from it.
+
+## D016 -- a request that never reached the provider is not evidence about the provider
+
+Found by running D014's journal, which is what it was built for.
+
+The second container restart killed the run at 52 journalled calls. The
+journal did its job -- 52 replies survived where attempt 2 lost 118 minutes
+entire -- and then the surviving record showed something worse than a lost
+run:
+
+    calls  1-20  ok, latencies 31-176s
+    call     21  ERR  54.6s  [Errno 111] Connection refused
+    calls 22-52  ERR   0.1s  [Errno 111] Connection refused  (31 of them)
+
+Thirty-two consecutive instant connection refusals as the container was torn
+down. The endpoint answered HTTP 200 in 4.1s from the next container minutes
+later, so the provider was healthy throughout. Nothing was listening on this
+side of the socket. Nothing was asked.
+
+THE DEFECT, WHICH IS IN CODE WRITTEN HOURS EARLIER IN THIS SESSION
+
+D014's rule 1 -- a recorded outage replays as that outage and is never
+re-asked -- is correct, and it is what stops a resume from becoming selective
+retry. Applied to these 32 rows it is catastrophic: they would have replayed
+into arm A+B+D forever as 32 model outages. A fact about the harness, made
+permanent as a fact about the model, by the very mechanism built to protect
+the record. Left alone, arm 1 would have carried 32 fabricated outages into
+`ABCD - ABD`.
+
+THE FIX, AND WHERE THE LINE IS DRAWN
+
+`ProviderStatus.UNREACHED`: the TCP connection was never established, so the
+provider never saw the request. The journal does not record such a response,
+so a resumed run asks that item for the first time -- not again.
+
+The line is deliberately narrow, because "it was probably the network" is a
+universal solvent for inconvenient outages:
+
+  - EXEMPT, and only these: failures that PROVE no connection came up --
+    connection refused, DNS resolution failure, no route to host, network
+    unreachable.
+  - RECORDED: everything else, including every timeout. A timeout is
+    ambiguous -- the request may have arrived and the reply been lost coming
+    back -- and the conservative direction for an ambiguous failure is that it
+    counts. Also recorded: connection reset, which can arrive after delivery.
+
+Checked before TIMEOUT in `classify`, because the NVIDIA adapter wraps every
+`URLError` as `TimeoutError`: "connection refused" arrives wearing a timeout's
+class and would otherwise read as an endpoint that was too slow. Its policy
+sets `counts_against_quality=False` and `open_circuit=False` -- the break is
+on our side, and opening the circuit on the provider would blame it for our
+outage.
+
+NOTHING WAS DELETED
+
+The 32 rows remain in the journal file. They are skipped at load by the rule
+above, which is the thing under test, rather than edited out by hand. The file
+stays a complete account of what happened; 20 genuine replies are kept and
+carried forward. Deleting evidence to repair a rule is how the repair becomes
+unauditable.
+
+Carried spend correctly reads 21 outbound attempts rather than 117: the 96
+attempts that never opened a connection cost nothing at the provider, which is
+the same fact the status class encodes.
+
+The validator fingerprint is unchanged at `2b8e15b6f390...` and freeze
+`919cd25bc306` remains in force -- `benchmark/provider_status.py` and
+`benchmark/journal.py` are both outside the hashed trees. The run resumes; it
+does not restart. Suite: 1274 passed, 4 skipped.

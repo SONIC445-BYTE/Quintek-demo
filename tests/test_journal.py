@@ -302,6 +302,117 @@ def test_every_written_line_carries_the_freeze_it_belongs_to(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# A request that never reached the provider is not evidence about the provider
+# ---------------------------------------------------------------------------
+
+REFUSED = "TimeoutError: NVIDIA NIM request failed: [Errno 111] Connection refused"
+
+
+class Unreachable(CountingProvider):
+    """The network is gone. Nothing is listening; nothing is asked."""
+
+    def generate(self, request):
+        response = super().generate(request)
+        response.error = REFUSED
+        response.raw_output, response.parsed = "", None
+        response.latency_ms = 100.0
+        return response
+
+
+def test_a_request_that_never_reached_the_provider_is_not_written_down(tmp_path):
+    """
+    Rule 1 makes a recorded outage permanent. That is right for an observation
+    of the run and catastrophic for our own network failing mid-teardown: it
+    would freeze a fact about the harness as a fact about the model.
+    """
+    path = tmp_path / "j.jsonl"
+    book = Journal.open(path, FREEZE)
+    wrap(Unreachable(), book).generate(req())
+    assert book.unreached == 1
+    assert not path.exists() or path.read_text().strip() == ""
+
+    # So the item is asked for the first time on the next invocation.
+    healthy = CountingProvider()
+    response = wrap(healthy, Journal.open(path, FREEZE)).generate(req())
+    assert healthy.calls == 1
+    assert response.ok
+
+
+def test_rows_written_under_the_older_rule_are_skipped_not_deleted(tmp_path):
+    """
+    The file stays a complete account of what happened; the rule that filters
+    it is the one under test. Deleting evidence to fix a rule is how the fix
+    becomes unauditable.
+    """
+    path = tmp_path / "j.jsonl"
+    rows = [
+        {"version": JOURNAL_VERSION, "freeze": FREEZE, "key": "good",
+         "response": {"item_id": "a", "raw_output": "yes", "parsed": {}, "provider": "p",
+                      "model": "m", "model_version": "1", "latency_ms": 50.0,
+                      "error": None, "attempts": 1}},
+        {"version": JOURNAL_VERSION, "freeze": FREEZE, "key": "unreached",
+         "response": {"item_id": "b", "raw_output": "", "parsed": None, "provider": "p",
+                      "model": "m", "model_version": "1", "latency_ms": 0.1,
+                      "error": REFUSED, "attempts": 3}},
+    ]
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+    book = Journal.open(path, FREEZE)
+    assert set(book.replies) == {"good"}
+    assert book.skipped_unreached == 1
+    assert len(path.read_text().strip().splitlines()) == 2, "the file was edited"
+
+
+def test_an_ambiguous_failure_is_still_recorded(tmp_path):
+    """
+    The narrow part of the rule, and the part that stops it being a loophole.
+
+    A timeout may mean the request arrived and the answer was lost coming
+    back, so it counts. Only failures that PROVE the connection never came up
+    are exempt. Anything else and "it was probably the network" becomes a
+    universal solvent for inconvenient outages.
+    """
+    path = tmp_path / "j.jsonl"
+    for n, error in enumerate((
+            "TimeoutError: request timed out after 30s",
+            "RuntimeError: NVIDIA NIM HTTP 500: internal server error",
+            "RuntimeError: NVIDIA NIM HTTP 429: rate limited",
+            "RuntimeError: connection reset by peer")):
+        book = Journal.open(path, FREEZE)
+        sick = CountingProvider(error=error)
+        # A distinct arm per case: sharing one would make the second case
+        # replay the first, which is correct behaviour and a useless test.
+        wrap(sick, book, arm=f"arm-{n}").generate(req())
+        assert book.unreached == 0, f"{error!r} was treated as never sent"
+        assert book.recorded == 1, f"{error!r} was not recorded"
+
+
+def test_the_unreached_failure_is_never_counted_against_the_model(tmp_path):
+    from benchmark.provider_status import ProviderStatus, classify, policy_for
+
+    assert classify(error=REFUSED) == ProviderStatus.UNREACHED
+    policy = policy_for(ProviderStatus.UNREACHED)
+    assert policy.counts_against_quality is False
+    # The break is on our side of the socket; opening the circuit on the
+    # provider would blame it for our outage.
+    assert policy.open_circuit is False
+
+
+def test_a_freeze_mismatch_names_both_digests_in_full(tmp_path):
+    """
+    Truncated digests print two different configurations as the same string,
+    turning a real mismatch into a nonsense message.
+    """
+    path = tmp_path / "j.jsonl"
+    a = "919cd25bc306" + "a" * 52
+    b = "919cd25bc306" + "b" * 52
+    wrap(CountingProvider(), Journal.open(path, a)).generate(req())
+    with pytest.raises(JournalMismatch) as caught:
+        Journal.open(path, b)
+    assert a in str(caught.value) and b in str(caught.value)
+
+
+# ---------------------------------------------------------------------------
 # End to end: an interrupted set resumes to the same answers
 # ---------------------------------------------------------------------------
 

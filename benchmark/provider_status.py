@@ -65,6 +65,22 @@ class ProviderStatus:
     MODEL_RETIRED = "MODEL_RETIRED"
     BILLING_BLOCKED = "BILLING_BLOCKED"
     EGRESS_BLOCKED = "EGRESS_BLOCKED"
+    # The TCP connection was never established, so the provider never saw the
+    # request. This is the one failure class that is not evidence about the
+    # provider AT ALL -- it is evidence about the caller's own network.
+    #
+    # It is separate from TIMEOUT because a timeout is ambiguous: the request
+    # may well have arrived and the answer been lost on the way back, so a
+    # timeout is conservatively an observation. "Connection refused" is not
+    # ambiguous. Nothing was listening; nothing was asked.
+    #
+    # Measured 2026-09-02: Phase 0 recorded 32 consecutive
+    # "[Errno 111] Connection refused" failures at 0.1s each as the session
+    # container was torn down, while the endpoint answered HTTP 200 from the
+    # next container minutes later. Classified as TIMEOUT they would have
+    # entered an arm as 32 model outages -- a fact about the harness recorded
+    # as a fact about the model.
+    UNREACHED = "UNREACHED"
     UNKNOWN_ERROR = "UNKNOWN_ERROR"
 
 
@@ -152,6 +168,16 @@ POLICIES: dict[str, StatusPolicy] = {
         "The provider is throttling us. Back off and route elsewhere meanwhile; this is our "
         "request rate, not the provider's health."),
 
+    ProviderStatus.UNREACHED: StatusPolicy(
+        # Retryable and emphatically NOT counted against quality: the model
+        # was never asked. The circuit does not open, because the thing that
+        # is broken is on this side of the socket and closing the circuit on
+        # the provider would blame it for our outage.
+        ProviderStatus.UNREACHED, True, 2, 1.0, False, None, False, True,
+        "The connection was never established, so the provider never saw this request. It "
+        "is evidence about this network, not about the model, and it must never be recorded "
+        "as an answer the model failed to give."),
+
     ProviderStatus.TIMEOUT: StatusPolicy(
         ProviderStatus.TIMEOUT, True, 1, 0.0, True, 60.0, False, True,
         "Might succeed immediately, so one retry is worth it -- but repeated timeouts are an "
@@ -193,6 +219,18 @@ _EGRESS_PATTERNS = (
     r"policy denial",
     r"egress",
     r"blocked by (?:the )?(?:organization|org|firewall)",
+)
+# The connection never came up. Deliberately narrow: every one of these means
+# the TCP handshake did not complete, so the request cannot have been seen.
+# "Connection reset" is NOT here -- a reset can arrive after the request was
+# delivered, and the conservative reading of an ambiguous failure is that it
+# counts.
+_UNREACHED_PATTERNS = (
+    r"connection refused", r"\[errno 111\]",
+    r"name or service not known", r"temporary failure in name resolution",
+    r"nodename nor servname provided", r"\[errno -2\]",
+    r"no route to host", r"\[errno 113\]",
+    r"network is unreachable", r"\[errno 101\]",
 )
 # Retirement, checked before the 404 patterns: a withdrawn model and one this
 # account cannot see are both "you may not call this", and only one of them
@@ -241,6 +279,11 @@ def classify(error: str | BaseException | None = None, *, http_status: int | Non
     if text:
         if _matches(text, _EGRESS_PATTERNS):
             return ProviderStatus.EGRESS_BLOCKED
+        # Before TIMEOUT: the NVIDIA adapter wraps every urllib URLError as
+        # TimeoutError, so "connection refused" arrives wearing a timeout's
+        # class and would otherwise be read as an endpoint that was too slow.
+        if _matches(text, _UNREACHED_PATTERNS):
+            return ProviderStatus.UNREACHED
         if _matches(text, _RETIRED_PATTERNS) or http_status == 410:
             return ProviderStatus.MODEL_RETIRED
         if _matches(text, _BILLING_PATTERNS) or http_status == 402:
