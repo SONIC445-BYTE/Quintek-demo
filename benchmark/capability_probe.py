@@ -399,7 +399,7 @@ def run_probes(source, model_id: str, capabilities, *, transport: Transport | No
               [n for n in wanted if n != PREREQUISITE]
 
     try:
-        headers, _used = source.headers(env)
+        headers = source.headers(env)
     except MissingCredential as exc:
         run.stopped_early = str(exc)
         run.inconclusive = list(wanted)

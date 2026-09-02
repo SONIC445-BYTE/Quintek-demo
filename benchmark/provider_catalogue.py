@@ -140,43 +140,28 @@ class CatalogueSource:
     #: capability and price fields stay unknown rather than defaulting to
     #: False, which would be inventing a measurement.
     bare_catalogue: bool = True
-    #: Does LISTING require the key, as opposed to INFERENCE? OpenRouter
-    #: publishes its catalogue publicly and charges for completions, so the
-    #: two answers differ -- and collapsing them would make an entire external
-    #: registry unreachable for want of a credential it does not need.
-    #: Inference always requires the key; only the listing is in question.
-    catalogue_requires_key: bool = True
     extra_headers: dict = field(default_factory=dict)
 
-    def headers(self, env: dict | None = None, *,
-                optional: bool = False) -> tuple[dict, bool]:
+    def headers(self, env: dict | None = None) -> dict:
         """
-        Built fresh per call, from the environment, by name. Returns the
-        headers and whether a credential went into them.
+        Built fresh per call, from the environment, by name.
 
         Raises rather than sending an unauthenticated request: a 401 recorded
         as the model's availability, when the real cause is an unset variable,
         is a wrong fact that persists in the registry.
-
-        `optional=True` is for an endpoint that works without a key -- a
-        public catalogue. The key is still attached when it IS available,
-        because a listing scoped to an account and a listing scoped to nobody
-        are different observations, and the caller records which it got.
         """
         env = os.environ if env is None else env
         headers = {"Accept": "application/json", **self.extra_headers}
         if not self.api_key_env:
-            return headers, False
+            return headers
         key = env.get(self.api_key_env)
         if not key:
-            if optional:
-                return headers, False
             raise MissingCredential(
                 f"{self.api_key_env} is not set, so {self.name} cannot be discovered. "
                 "The key is read from the environment by name and never stored; set "
                 "the variable rather than passing a value.")
         headers["Authorization"] = f"Bearer {key}"
-        return headers, True
+        return headers
 
     def parse(self, body: str) -> list[Observation]:
         """OpenAI-compatible `{"data": [...]}`; overridden where it is not."""
@@ -208,66 +193,6 @@ class CatalogueSource:
                 "max_tokens": PROBE_MAX_TOKENS, "temperature": 0.0}
 
 
-class OpenRouterSource(CatalogueSource):
-    """
-    The one provider here that publishes capabilities and prices, so it is the
-    one whose observations carry more than an id.
-    """
-
-    def observation(self, row: dict) -> Observation:
-        architecture = row.get("architecture") or {}
-        parameters = set(row.get("supported_parameters") or [])
-        pricing = row.get("pricing") or {}
-        modalities = list(architecture.get("input_modalities") or [])
-
-        stated = True
-
-        def price(field_name):
-            """
-            Per million tokens, or a sentinel flagged as unstated.
-
-            OpenRouter writes `-1` for models priced at request time. Read as
-            a number that is the cheapest entry in the catalogue, which is how
-            a variable-price router reached the head of every shortlist once.
-            """
-            nonlocal stated
-            raw = pricing.get(field_name)
-            try:
-                number = float(raw) if raw is not None else None
-            except (TypeError, ValueError):
-                stated = False
-                return None
-            if number is None:
-                stated = False
-                return None
-            if number < 0:
-                stated = False
-                return None
-            return number * 1_000_000
-
-        input_price, output_price = price("prompt"), price("completion")
-        alias = row.get("alias_target") or None
-        if alias:
-            kind = "ALIAS"
-        elif architecture.get("tokenizer") == "Router":
-            kind = "ROUTER"
-        else:
-            kind = "MODEL"
-
-        return Observation(
-            provider=self.name, model_id=row["id"], entry_kind=kind,
-            family=_family_of(row["id"]), source=self.catalogue_url,
-            context_window=row.get("context_length"),
-            input_price=input_price, output_price=output_price, price_stated=stated,
-            capabilities={
-                "structured_output": bool(
-                    parameters & {"response_format", "structured_outputs"}),
-                "tool_calling": bool(parameters & {"tools", "tool_choice"}),
-                "reasoning": bool(row.get("reasoning")) or bool(parameters & {"reasoning"}),
-                "vision": "image" in modalities,
-            })
-
-
 def _family_of(model_id: str) -> str:
     """
     The vendor path segment, or the leading token of a flat id.
@@ -291,14 +216,6 @@ SOURCES = {
         catalogue_url="https://integrate.api.nvidia.com/v1/models",
         completions_url="https://integrate.api.nvidia.com/v1/chat/completions",
         api_key_env="NVIDIA_API_KEY"),
-    "openrouter": OpenRouterSource(
-        name="openrouter",
-        catalogue_url="https://openrouter.ai/api/v1/models",
-        completions_url="https://openrouter.ai/api/v1/chat/completions",
-        api_key_env="OPENROUTER_API_KEY", bare_catalogue=False,
-        # Public listing, paid inference. Measured 2026-09-02: 421 entries
-        # returned with no Authorization header at all.
-        catalogue_requires_key=False),
     "cerebras": CatalogueSource(
         name="cerebras",
         catalogue_url="https://api.cerebras.ai/v1/models",
@@ -315,16 +232,11 @@ class CatalogueResult:
     error: str = ""
     http_status: int | None = None
     latency_ms: float | None = None
-    #: Whether a credential was attached. Part of the provenance: a public
-    #: listing and an account-scoped listing can differ, and a snapshot that
-    #: cannot say which it is cannot be compared with the next one.
-    credential_used: bool = False
 
     def as_dict(self) -> dict:
         return {"provider": self.provider, "count": len(self.observations),
                 "ok": self.ok, "error": self.error, "http_status": self.http_status,
-                "latency_ms": self.latency_ms,
-                "credential_used": self.credential_used}
+                "latency_ms": self.latency_ms}
 
 
 def fetch_catalogue(source: CatalogueSource, *, transport: Transport | None = None,
@@ -343,11 +255,10 @@ def fetch_catalogue(source: CatalogueSource, *, transport: Transport | None = No
     transport = transport or UrllibTransport()
     result = CatalogueResult(provider=source.name)
     try:
-        headers, used = source.headers(env, optional=not source.catalogue_requires_key)
+        headers = source.headers(env)
     except MissingCredential as exc:
         result.error = str(exc)
         return result
-    result.credential_used = used
     response = transport.get(source.catalogue_url, headers=headers, timeout=timeout)
     result.http_status = response.status
     result.latency_ms = response.latency_ms
@@ -387,10 +298,7 @@ def probe(source: CatalogueSource, model_id: str, *, transport: Transport | None
     transport = transport or UrllibTransport()
     key = f"{source.name}:{model_id}"
     try:
-        # Never optional. Inference is what a credential is for, and a probe
-        # that quietly went out unauthenticated would record a 401 as the
-        # model's availability.
-        headers, _used = source.headers(env)
+        headers = source.headers(env)
     except MissingCredential as exc:
         return ProbeResult(key=key, error=str(exc))
     response = transport.post_json(source.completions_url, headers=headers,

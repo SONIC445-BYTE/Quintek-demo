@@ -20,7 +20,7 @@ import pytest
 from benchmark.discovery import (Availability, CredentialInRegistry, DiscoveryPolicy,
                                  DynamicModelRegistry, Observation, Pricing,
                                  EVENT_RETIRED, price_state)
-from benchmark.provider_catalogue import (CatalogueSource, HttpResult, OpenRouterSource,
+from benchmark.provider_catalogue import (CatalogueSource, HttpResult,
                                           MissingCredential, SOURCES, Transport,
                                           fetch_catalogue, probe)
 from benchmark.provider_status import ProviderStatus, classify
@@ -612,51 +612,12 @@ def test_24c_a_key_is_read_by_name_at_call_time_and_never_stored():
     source = nvidia_source()
     assert source.api_key_env == "NVIDIA_API_KEY"
     assert not any("nvapi" in str(v) for v in vars(source).values())
-    headers, used = source.headers({"NVIDIA_API_KEY": "nvapi-secret"})
+    headers = source.headers({"NVIDIA_API_KEY": "nvapi-secret"})
     assert headers["Authorization"] == "Bearer nvapi-secret"
-    assert used is True
     # Built and discarded; nothing was retained on the source.
     assert not any("nvapi" in str(v) for v in vars(source).values())
 
 
-def test_a_public_catalogue_is_reachable_without_a_key_and_says_so():
-    """
-    OpenRouter publishes its catalogue and charges for completions. Requiring
-    a credential to LIST would make an entire external registry unreachable
-    for want of a key it does not need -- but a listing scoped to an account
-    and one scoped to nobody are different observations, so which was obtained
-    is recorded rather than assumed.
-    """
-    public = OpenRouterSource(name="openrouter", catalogue_url="https://x/models",
-                              completions_url="https://x/chat",
-                              api_key_env="OPENROUTER_API_KEY",
-                              catalogue_requires_key=False)
-    headers, used = public.headers({}, optional=True)
-    assert "Authorization" not in headers
-    assert used is False
-
-    headers, used = public.headers({"OPENROUTER_API_KEY": "sk-live"}, optional=True)
-    assert headers["Authorization"] == "Bearer sk-live"
-    assert used is True
-
-    result = fetch_catalogue(public, transport=FakeTransport(
-        catalogue={"data": [{"id": "vendor/m"}]}), env={})
-    assert result.ok is True
-    assert result.credential_used is False
-
-
-def test_inference_always_requires_a_key_even_when_the_catalogue_does_not():
-    """
-    The asymmetry must not leak. A probe that quietly went out unauthenticated
-    would record a 401 as the model's availability.
-    """
-    public = OpenRouterSource(name="openrouter", catalogue_url="https://x/models",
-                              completions_url="https://x/chat",
-                              api_key_env="OPENROUTER_API_KEY",
-                              catalogue_requires_key=False)
-    outcome = probe(public, "vendor/m", transport=FakeTransport(), env={})
-    assert outcome.http_status is None
-    assert "OPENROUTER_API_KEY is not set" in str(outcome.error)
 
 
 def test_24d_a_missing_credential_is_named_not_sent_unauthenticated():
@@ -681,27 +642,6 @@ def test_a_bare_catalogue_claims_nothing_about_capabilities():
     assert result.observations[0].context_window is None
     assert result.observations[0].input_price is None
 
-
-def test_openrouter_capabilities_and_the_minus_one_sentinel():
-    source = OpenRouterSource(name="openrouter",
-                              catalogue_url="https://x/models",
-                              completions_url="https://x/chat")
-    transport = FakeTransport(catalogue={"data": [
-        {"id": "vendor/real", "context_length": 128000,
-         "pricing": {"prompt": "0.000001", "completion": "0.000002"},
-         "architecture": {"input_modalities": ["text", "image"],
-                          "output_modalities": ["text"]},
-         "supported_parameters": ["response_format", "tools"]},
-        {"id": "openrouter/auto", "pricing": {"prompt": "-1", "completion": "-1"},
-         "architecture": {"tokenizer": "Router"}},
-    ]})
-    result = fetch_catalogue(source, transport=transport, env={})
-    real, router = result.observations
-    assert real.capabilities["structured_output"] is True
-    assert real.capabilities["vision"] is True
-    assert real.input_price == pytest.approx(1.0)
-    assert router.entry_kind == "ROUTER"
-    assert router.price_stated is False
 
 
 def test_reconciling_a_different_providers_observations_is_refused(tmp_path):

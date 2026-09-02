@@ -289,8 +289,11 @@ rather than as a routing answer, and NVIDIA publishes no prices for the
 registry to replace them with. The cost figures it produces are historical
 OpenRouter observations and should be read as such.
 
-**No capability evidence against live models yet.** The probe exists and is
-tested; it has not been run. Nineteen NVIDIA models are `PROBED` (they answer)
-and none is `QUALIFIED` (nothing has shown they can produce structured output
-or reason). `shortlist --role validation` therefore returns zero, which is the
-honest answer and not a usable one. Obtaining the evidence costs 57 calls.
+**NVIDIA is the only authorized inference provider.** Discovery has exactly
+one source. An OpenRouter catalogue source was added and then reverted on
+2026-09-02 (see `docs/DECISION_LOG.md` D009): OpenRouter is not an authorized
+Quintek provider, and the separate Registry repository belongs to a different
+provider/discovery project. Pre-existing OpenRouter references in
+`benchmark/candidates.py`, `benchmark/provider_registry.py`,
+`tools_provider_matrix.py` and `configs/model_prices.json` predate that change
+and are untouched.

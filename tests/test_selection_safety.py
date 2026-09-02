@@ -291,19 +291,20 @@ def test_every_adversarial_scenario_has_a_named_home():
 
 def test_a_declared_capability_never_reaches_qualified(tmp_path):
     """
-    OpenRouter publishes capability metadata for 421 models and charges for
-    inference. Without OPENROUTER_API_KEY the catalogue is readable and the
-    models are not callable, so 267 of them DECLARE both validation
-    capabilities and none can be QUALIFIED. That gap is the whole point of
-    keeping DECLARED and OBSERVED apart: a registry that let a vendor's own
-    metadata qualify a model would have produced a Phase 0 pairing out of
-    nothing.
+    A catalogue that publishes capability metadata can say a model does
+    structured output and reasoning. That is the vendor's claim, not a
+    measurement, and it may never qualify a model on its own: a registry
+    that let vendor metadata reach QUALIFIED could produce a Phase 0 pairing
+    out of nothing at all.
+
+    Qualification requires OBSERVED evidence -- a request that was sent and a
+    reply that was read.
     """
     reg = DynamicModelRegistry(tmp_path / "r.json")
-    reg.reconcile("openrouter", [Observation(
-        provider="openrouter", model_id="vendor/m", context_window=128_000,
+    reg.reconcile("catalogued", [Observation(
+        provider="catalogued", model_id="vendor/m", context_window=128_000,
         capabilities={"structured_output": True, "reasoning": True})], at=T0)
-    record = reg.get("openrouter:vendor/m")
+    record = reg.get("catalogued:vendor/m")
     assert record.capability("structured_output").source == "DECLARED"
     assert record.availability == Availability.UNVERIFIED
 
@@ -311,9 +312,9 @@ def test_a_declared_capability_never_reaches_qualified(tmp_path):
     kept, _ = reg.eligible(required_capabilities=("structured_output", "reasoning"))
     assert kept == []           # still not AVAILABLE, so still not eligible
 
-    reg.record_probe("openrouter:vendor/m", http_status=200, at=T0)
+    reg.record_probe("catalogued:vendor/m", http_status=200, at=T0)
     kept, _ = reg.eligible(required_capabilities=("structured_output", "reasoning"))
-    assert [r.key for r in kept] == ["openrouter:vendor/m"]
+    assert [r.key for r in kept] == ["catalogued:vendor/m"]
 
     # ...and never enough for qualification, which requires observation.
     kept, dropped = reg.eligible(required_capabilities=("structured_output", "reasoning"),
