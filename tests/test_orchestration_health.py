@@ -342,3 +342,102 @@ def test_a_successful_call_records_health_so_the_next_one_can_read_it(env):
     reading = health.health(key_of(good))
     assert reading["n"] == 1
     assert reading["success_rate"] == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Phase 6: a promotion may not name a model that no longer exists
+# ---------------------------------------------------------------------------
+
+def test_a_passing_run_cannot_promote_a_withdrawn_model(tmp_path):
+    """
+    The router and the orchestrator already refuse to CALL a retired model, so
+    production degrades safely without this. What this prevents is different:
+    a deployment record, and an admin console, naming a dead model as the
+    production model for a task. That is not an outage, it is a false
+    statement about what is serving learners.
+
+    Eleven models on this account were retired inside one week, so a passing
+    run outliving its model is not hypothetical.
+    """
+    from benchmark.promotion_api import PromotionAPI, PromotionError
+
+    models = DynamicModelRegistry(tmp_path / "models.json")
+    models.reconcile("nvidia", [Observation(provider="nvidia", model_id="gone"),
+                                Observation(provider="nvidia", model_id="alive")])
+    models.record_probe("nvidia:gone", error=NVIDIA_410, http_status=410)
+    models.record_probe("nvidia:alive", http_status=200)
+
+    class FakeCandidate:
+        def __init__(self, provider, model_id):
+            self.provider, self.model_id = provider, model_id
+
+    class FakeRegistry:
+        def __init__(self, mapping):
+            self._m = mapping
+
+        def get(self, cid):
+            return self._m.get(cid)
+
+    class FakeAI:
+        registry = None
+
+    api = PromotionAPI(FakeAI(), archive=object(),
+                       registry=FakeRegistry({
+                           "cand-gone": FakeCandidate("nvidia", "gone"),
+                           "cand-alive": FakeCandidate("nvidia", "alive")}),
+                       model_registry=models)
+
+    passing = {"candidate_id": "cand-gone", "integrity_satisfied": True,
+               "scores_withheld": False, "outcome": "PASS"}
+    reason = api._blocking_reason(passing)
+    assert reason is not None
+    assert "withdrawn by the provider" in reason
+    assert "410" in reason
+
+    # The live model with the same passing run is promotable.
+    passing["candidate_id"] = "cand-alive"
+    assert api._blocking_reason(passing) is None
+
+
+def test_withdrawal_is_reported_ahead_of_integrity(tmp_path):
+    """
+    Ordered most-fundamental-first. Telling the reader "its integrity checks
+    failed" about a model that no longer exists sends them to fix the wrong
+    thing.
+    """
+    from benchmark.promotion_api import PromotionAPI
+
+    models = DynamicModelRegistry(tmp_path / "models.json")
+    models.reconcile("nvidia", [Observation(provider="nvidia", model_id="gone")])
+    models.record_probe("nvidia:gone", error=NVIDIA_410, http_status=410)
+
+    class FakeCandidate:
+        provider, model_id = "nvidia", "gone"
+
+    class FakeRegistry:
+        def get(self, cid):
+            return FakeCandidate()
+
+    class FakeAI:
+        registry = None
+
+    api = PromotionAPI(FakeAI(), archive=object(), registry=FakeRegistry(),
+                       model_registry=models)
+    both_wrong = {"candidate_id": "cand-gone", "integrity_satisfied": False,
+                  "scores_withheld": True, "outcome": "FAIL"}
+    assert "withdrawn by the provider" in api._blocking_reason(both_wrong)
+
+
+def test_no_model_registry_means_no_opinion_not_a_pass(tmp_path):
+    """
+    A missing discovery registry means discovery has not run here, which is
+    not evidence that a model is fine. The check says nothing rather than
+    approving.
+    """
+    from benchmark.promotion_api import PromotionAPI
+
+    class FakeAI:
+        registry = None
+
+    api = PromotionAPI(FakeAI(), archive=object(), registry=None, model_registry=None)
+    assert api._withdrawn_reason("anything") is None

@@ -52,13 +52,24 @@ class PromotionAPI:
     and a run without a deployment record changes nothing.
     """
 
-    def __init__(self, ai_engine, archive=None, *, registry=None, runs_root: str | Path = "runs"):
+    def __init__(self, ai_engine, archive=None, *, registry=None, runs_root: str | Path = "runs",
+                 model_registry=None):
         self.ai = ai_engine
         if archive is None:
             from .analytics import RunArchive
             archive = RunArchive(runs_root)
         self.archive = archive
         self.registry = registry if registry is not None else getattr(ai_engine, "registry", None)
+        # `benchmark.discovery.DynamicModelRegistry`, so a promotion can ask
+        # whether the model still exists. Loaded from disk when present and
+        # left as None when it is not: a missing registry means discovery has
+        # not run here, which is not evidence that a model is fine, so the
+        # check says nothing rather than passing.
+        if model_registry is None:
+            from .discovery import DEFAULT_REGISTRY_PATH, DynamicModelRegistry
+            if Path(DEFAULT_REGISTRY_PATH).exists():
+                model_registry = DynamicModelRegistry(DEFAULT_REGISTRY_PATH)
+        self.model_registry = model_registry
 
     # ---------- evidence ----------
 
@@ -85,7 +96,23 @@ class PromotionAPI:
 
         Ordered from most fundamental to least, so the message names the thing
         that must be fixed first rather than the first thing checked.
+
+        Withdrawal comes first, ahead even of integrity: a model the provider
+        has retired cannot serve production however well it once scored, and
+        saying "its integrity checks failed" about a model that no longer
+        exists sends the reader to fix the wrong thing. Eleven models on this
+        account were retired inside one week, so a passing run outliving its
+        model is not a hypothetical.
+
+        The router and the orchestrator already refuse to CALL a retired
+        model, so production degrades safely without this. What it prevents is
+        a deployment record -- and an admin console -- naming a dead model as
+        the production model for a task, which is a different failure: not an
+        outage, a false statement about what is serving learners.
         """
+        withdrawn = self._withdrawn_reason(run["candidate_id"])
+        if withdrawn:
+            return withdrawn
         if not run["integrity_satisfied"]:
             return ("the run's integrity checks did not pass, so its scores are not evidence "
                     "of anything")
@@ -97,6 +124,21 @@ class PromotionAPI:
             return None  # promotable, but only with a named sign-off -- checked at promote time
         return (f"the run's outcome is {run['outcome']}; only PASS, or CONDITIONAL with a "
                 "recorded sign-off, may serve production")
+
+    def _withdrawn_reason(self, candidate_id: str) -> str | None:
+        """The provider's own words for why this candidate's model is gone."""
+        if self.model_registry is None or self.registry is None:
+            return None
+        candidate = self.registry.get(candidate_id)
+        if candidate is None:
+            return None
+        record = self.model_registry.get(f"{candidate.provider}:{candidate.model_id}")
+        if record is None or not record.retired:
+            return None
+        return (f"{candidate.provider}:{candidate.model_id} has been withdrawn by the "
+                f"provider ({record.retirement_reason or 'retired'}), so it cannot serve "
+                f"production whatever this run measured. The run and its scores stand as "
+                f"history; the model is gone.")
 
     def eligible(self, task_type: str | None = None) -> dict:
         """
