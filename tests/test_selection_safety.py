@@ -365,3 +365,41 @@ def test_a_forecast_over_the_ceiling_refuses_rather_than_truncating(tmp_path,
     out = capsys.readouterr()
     assert "EXCEEDED" in out.out
     assert "exceeds the configured ceiling" in out.err
+
+
+def test_a_base_endpoint_that_is_not_a_completions_url_is_refused(capsys):
+    """
+    `NVIDIAProvider` POSTs to base_url verbatim. This repository's own
+    documented example passed `.../v1`, which would have spent the whole
+    2295-attempt budget collecting 404s and reported them as a validator that
+    could not reach a model. Refused rather than rewritten: --endpoint is
+    recorded in the freeze manifest as where the requests went, and a manifest
+    naming one URL while the run used another is a provenance record that lies.
+    """
+    import tools_validator_eval as tool
+
+    class Args:
+        endpoint = "https://integrate.api.nvidia.com/v1"
+
+    assert tool._reject_bad_endpoint(Args()) is True
+    assert "not a completions URL" in capsys.readouterr().err
+
+    class Good:
+        endpoint = "https://integrate.api.nvidia.com/v1/chat/completions"
+
+    assert tool._reject_bad_endpoint(Good()) is False
+
+    class Unset:
+        endpoint = ""
+
+    assert tool._reject_bad_endpoint(Unset()) is False
+
+
+def test_the_documented_run_command_uses_a_completions_url():
+    """The doc was the source of the bad example; pin it so it cannot regress."""
+    from pathlib import Path
+
+    doc = Path(__file__).resolve().parent.parent / "docs" / "VALIDATOR.md"
+    for line in doc.read_text().splitlines():
+        if "--endpoint" in line and "http" in line:
+            assert "/chat/completions" in line, line

@@ -597,6 +597,35 @@ def _seats(sub_parser):
     sub_parser.add_argument("--provider", default=None, help=argparse.SUPPRESS)
 
 
+#: What a chat endpoint has to end with. `NVIDIAProvider` POSTs to `base_url`
+#: verbatim, so a base that stops at `/v1` sends every request to a path that
+#: does not accept POST. This repository's own documented example did exactly
+#: that, which would have spent an entire 2295-attempt budget collecting 404s
+#: and reported them as a validator that could not reach a model.
+COMPLETIONS_SUFFIX = "/chat/completions"
+
+
+def _reject_bad_endpoint(args) -> bool:
+    """
+    Refuse an endpoint that is not a completions URL, rather than rewriting it.
+
+    Silently appending a path would be friendlier and worse: `--endpoint` is
+    recorded in the freeze manifest as where the requests went, and a manifest
+    that names one URL while the run used another is a provenance record that
+    lies. One line for the operator to correct beats a guess this tool cannot
+    take back.
+    """
+    endpoint = (getattr(args, "endpoint", "") or "").strip()
+    if not endpoint or endpoint.rstrip("/").endswith(COMPLETIONS_SUFFIX):
+        return False
+    print(f"refusing to start: --endpoint {endpoint!r} is not a completions URL. "
+          f"The provider POSTs to it verbatim, so a base that stops short would "
+          f"return 404 for every call in the budget. Pass "
+          f"{endpoint.rstrip('/') + COMPLETIONS_SUFFIX!r}, or omit --endpoint to "
+          f"use the adapter's default.", file=sys.stderr)
+    return True
+
+
 def _reject_provider(args):
     if getattr(args, "provider", None) is not None:
         print("--provider has been removed. 'Provider' is the adapter that builds a "
@@ -652,6 +681,8 @@ def main(argv=None):
                                   "configuration; requires --note")
     args = parser.parse_args(argv)
     if _reject_provider(args):
+        return 2
+    if _reject_bad_endpoint(args):
         return 2
     return {"ceiling": run_ceiling, "layers": run_layers, "run": run_real,
             "experiments": run_experiments,

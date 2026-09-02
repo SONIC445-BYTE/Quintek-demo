@@ -499,7 +499,7 @@ python3 tools_validator_eval.py forecast --max-calls 2400 --max-judge-calls 600
 python3 tools_validator_eval.py experiments \
   --candidate 'nvidia:meta/llama-3.1-8b-instruct' \
   --judge     'nvidia:meta/llama-3.1-70b-instruct' \
-  --endpoint  https://integrate.api.nvidia.com/v1 \
+  --endpoint  https://integrate.api.nvidia.com/v1/chat/completions \
   --credential-env NVIDIA_API_KEY \
   --max-calls 2400 --max-judge-calls 600 --confirm-spend \
   --note "first development experiment set"
