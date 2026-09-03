@@ -49,6 +49,17 @@ OFF_CONCEPT = "tests_a_different_concept"
 BELOW_DECLARED_DIFFICULTY = "below_declared_difficulty"
 ANSWERABLE_FROM_WORDING = "answerable_from_wording_alone"
 CUE_NOT_IN_QUESTION = "cue_not_found_in_question"
+#: The cue lies inside the keyed option. Circular: every key appears in its own
+#: options, so this condition is satisfiable for any item whatsoever and proves
+#: nothing about wording.
+CUE_IS_THE_KEY = "cue_is_the_keyed_answer"
+#: The cue appears only in a distractor. A wording that occurs solely in a wrong
+#: option cannot select the RIGHT one, which is what the check claims.
+CUE_ONLY_IN_DISTRACTOR = "cue_only_in_a_distractor"
+#: The cue is genuinely in the stem, and nothing deterministic here can
+#: establish that it hands over the key. Reported as unevaluable rather than
+#: guessed.
+CUE_NOT_EVALUABLE = "wording_giveaway_not_evaluable"
 
 RECALL = "recall"
 APPLICATION = "application"
@@ -186,24 +197,86 @@ def check(item: dict, provider, *,
             f"the item is declared {difficulty!r} but demands only recall of a stated fact")
 
     if bool(parsed.get("answerable_from_wording_alone", False)):
+        # THE CLAIM IS A RELATION, NOT A PRESENCE.
+        #
+        # This check asserts that a wording "selects the keyed option without
+        # any knowledge of the subject". It used to verify only that the cue
+        # occurred somewhere in `stem + all options`, which is a much weaker
+        # and sometimes contradictory test. Measured over Phase 0's journal,
+        # all eight flags on clean items failed the claim they asserted:
+        #
+        #   2  the cue lay ONLY in a distractor -- text in a wrong option
+        #      cannot select the right one
+        #   2  the cue WAS the keyed option -- circular, and satisfiable for
+        #      any item, since every key appears in its own options
+        #   4  the cue was stem text absent from the key, so the giveaway was
+        #      asserted rather than shown
+        #
+        # Each of those is decided from the question text alone: where a cue
+        # lies is a string fact needing no subject knowledge. So they are
+        # separated here and reported by name.
+        #
+        # What remains -- whether a stem cue genuinely hands over the answer --
+        # is a judgement, and this module has no deterministic rule for it.
+        # Inventing one (say, lexical overlap with the key and not the
+        # distractors) would be a new heuristic asserting the same
+        # unestablished claim. So the honest outcome is ABSTAINED: the layer
+        # records that it could not evaluate the giveaway, and the item is
+        # excluded from both rates rather than counted as a finding.
         cue = str(parsed.get("wording_cue") or "")
-        haystack = stem + " " + " ".join(str(o) for o in options)
-        if quote_is_in(haystack, cue):
+        # This layer does not otherwise need the key -- it checks an item
+        # against its own declared specification, not against its answer. It is
+        # read here for one purpose: to tell the keyed option apart from the
+        # distractors, which is what separates a circular cue from a
+        # contradictory one. A malformed key leaves both empty, and the branch
+        # below then falls through to the stem test, which is the conservative
+        # direction.
+        key_index = item.get("correct_index")
+        keyed = (isinstance(key_index, int) and not isinstance(key_index, bool)
+                 and 0 <= key_index < len(options))
+        key_text = str(options[key_index]) if keyed else ""
+        distractors = ([str(o) for i, o in enumerate(options) if i != key_index]
+                       if keyed else [])
+
+        in_stem = quote_is_in(stem, cue)
+        in_key = quote_is_in(key_text, cue)
+        in_distractor = any(quote_is_in(d, cue) for d in distractors)
+
+        if in_key:
+            reason, note = CUE_IS_THE_KEY, (
+                "a giveaway was reported but the wording offered as the cue is the keyed "
+                "answer itself. Every key appears in its own options, so this shows "
+                "nothing about the question's wording")
+        elif in_distractor and not in_stem:
+            reason, note = CUE_ONLY_IN_DISTRACTOR, (
+                "a giveaway was reported but the wording offered as the cue appears only "
+                "in a distractor, and wording that occurs solely in a wrong option cannot "
+                "select the right one")
+        elif not in_stem:
+            reason, note = CUE_NOT_IN_QUESTION, (
+                "a giveaway was reported but the wording offered as the cue does not "
+                "appear in the question, so this run produced no usable evidence about it")
+        else:
+            # Grounded in the stem, and neither circular nor contradictory.
+            # This is the case the corpus's own planted giveaways use -- see
+            # `vd-def-009`, whose defect_note reads "The stem now contains the
+            # word 'caseating', which appears in no other option". So it is
+            # reported, and the wording of the finding says only what was
+            # actually established: the cue is in the stem. Whether it hands
+            # over the key is the item-writer's judgement, and the detail no
+            # longer claims this layer proved it.
             checks.append(ANSWERABLE_FROM_WORDING)
             detail.append(
-                f"the wording {cue.strip()[:120]!r} selects the keyed option without any "
-                "knowledge of the subject")
-        else:
-            # The claim may well be right, but the evidence offered for it is
-            # not in the question. Reporting it anyway would be taking the
-            # model's word for something it was asked to demonstrate.
+                f"the stem carries the wording {cue.strip()[:120]!r}, offered as a cue that "
+                "points to the keyed option without knowledge of the subject. The cue is "
+                "confirmed present in the stem and absent from the key; whether it is "
+                "sufficient to answer on is not established here")
+            reason = None
+
+        if reason is not None:
             return ConformanceResult(
-                ABSTAINED, tuple(dict.fromkeys(checks + [CUE_NOT_IN_QUESTION])),
-                tuple(detail + [
-                    "a giveaway was reported but the wording offered as the cue does not "
-                    "appear in the question, so this run produced no usable evidence "
-                    "about it"]),
-                concept_tested, level, 1)
+                ABSTAINED, tuple(dict.fromkeys(checks + [reason])),
+                tuple(detail + [note]), concept_tested, level, 1)
 
     verdict = FLAGGED if checks else PASSED
     return ConformanceResult(verdict, tuple(dict.fromkeys(checks)), tuple(detail),
