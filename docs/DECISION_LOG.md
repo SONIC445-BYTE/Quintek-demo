@@ -343,3 +343,99 @@ The validator fingerprint is unchanged at `2b8e15b6f390...` and freeze
 `919cd25bc306` remains in force -- `benchmark/provider_status.py` and
 `benchmark/journal.py` are both outside the hashed trees. The run resumes; it
 does not restart. Suite: 1274 passed, 4 skipped.
+
+## D017 -- the validator was reading the HTTP envelope as the model's answer. Every Phase 0 arm to date is void
+
+Arm 1 of the resumed run completed cleanly: 68 of 68 decided, 0 abstentions,
+15 outages, no restarts. It reported sensitivity 100%, specificity 0%, and a
+discrimination rate of 0% across 29 matched pairs, with all 34 false positives
+on one check, `grounding/not_answerable_from_passage`.
+
+A validator that flags every item it sees is not measuring the items. The
+journal made the cause auditable, because it had stored every raw reply.
+
+### The defect
+
+`NVIDIAProvider._call` returned the entire HTTP body as `raw_output`. Every
+validator layer recovers the model's JSON with
+`validator.grounding.extract_json(response.raw_output)`, which takes the first
+BALANCED JSON object in the text. An HTTP envelope is itself a balanced JSON
+object, so the validator parsed
+
+    {"id": "chatcmpl-...", "choices": [...], "usage": {...}}
+
+and read that as the model's answer. `supported` is absent from an envelope,
+so `supported == []` and every item took the `not addresses or not supported`
+branch: `NOT_ANSWERABLE_FROM_PASSAGE`. Measured over the journal: 91 of 94
+grounding `:key` calls returned the envelope, 3 returned nothing, and ZERO
+returned the model's answer.
+
+The contract was never ambiguous. `validator/scripted.py` has always returned
+`json.dumps(reply)` -- the model's reply. Only this adapter disagreed, and
+1283 tests were green because every one of them drives a scripted provider.
+Nothing anywhere compared the two implementations against the consumer they
+share. The gap was not a missing assertion inside a test; it was a missing
+test at the seam.
+
+The model was answering correctly the whole time. `vd-clean-001` returned
+`{"passage_addresses_question": true, "supported": ["D"], ...}` with verbatim
+evidence, and was flagged as unanswerable.
+
+### Two further defects found in the same evidence
+
+2. `content_of` CONCATENATED `content` and `reasoning_content`. The intent was
+   that a reasoning model fills `reasoning_content` INSTEAD of `content`; when
+   it fills both, the reply is in `content` and the other field is the
+   thinking. Joining appended prose to the JSON, and the greedy extractor then
+   spanned from the answer's opening brace into the prose. Of 340 journalled
+   replies, 219 carried both fields: joined, 184 parsed; first-non-empty, 277.
+   The join was costing 93 answers, recorded as backend outages. This was
+   introduced by D013's own fix -- a repair that created a subtler version of
+   the bug it repaired.
+
+3. A reply cut off at `max_tokens` with no `content` was handed to
+   `extract_json` as reasoning prose, which quotes JSON: a fragment such as
+   `{"A": "..."}` inside the model's deliberation was read as its answer and
+   the item flagged on the strength of it. An unfinished reply is now an
+   outage.
+
+### A configuration change, made before any valid score existed
+
+`GenerationRequest` defaults to `max_tokens=1024`. That was a dataclass
+default, not a validator decision. Against this reasoning candidate: 277
+replies finished normally using a mean of 402 completion tokens (median 351,
+p90 811, max 1007); 63 hit `finish_reason: length` at exactly 1024, and 52 of
+those had emitted no answer at all.
+
+An 18% loss rate is not survivable here, and arm 1 said why: the clean arm
+needs at least 35 scored items for even a flawless run to reach a 90%
+specificity lower bound, and the corpus supplies 40. At 18% outages the arm
+lands near 33 and the gate reads INSUFFICIENT_EVIDENCE whatever the model
+does. The cap was making the experiment unable to return a verdict.
+
+`validator.grounding.MAX_REPLY_TOKENS = 4096`, used by all three layers. It is
+a ceiling on truncation, not a target; a reply that fits in 351 tokens still
+costs 351. Decided from measurement, before any valid score existed -- the
+only scores in existence were produced by the defect above and are void.
+
+### A V1 limitation that this surfaced and does not fix
+
+Specificity >= 0.90 is reachable on this corpus ONLY with a perfect clean arm:
+35 items for a flawless run, 53 to clear the threshold while tolerating a
+single false positive, against 40 available. The corpus is marginal for its
+own gate. That is a property of the corpus, not of any model, and no amount of
+re-running changes it. Recorded here as a known V1 limitation.
+
+### Consequence
+
+Every Phase 0 arm produced so far is VOID -- not INSUFFICIENT_EVIDENCE, which
+is a statement about a measurement that happened, but void: the instrument was
+reading its own transport. Attempt 1's specificity 0% carried the same
+signature and has the same explanation, so D013 was right that there was an
+adapter defect and wrong that it had found it.
+
+No score from any of them is quoted or carried forward. The fingerprint moves
+to `a438d091e1d4...`, freeze `919cd25bc306` is retired, and its journal is
+refused rather than replayed: those replies were collected under a
+configuration that truncated at 1024 and cannot be mixed with replies that do
+not. Suite: 1283 passed, 4 skipped.

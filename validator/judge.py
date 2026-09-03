@@ -40,7 +40,7 @@ from dataclasses import dataclass
 
 from benchmark.providers.base import GenerationRequest
 
-from validator.grounding import (LETTERS, extract_json, format_options,
+from validator.grounding import (LETTERS, MAX_REPLY_TOKENS, extract_json, format_options,
                                  quote_is_in)
 from validator.metrics import ABSTAINED, FLAGGED, PASSED
 
@@ -172,6 +172,7 @@ def check(item: dict, provider, *, show_passage: bool = True,
     block = PASSAGE_BLOCK.format(passage=passage) if (show_passage and passage) else ""
     request = GenerationRequest(
         item_id=f"{item_id}:judge", system=SYSTEM, temperature=0.0,
+        max_tokens=MAX_REPLY_TOKENS,
         prompt=PROMPT.format(passage_block=block, stem=(item.get("stem") or "").strip(),
                              options=format_options(options)),
         metadata={"layer": "judge", "prompt_version": PROMPT_VERSION,

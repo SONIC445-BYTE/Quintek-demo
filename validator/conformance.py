@@ -39,7 +39,8 @@ from dataclasses import dataclass
 
 from benchmark.providers.base import GenerationRequest
 
-from validator.grounding import extract_json, format_options, quote_is_in
+from validator.grounding import (MAX_REPLY_TOKENS, extract_json, format_options,
+                                 quote_is_in)
 from validator.metrics import ABSTAINED, FLAGGED, PASSED
 
 PROMPT_VERSION = "conformance/0.1.0"
@@ -149,6 +150,7 @@ def check(item: dict, provider, *,
 
     request = GenerationRequest(
         item_id=f"{item_id}:conformance", system=SYSTEM, temperature=0.0,
+        max_tokens=MAX_REPLY_TOKENS,
         prompt=PROMPT.format(concept=concept, difficulty=difficulty,
                              question_type=(item.get("question_type") or "").strip() or "mcq",
                              stem=stem, options=format_options(options)),

@@ -44,19 +44,34 @@ def content_of(message: dict) -> str:
     """
     The text of one chat message, from wherever the host put it.
 
+    THE FIRST NON-EMPTY FIELD, NOT ALL OF THEM JOINED. `reasoning_content` is
+    what a reasoning model fills INSTEAD of `content`; when it fills both, the
+    reply is in `content` and `reasoning_content` is the thinking that led
+    there. Concatenating them appends prose to the JSON the caller asked for,
+    and `extract_json_object`'s greedy brace-to-brace regex then spans from the
+    answer's opening brace to a brace somewhere in the prose and fails to
+    parse.
+
+    Measured on Phase 0's journal, 2026-09-03: of 340 replies, 219 carried
+    both fields. Joined, 184 parsed. First-non-empty, 277 parsed. The join was
+    costing 93 answers -- recorded not as wrong answers but as backend
+    outages, which is the failure mode this file's header warns about.
+
     Returns "" rather than None so a caller that regexes the result cannot
     crash on an empty reply -- an empty reply is a parse failure, which is a
     different and much better outcome than an exception.
     """
-    parts = []
     for field in TEXT_FIELDS:
         value = (message or {}).get(field)
         if isinstance(value, list):          # some hosts return content parts
-            parts.append("".join(p.get("text", "") for p in value
-                                 if isinstance(p, dict)))
+            text = "".join(p.get("text", "") for p in value if isinstance(p, dict))
         elif isinstance(value, str):
-            parts.append(value)
-    return "".join(parts)
+            text = value
+        else:
+            continue
+        if text.strip():
+            return text
+    return ""
 
 
 @dataclass

@@ -67,6 +67,28 @@ from validator.metrics import ABSTAINED, FLAGGED, PASSED
 
 PROMPT_VERSION = "grounding/0.1.0"
 
+#: Room for a reasoning model to think AND answer.
+#:
+#: `GenerationRequest` defaults to 1024, which is not a validator decision --
+#: it is a dataclass default that happened to apply. Measured on Phase 0's
+#: journal, 2026-09-03, against a reasoning candidate: of 340 replies, 277
+#: finished normally using a mean of 402 completion tokens (median 351, p90
+#: 811, max 1007) and 63 hit `finish_reason: length` at exactly 1024. Of those
+#: 63, 52 had produced no `content` at all -- cut off mid-thought, with the
+#: answer never emitted.
+#:
+#: That is not a tolerable loss rate here. Arm 1 of that run reported that the
+#: clean arm needs at least 35 scored items for even a flawless run to reach a
+#: 90% specificity lower bound, and the corpus supplies 40. An 18% outage rate
+#: puts the arm below the floor, so the gate reads INSUFFICIENT_EVIDENCE
+#: whatever the model does. The cap was making the experiment unable to return
+#: a verdict at all.
+#:
+#: 4096 clears the observed successful maximum four times over. It is a
+#: ceiling on truncation, not a target: a reply that fits in 351 tokens still
+#: costs 351.
+MAX_REPLY_TOKENS = 4096
+
 # Check ids produced by this layer.
 NOT_ANSWERABLE_FROM_PASSAGE = "not_answerable_from_passage"
 KEY_NOT_SUPPORTED = "key_not_supported_by_passage"
@@ -212,6 +234,7 @@ def format_options(options: list[str]) -> str:
 def _ask(provider, item_id: str, prompt: str, *, purpose: str) -> tuple[dict, str]:
     request = GenerationRequest(item_id=f"{item_id}:{purpose}", prompt=prompt,
                                 system=SYSTEM, temperature=0.0,
+                                max_tokens=MAX_REPLY_TOKENS,
                                 metadata={"layer": "grounding", "purpose": purpose,
                                           "prompt_version": PROMPT_VERSION})
     response = provider.generate(request)

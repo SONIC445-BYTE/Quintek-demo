@@ -156,16 +156,43 @@ class NVIDIAProvider(BaseProvider):
         except urllib.error.URLError as exc:
             raise TimeoutError(f"NVIDIA NIM request failed: {exc.reason}") from exc
 
-        raw = raw_bytes.decode("utf-8")
-        payload = json.loads(raw)
+        envelope = raw_bytes.decode("utf-8")
+        payload = json.loads(envelope)
         choice = payload["choices"][0]
         # Not choice["message"]["content"]: a reasoning model leaves that null
         # and puts its reply in `reasoning_content`, and handing None to the
         # JSON extractor raises rather than failing to parse. See
         # `providers/base.content_of`.
-        content = content_of(choice.get("message") or {})
+        message = choice.get("message") or {}
+        content = content_of(message)
+        if choice.get("finish_reason") == "length" \
+                and not (message.get("content") or "").strip():
+            # Cut off mid-thought, with the answer never emitted. What is left
+            # is reasoning prose, and `extract_json` takes the first balanced
+            # object out of whatever it is handed -- so a quoted fragment like
+            # {"A": "..."} inside the thinking got read as the model's answer,
+            # and an item was flagged on the strength of it. An unfinished
+            # reply is an outage. Returning "" makes it parse to None, which
+            # is exactly how every layer already reports "nothing was checked".
+            content = ""
         usage = payload.get("usage") or {}
         tin = usage.get("prompt_tokens")
         tout = usage.get("completion_tokens")
         parsed = self._parse(content)
-        return raw, parsed, tin, tout
+        # raw_output IS THE MODEL'S REPLY, not the HTTP body that carried it.
+        #
+        # Every consumer assumes this. `validator/grounding.extract_json` takes
+        # the first balanced JSON object out of `response.raw_output`, and the
+        # HTTP envelope is itself a balanced JSON object -- so returning the
+        # envelope handed the validator `{"id": "chatcmpl-...", "choices":
+        # [...]}` and it read that as the model's answer. `supported` is absent
+        # from an envelope, so EVERY item was flagged
+        # `not_answerable_from_passage`: 91 of 94 grounding calls in Phase 0 on
+        # 2026-09-03, giving specificity 0%, sensitivity 100% and a
+        # discrimination rate of 0% -- a validator that flags everything,
+        # measuring nothing.
+        #
+        # The contract was never ambiguous: `validator/scripted.py` returns
+        # `json.dumps(reply)`. Only this adapter disagreed, and no test
+        # compared the two, which is why 1274 green tests sat on top of it.
+        return content, parsed, tin, tout
