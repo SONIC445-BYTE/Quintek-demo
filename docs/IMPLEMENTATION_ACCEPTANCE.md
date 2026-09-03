@@ -40,12 +40,16 @@ judge's verdict, but no judge pipeline at all.
       `docs/JUDGE_INDEPENDENCE.md`; `test_scenario_3_deterministic_wins_for_deterministic_properties`
 - [x] scorers that consume a judge's or human rater's verdict — `score_generation_rubric`,
       `score_validation_false_approval`
-- [ ] **an actual Tier-2 LLM judge pipeline — does not exist.** `benchmark/judges/__init__.py`
-      is a 0-byte file. Nothing in this repository has ever called an LLM to judge anything.
-      Needs: a provider adapter for the judge model, a provider adapter for the candidate model
-      (a different model family, per Tier 2), and API keys for both, none of which a model can
-      supply for itself. See `IMPLEMENTATION_STATUS.md` for exactly what's needed from a human
-      to close this.
+- [x] **an actual Tier-2 LLM judge pipeline — built and executed.** It lives in
+      `validator/judge.py`, not in `benchmark/judges/` (which remains an empty stub): Layer C
+      of the validator asks an independent model to answer the item and compares with the key,
+      with `assert_independent` refusing a judge that wrote the item or shares its family. It
+      has run against real models under frozen configurations — candidate
+      `deepseek-ai/deepseek-v4-flash-0731` (family `deepseek`), judge
+      `nvidia/ising-calibration-1.5-31b` (family `ising`). Tier 2's family requirement is met
+      and enforced in code; its "different provider where practical" half is not, because
+      NVIDIA is the only authorized provider — recorded in `FINAL_STATUS.md`.
+      This line previously read "does not exist", which was true when written and is no longer.
 
 ## Core
 - [x] Dataset loader — `benchmark/dataset.py:load`
