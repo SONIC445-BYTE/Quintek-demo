@@ -25,11 +25,13 @@ limitation · **D** cosmetic · **E** intentional V1 boundary / correct behaviou
 
 | | |
 |---|---|
-| STATUS | OPEN — needs a product decision, see DECISION |
+| STATUS | **VERIFIED FIXED** — gateway implemented using the repository's existing mount pattern |
 | SEVERITY | **B** |
 | EVIDENCE | STUDENT bundle imports `quintek-student-api.js` (learner routes, `/ai/benchmark/powering`), `quintek-eval-api.js` (`/ai/eval`), `quintek-billing-api.js` (`/billing/*`) — all served by `student/server.py`. ADMIN bundle imports `quintek-report-api.js` → `/api/runs`, `/api/gates`, `/api/preflight`, `/api/datasets/*`, served **only** by `analytics_api.py`. Probed: `/api/gates` → 200 on :8420, 401-then-unrouted on :8500; `/notebooks` → 404 on :8420. |
 | IMPACT | `Settings.backendUrl` is one SharedPreferences value read by both activities, so whichever server is configured, the other screen's live panels cannot resolve. No false data results — see E-4 — but the two screens cannot both be live at once. |
-| DECISION | **Requires a product decision, not an implementation choice.** Either (a) run one process that mounts both surfaces, (b) give the console its own backend setting, or (c) accept it and document that the console is pointed at the analytics server only when it is being used. Not fixed unilaterally. |
+| DECISION | Option (a), because the repository already had the architecture for it. `billing/mount.py` establishes `owns(path)` + `handle(...)` with `student/server.py` dispatching to it, and `student/api.py` already re-serves `/ai/eval` and `/ai/benchmark/*` documented as *"so the app talks to one origin"*. The gateway finishes that job rather than inventing one. |
+| FIX | `benchmark/analytics_mount.py` — `AnalyticsMount`, shaped like `BillingMount`, mounted into `student/server.py` behind `--with-console`. Ownership is **declared, not discovered**: `/api/*` plus every `/ai/*` route the learner API does not answer itself. No fallthrough-on-404, so a missing notebook can never be rerouted into the benchmark archive. Read-only: any non-GET returns 405, so promotion — the one analytics surface that writes — is unreachable from a phone origin. **Opt-in**, because mounting operator routes on the learner origin widens the security posture and a default must not do that quietly. |
+| TEST | 37 new tests in `tests/test_analytics_mount.py`, including one that parses `student/api.py::_ai` and fails if the two ownership lists ever drift. Live, one origin, authenticated: `/capabilities` `/notebooks` `/ai/eval` `/api/runs` `/api/gates` `/ai/discovery` `/ai/routing/current` all **200**; `POST /api/runs` **405**. Default (no flag): console routes **404** authenticated — posture unchanged. Suite 1320 passed, 4 skipped. |
 
 ## C-1 — Cleartext traffic enabled app-wide
 

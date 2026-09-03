@@ -42,6 +42,23 @@ def build_billing(db_path: str | Path | None = None, *, env=None):
     return BillingMount.from_env(path, env=env)
 
 
+def build_console(**kwargs):
+    """
+    Attach the benchmark console's read-only surface, or `None`.
+
+    The Android app has one backend setting and its two screens read two
+    different globals, so a single origin has to answer both. `None` here
+    means the console routes 404 -- honest, and the learner half still works.
+
+    OFF BY DEFAULT. These are operator routes: `/api/runs` serves full run
+    reports and `/ai/discovery` the model registry. Serving them from the
+    origin a learner's phone is pointed at is a deliberate operator decision,
+    so it is opt-in rather than something a default quietly widens.
+    """
+    from benchmark.analytics_mount import AnalyticsMount
+    return AnalyticsMount.build(**kwargs)
+
+
 def build_cost_sink(billing_mount):
     """
     The join between the two financial systems, or `None`.
@@ -129,7 +146,7 @@ def build_api(db_path: str | Path | None = None, *, with_ai: bool = True,
                       notifier=NotificationService(db))
 
 
-def make_handler(api: StudentAPI, billing=None):
+def make_handler(api: StudentAPI, billing=None, analytics=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "Quintek/0.4"
 
@@ -171,6 +188,16 @@ def make_handler(api: StudentAPI, billing=None):
                     return
                 raw = self.rfile.read(length) if length else b""
 
+            if analytics is not None and analytics.owns(parsed.path):
+                # The console's read-only surface, so one origin answers both
+                # Android screens. Dispatched from the raw parse_qs result:
+                # AnalyticsAPI expects dict[str, list[str]], not the flattened
+                # form the learner API takes.
+                raw_params = parse_qs(parsed.query)
+                status, payload = analytics.handle(method, parsed.path, raw_params)
+                self._send(status, payload)
+                return
+
             if billing is not None and billing.owns(parsed.path):
                 # Identity comes from the session, never from the request body.
                 user = api.db.user_for_token(self._token())
@@ -209,11 +236,13 @@ def make_handler(api: StudentAPI, billing=None):
 
 def serve(*, host: str = "127.0.0.1", port: int = 8500,
           db_path: str | Path | None = None, with_ai: bool = True,
-          with_billing: bool = True, billing_db: str | Path | None = None) -> None:
+          with_billing: bool = True, billing_db: str | Path | None = None,
+          with_console: bool = False, console_kwargs: dict | None = None) -> None:
     billing = build_billing(billing_db) if with_billing else None
     recorder, cost_sink = build_cost_sink(billing)
     api = build_api(db_path, with_ai=with_ai, cost_sink=cost_sink)
-    server = ThreadingHTTPServer((host, port), make_handler(api, billing))
+    analytics = build_console(**(console_kwargs or {})) if with_console else None
+    server = ThreadingHTTPServer((host, port), make_handler(api, billing, analytics))
     print(f"Quintek student API on http://{host}:{port}  (Ctrl+C to stop)")
     if billing is None:
         print("  billing: not mounted")

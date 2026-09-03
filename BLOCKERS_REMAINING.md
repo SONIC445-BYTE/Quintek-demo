@@ -4,12 +4,12 @@
 
 **None found in the Android application code.**
 
-## Functional bugs (B)
+## Functional bugs (B) — both resolved
 
 | ID | Blocker | Resolution |
 |---|---|---|
 | B-1 | In-app backend guidance names `serve-analytics`, which does not serve the learner routes. Following it leaves the student app dead. | Fix unambiguous — correct the strings. |
-| B-2 | One backend setting cannot serve both shipped screens; the console's `/api/*` panels and the learner surface live on different servers. | **Needs a product decision.** Three options in AUDIT_FINDINGS.md; not chosen unilaterally. |
+| B-2 | One backend setting cannot serve both shipped screens. | **FIXED.** `AnalyticsMount` composes the console's read-only routes into the learner server behind `--with-console`, using the mount pattern `billing/mount.py` already established. One origin, both screens, verified live. |
 
 ## Deployment prerequisites (not defects)
 

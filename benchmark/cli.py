@@ -90,6 +90,9 @@ def cmd_serve_analytics(args) -> int:
     return 0
 
 
+DEFAULT_REGISTRY = ROOT / "configs" / "model_registry.json"
+
+
 def cmd_serve_student(args) -> int:
     """
     The learner-facing API -- see student/server.py.
@@ -100,7 +103,20 @@ def cmd_serve_student(args) -> int:
     """
     from student.server import serve
 
-    serve(host=args.host, port=args.port, db_path=args.db, with_ai=not args.no_ai)
+    serve(host=args.host, port=args.port, db_path=args.db, with_ai=not args.no_ai,
+          with_console=args.with_console,
+          # The console reads the same archive and registries serve-analytics
+          # does; naming them here rather than defaulting inside the mount
+          # keeps one description of where the evidence lives.
+          console_kwargs={
+              "runs_root": args.runs_root,
+              "root": ROOT,
+              "registry_path": str(DEFAULT_REGISTRY) if DEFAULT_REGISTRY.exists() else None,
+              "gate_registry_path": str(ROOT / "configs" / "gate_registry_v0_4.json"),
+              "config_path": str(ROOT / "configs" / "v0_4.yaml"),
+              "execution_log_path": "executions.jsonl",
+              "costs_path": str(ROOT / "configs" / "model_costs.json"),
+          })
     return 0
 
 
@@ -162,6 +178,15 @@ def main(argv=None) -> int:
     ss.add_argument("--port", type=int, default=8500)
     ss.add_argument("--no-ai", action="store_true",
                     help="start without AI services; ingestion and generation report 503")
+    ss.add_argument("--with-console", action="store_true",
+                    help="also mount the benchmark console's read-only routes (/api/* and the "
+                         "operator /ai/* routes), so ONE origin answers both Android screens -- "
+                         "the app has a single backend setting and its two screens read two "
+                         "different globals. Off by default: these are operator routes, and "
+                         "mounting them on the origin a learner's phone points at is a "
+                         "deliberate choice, not a default")
+    ss.add_argument("--runs-root", default="runs",
+                    help="benchmark archive the mounted console reads")
     ss.set_defaults(func=cmd_serve_student)
 
     nt = sub.add_parser("notify", help="fire due daily revision triggers once, then exit")
