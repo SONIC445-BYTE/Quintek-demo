@@ -1,5 +1,58 @@
 # Quintek V1 — Known Limitations
 
+## AUTHORITATIVE QUALIFICATION RECORD
+
+This is the settled state. It is not provisional, and nothing below is
+awaiting a run.
+
+    QUALIFICATION          NO MODEL QUALIFIED
+    REASON                 INSUFFICIENT EVIDENCE
+    PHASE 0                INCOMPLETE / NOT COMPARABLE
+    HOLDOUT                0 scoring runs of MAX_USES 5
+    PRODUCTION CANDIDATES  0
+    FREEZE                 acd21b3687b9
+    CORPUS HASH            4da47a68fce97b8d
+    VALIDATOR FINGERPRINT  a438d091e1d435b6
+
+### Four things this record fixes
+
+1. **`answerable_from_wording_alone` received a genuine implementation
+   correction** (`bf03cb0`). It asserted that a cue "selects the keyed option"
+   while verifying only that the cue appeared somewhere in stem + all options.
+   Two of its Phase 0 flags quoted a distractor, which cannot select the key,
+   and two quoted the keyed answer itself, which is circular. Those now
+   abstain. Stem-grounded cues still report, because the corpus's own planted
+   giveaways depend on that case — `vd-def-009`'s defect_note reads "The stem
+   now contains the word 'caseating', which appears in no other option".
+   False flags on clean items fell 8 → 4; sensitivity to planted giveaways is
+   unchanged.
+
+2. **`below_declared_difficulty` is NOT a code defect.** It applies its
+   documented rule as a direct field comparison. It is unevaluable on this
+   corpus because the difficulty labels are `provenance: model_authored`,
+   `gold_standard: false`, `reviewed_by: ""` — on all 100 items. Nothing may
+   be concluded from its flags in either direction.
+
+3. **No qualification conclusion may be extracted from the incomplete Phase 0
+   arms.** Arms 1 and 3 did not reach every item, so `ABCD - ABD` was not
+   computed and Layer C was neither retained nor removed. The model conclusion
+   remains DEFERRED.
+
+4. **The experiment is closed.** It must not be re-run automatically. A future
+   qualification attempt is a new, explicitly authorized experiment under
+   `docs/V2_QUALIFICATION_SPEC.md`, not a repeat of this one.
+
+### What this state is not
+
+It is **not** a verdict on the candidate model's quality. Nothing here
+measured that. The gate was not reached because the instrument could not be
+evaluated against this corpus, which is a statement about the evidence
+available, not about the model.
+
+Production behaviour follows from this record and is correct: no qualified
+model, so generation refuses.
+
+
 Referenced by D012. This is the honest list of what Quintek V1 does not do,
 recorded so that nobody has to rediscover it from the code.
 
