@@ -499,3 +499,82 @@ The holdout remains at 0 scoring runs of MAX_USES 5. No further inference is
 authorized against this configuration, and no replacement experiment is run.
 Closing the gap would need the conformance checks recalibrated and the item
 attrition reduced, both of which are V2 work.
+
+## D019 -- Phase 1: NO MODEL QUALIFIED. The blocker is a corpus/threshold judgement, not a defect, and it is not mine to settle
+
+Asked whether Quintek can reach a legitimate qualified production model under
+the existing specification. It cannot, and re-running the experiment cannot
+change that. The reason is arithmetic, not luck.
+
+WHERE THE SPECIFICITY GOES
+
+Arm 1 of the repaired run decided 36 clean items and flagged 22 of them
+(specificity 38.9%). The flags are concentrated, not diffuse:
+
+    17  conformance/below_declared_difficulty
+    11  conformance/answerable_from_wording_alone
+     2  grounding/explanation_contradicts_passage
+
+`below_declared_difficulty` fires when the candidate classifies an item's
+cognitive level as `recall` while the item declares a difficulty at which
+recall is not acceptable. `RECALL_IS_ACCEPTABLE_AT = ("foundation",)`, and the
+clean arm is 25 `pg_entry` items and 15 `foundation` ones. So the candidate is
+judging roughly 17 of the 25 `pg_entry` clean items to be mere recall.
+
+Even if every other check were made perfect, that one check alone caps
+specificity at (36 - 17) / 36 = 52.8%. The gate requires 0.90. Qualification
+is unreachable, and no amount of re-running moves it.
+
+THE CHECKS ARE NOT DEFECTIVE
+
+Both were read closely before concluding this.
+`answerable_from_wording_alone` fires only when the candidate claims a giveaway
+AND the quoted cue is verifiably present in the question; when the cue is
+absent it ABSTAINS rather than taking the model's word for something it was
+asked to demonstrate. `below_declared_difficulty` is a direct comparison of a
+declared field against a reported one. Neither misreads a correct reply. This
+is not the D017 situation.
+
+WHAT IS ACTUALLY IN DISPUTE
+
+Either the candidate's cognitive-level classification is unreliable, or the
+corpus's `pg_entry` items genuinely are recall-level and the difficulty labels
+are wrong. That is a medical and pedagogical judgement about the gold corpus,
+and every route to settling it is closed to this project:
+
+  * Widening `RECALL_IS_ACCEPTABLE_AT` to include `pg_entry` would make the
+    check nearly vacuous and would be a threshold moved after seeing the
+    result it blocks. Forbidden outright.
+  * Relabelling the corpus difficulties would change `corpus_hash` and would
+    be a model editing the gold it is graded against -- precisely the failure
+    the benchmark exists to prevent.
+  * Expert adjudication is the correct route and needs the qualified reviewer
+    pool V1 does not have.
+
+CONCLUSION
+
+    PHASE 1 OUTCOME: NO MODEL QUALIFIED
+
+Not INCOMPLETE: the run was complete enough to establish this. Arm 1 reached
+68 of 70 items and the shortfall is nowhere near the 37-point gap between 39%
+and 90%. Not FAIL-of-the-model either: what failed its gate is the validator's
+conformance calibration against this corpus, and the model conclusion stays
+DEFERRED exactly as D018 left it.
+
+Production enforcement is unchanged and remains correct: no qualified model,
+so generation refuses. Verified live with the development override removed --
+ingestion returns `NoEligibleModel` and generation returns 422 without
+inventing anything. The holdout remains at 0 scoring runs of MAX_USES 5.
+
+DECISION REQUIRED FROM THE PROJECT OWNER
+
+Qualification cannot proceed until one of these is chosen, and none of them is
+a decision an implementer may take alone:
+
+  1. Commission expert review of the 25 `pg_entry` clean items to establish
+     whether their difficulty labels are correct. Evidence-led, slowest.
+  2. Accept V1 with NO QUALIFIED MODEL: production deploys and honestly
+     refuses generation until a model qualifies. Nothing is weakened.
+  3. Re-specify the difficulty taxonomy or `RECALL_IS_ACCEPTABLE_AT` as a
+     deliberate, documented specification change made BEFORE any re-run and
+     recorded as such -- not as a reaction to this result.
