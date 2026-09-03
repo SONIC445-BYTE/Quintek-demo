@@ -1,6 +1,6 @@
 {
   "validator_version": "0.2.0",
-  "validator_fingerprint": "2b8e15b6f39036448a3884141373cf09f8ffca0f7046cc2418805cddc8d66479",
+  "validator_fingerprint": "a438d091e1d435b65c0223cff408f7f598f27bcb1a8d77d70977f24e235498ca",
   "corpus": "corpus/validator_dev",
   "corpus_hash": "4da47a68fce97b8dd9a74f4386c45be967cd27823e383282748bd18eb32bf057",
   "prompt_versions": {
@@ -96,7 +96,7 @@
     "budget_max_judge_calls": 600,
     "max_wall_minutes": 1200.0
   },
-  "note": "Phase 0, complete three-arm set. Pairing re-derived by the D011 rule and unchanged. Adapter defect D013.1 fixed: providers/nvidia.py read only message.content, so a reasoning candidate's null content raised in the JSON extractor and burned three retries per item before being recorded as an outage; the fix moved the fingerprint to 2b8e15b6f390 because benchmark/providers is now inside it (D013.2), so this set is deliberately non-comparable with 3bca900de60e. Every reply is journalled and fsynced before use, so a container restart resumes rather than restarts (D014); a recorded outage replays as that outage and is never re-asked, each arm pays for its own calls, and spend and elapsed carry across resumes so the frozen ceilings bound the set. Wall-clock ceiling 1200 min set from a measured 75.2 s per logical call over 8 journalled replies of this exact configuration, decided before any arm finished and before any score existed (D015); it is an operational bound on completion, not a gating threshold, and the 2400/600 call budget is unchanged.",
-  "created_at": "2026-09-02T21:55:37Z",
-  "digest": "919cd25bc30618b8bb6ace38526724fad07a8ed9d22b0f4a32fe4b15921ddffb"
+  "note": "Phase 0, complete three-arm set, first run on a repaired instrument (D017). Every previous arm is void: NVIDIAProvider returned the HTTP envelope as raw_output and validator.grounding.extract_json takes the first BALANCED JSON object, so the validator read the envelope as the model's answer; supported is absent from an envelope, so all 68 decided items were flagged not_answerable_from_passage. 91 of 94 grounding calls. Also fixed: content_of concatenated content and reasoning_content, costing 93 of 340 parses; and a reply truncated at max_tokens was scavenged for a JSON fragment out of the model's reasoning. max_tokens 1024 to 4096 in all three layers, measured from 63 of 340 replies truncating at exactly 1024 with 52 emitting no answer, which put the clean arm below the 35-item floor its own gate needs. Pairing unchanged and re-derived by the D011 rule; thresholds, corpus, prompts, temperature, retry policy and call budget unchanged.",
+  "created_at": "2026-09-03T04:06:58Z",
+  "digest": "acd21b3687b91d8c52d80aa7c86f66b487c77a82304b2c526887cbb758de6197"
 }
