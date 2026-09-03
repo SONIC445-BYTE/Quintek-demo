@@ -28,6 +28,20 @@ from .uploads import MAX_ENCODED_BYTES
 # drifts low rejects uploads the API would have accepted.
 MAX_REQUEST_BYTES = MAX_ENCODED_BYTES + 64 * 1024
 
+#: Which origins may call this server from a browser.
+#:
+#: Defaults to `*`, which is what the Android WebView needs: it loads its
+#: bundle from `file:///android_asset/`, so its Origin is the literal string
+#: "null" and no specific origin can be allowlisted for it. The app sends a
+#: bearer token in a header rather than cookies, so `*` does not expose an
+#: ambient-credential path.
+#:
+#: Set QUINTEK_CORS_ORIGIN to a single origin when the console is served to a
+#: real browser origin and the WebView is not a client of that deployment.
+#: This is the narrowing the module docstring above asks for, made a
+#: deployment decision rather than a code edit.
+CORS_ORIGIN = os.environ.get("QUINTEK_CORS_ORIGIN", "*")
+
 
 def build_billing(db_path: str | Path | None = None, *, env=None):
     """
@@ -159,7 +173,7 @@ def make_handler(api: StudentAPI, billing=None, analytics=None):
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(payload)))
-            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Origin", CORS_ORIGIN)
             self.send_header("Access-Control-Allow-Headers", "content-type, authorization")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
             self.end_headers()

@@ -1,0 +1,45 @@
+# Render blueprint for the Quintek backend.
+#
+# ONE service. `serve-student --with-console` mounts the console's read-only
+# routes onto the learner origin, so the Android app's single backend setting
+# answers both of its screens. Splitting them would need two services and two
+# settings in an app that has one.
+#
+# PERSISTENCE WARNING
+# -------------------
+# Render's filesystem is EPHEMERAL. Everything below runs on SQLite files that
+# are destroyed on every redeploy and every restart. That is fine for a
+# staging deployment whose data is disposable and NOT fine for real learners.
+# See docs/DEPLOYMENT.md: production persistence needs an external Postgres
+# (Supabase), which is an open decision, not something this file solves.
+services:
+  - type: web
+    name: quintek-api
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: >-
+      python -m benchmark.cli serve-student
+      --host 0.0.0.0
+      --port $PORT
+      --with-console
+      --db $QUINTEK_DB_PATH
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: QUINTEK_DB_PATH
+        value: /tmp/quintek.db          # ephemeral -- see the warning above
+      - key: QUINTEK_BILLING_DB
+        value: /tmp/billing.db          # ephemeral -- see the warning above
+      - key: QUINTEK_CORS_ORIGIN
+        value: "*"                      # the WebView's origin is "null"
+      # Secrets are entered in the Render dashboard, never committed here.
+      - key: NVIDIA_API_KEY
+        sync: false                     # optional: only the production AI path needs it
+      - key: RAZORPAY_KEY_ID
+        sync: false                     # optional: checkout refuses without it
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false

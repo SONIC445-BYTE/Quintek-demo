@@ -98,6 +98,41 @@ class StudentAPI:
         except Exception as exc:  # never leak a stack trace to a client
             return 500, {"error": f"{type(exc).__name__}: {exc}"}
 
+    def _health(self) -> tuple[int, dict]:
+        """
+        Liveness plus the two dependencies that decide what this server can do.
+
+        Returns 200 while the process can serve requests at all. `database`
+        going false is the one condition that makes the answer 503: without it
+        nothing works. A missing model is reported, not fatal -- refusing to
+        generate is correct behaviour, not ill health.
+        """
+        database, database_error = True, None
+        try:
+            self.db.query_one("SELECT 1 AS ok")
+        except Exception as exc:
+            database, database_error = False, f"{type(exc).__name__}: {exc}"
+
+        generation = "unavailable"
+        if self.ai is not None:
+            try:
+                self.ai.resolve("QUESTION_GENERATION")
+                generation = "available"
+            except Exception:
+                # NoEligibleModel is the expected answer while nothing is
+                # qualified. Reported as a state, never as an error.
+                generation = "no_qualified_model"
+
+        body = {
+            "status": "ok" if database else "degraded",
+            "database": database,
+            "generation": generation,
+            "ai_configured": self.ai is not None,
+        }
+        if database_error:
+            body["database_error"] = database_error
+        return (200 if database else 503), body
+
     def _user(self, token: str | None):
         row = self.db.user_for_token(token)
         if row is None:
@@ -107,6 +142,17 @@ class StudentAPI:
     def _route(self, method: str, path: str, params: dict, body: dict,
                token: str | None) -> tuple[int, Any]:
         seg = [p for p in path.strip("/").split("/") if p]
+
+        # --- health (unauthenticated, no database write) ---
+        #
+        # A platform health check runs before anything is configured and must
+        # answer without a session. It reports what a deployment can actually
+        # do rather than a bare "ok": a server whose database is unreachable is
+        # not healthy, and one with no qualified model is healthy but cannot
+        # generate -- two different states an operator must be able to tell
+        # apart from outside.
+        if seg == ["health"] and method == "GET":
+            return self._health()
 
         # --- auth (unauthenticated) ---
         if seg[:1] == ["auth"]:
