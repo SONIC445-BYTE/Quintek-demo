@@ -7,9 +7,22 @@ import android.content.Context
  *
  * Unset (the default) means every screen renders its built-in fixture data,
  * which is why the app is fully usable with no server and no network. Set it
- * to a reachable origin -- typically a laptop on the same Wi-Fi running
- * `python -m benchmark.cli serve-analytics` -- and the reliability, leaderboard
- * and run screens switch to live data.
+ * to a reachable origin and the screens switch to live data.
+ *
+ * WHICH SERVER. The learner app needs `serve-student` (default port 8500):
+ * that process serves the notebooks, questions, progress and billing routes
+ * AND the `/ai/eval` and `/ai/benchmark/*` transparency routes, which is why
+ * one origin is injected into both `__QUINTEK_API__` and
+ * `__QUINTEK_STUDENT_API__`.
+ *
+ * `serve-analytics` (port 8420) is a DIFFERENT server. It answers `/ai/*` and
+ * `/api/*` for the benchmark console and returns 404 for every learner route,
+ * so pointing the student app at it leaves notebooks, questions, progress and
+ * billing dead while only the transparency screen loads. This help text used
+ * to name it, which is exactly that mistake.
+ *
+ * Bind it where the phone can reach it -- `--host 0.0.0.0`, not the default
+ * loopback -- and use the machine's LAN address.
  */
 object Settings {
 

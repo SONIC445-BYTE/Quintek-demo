@@ -13,13 +13,13 @@ limitation · **D** cosmetic · **E** intentional V1 boundary / correct behaviou
 
 | | |
 |---|---|
-| STATUS | OPEN — fix is unambiguous, see FIX |
+| STATUS | **VERIFIED FIXED** |
 | SEVERITY | **B** |
 | EVIDENCE | `strings.xml:8` `backend_help` says *"python -m benchmark.cli serve-analytics --host 0.0.0.0 --port 8420"*. `Settings.kt` KDoc repeats it. Probed live: against `serve-analytics` :8420 → `/notebooks` `/progress` `/questions` `/demos` `/billing/me/entitlements` all **404**. Against `serve-student` :8500 → all **401** (route exists, needs auth). |
 | IMPACT | An operator who follows the on-screen instruction gets a student app whose notebooks, question bank, progress and billing are all dead. Only `/ai/eval` resolves. This is the same class of failure the `WebScreenActivity` comment records having fixed on the injection side. |
 | DECISION | Fix the guidance. Do not change the injection: pointing both globals at one origin is correct for the learner app. |
-| FIX | `strings.xml` and `Settings.kt` should name `serve-student` (default port 8500) as the backend for the learner app, and mention `serve-analytics` only for the console. |
-| TEST | Re-probe the learner routes against the named server. |
+| FIX | Applied. `strings.xml` `backend_help` now names `serve-student --host 0.0.0.0 --port 8500` and states plainly that `serve-analytics` does not serve the learner routes. `Settings.kt` carries the same distinction, including why one origin is injected into both globals. `AdminActivity`'s example hint moved 8420 → 8500. |
+| TEST | Probed before the fix: learner routes 404 on :8420, 401 on :8500. Backend suite after the fix: 1283 passed, 4 skipped. The strings are user-facing copy with no automated test; the probe above is the evidence. |
 
 ## B-2 — One backend setting cannot serve both shipped screens
 

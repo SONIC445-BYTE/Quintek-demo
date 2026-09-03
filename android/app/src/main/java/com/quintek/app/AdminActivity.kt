@@ -45,7 +45,7 @@ class AdminActivity : WebScreenActivity() {
     private fun promptForBackend() {
         val input = EditText(this).apply {
             inputType = InputType.TYPE_TEXT_VARIATION_URI
-            hint = "http://192.168.1.10:8420"
+            hint = "http://192.168.1.10:8500"
             setText(Settings.backendUrl(this@AdminActivity) ?: "")
             setSingleLine()
         }
