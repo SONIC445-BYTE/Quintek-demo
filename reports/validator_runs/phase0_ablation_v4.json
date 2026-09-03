@@ -1,0 +1,185 @@
+{
+  "freeze": {
+    "validator_version": "0.2.0",
+    "validator_fingerprint": "a438d091e1d435b65c0223cff408f7f598f27bcb1a8d77d70977f24e235498ca",
+    "corpus": "corpus/validator_dev",
+    "corpus_hash": "4da47a68fce97b8dd9a74f4386c45be967cd27823e383282748bd18eb32bf057",
+    "prompt_versions": {
+      "grounding": "grounding/0.1.0",
+      "judge": "judge/0.1.0",
+      "conformance": "conformance/0.1.0"
+    },
+    "thresholds": {
+      "min_sensitivity": 0.8,
+      "min_specificity": 0.9,
+      "min_items_per_arm": 30,
+      "judge_confidence_floor": 0.6
+    },
+    "models": [
+      {
+        "seat": "candidate",
+        "role": "grounding",
+        "credential_ref": "NVIDIA_API_KEY",
+        "provider": "nvidia",
+        "model": "deepseek-ai/deepseek-v4-flash-0731",
+        "model_version": "unknown",
+        "model_family": "deepseek",
+        "is_model": true,
+        "is_oracle": false,
+        "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions",
+        "temperature": 0.0
+      },
+      {
+        "seat": "judge",
+        "role": "judge",
+        "credential_ref": "NVIDIA_API_KEY",
+        "provider": "nvidia",
+        "model": "nvidia/ising-calibration-1.5-31b",
+        "model_version": "unknown",
+        "model_family": "ising",
+        "is_model": true,
+        "is_oracle": false,
+        "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions",
+        "temperature": 0.0
+      },
+      {
+        "seat": "candidate",
+        "role": "conformance",
+        "credential_ref": "NVIDIA_API_KEY",
+        "provider": "nvidia",
+        "model": "deepseek-ai/deepseek-v4-flash-0731",
+        "model_version": "unknown",
+        "model_family": "deepseek",
+        "is_model": true,
+        "is_oracle": false,
+        "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions",
+        "temperature": 0.0
+      }
+    ],
+    "sampling": {
+      "temperature": 0.0
+    },
+    "experiments": [
+      {
+        "name": "1  A+B+D  validator without the judge",
+        "layers": "ABD",
+        "config": {
+          "structural": true,
+          "grounding": true,
+          "judge": false,
+          "conformance": true
+        }
+      },
+      {
+        "name": "2  C      the independent judge alone",
+        "layers": "C",
+        "config": {
+          "structural": false,
+          "grounding": false,
+          "judge": true,
+          "conformance": false
+        }
+      },
+      {
+        "name": "3  ABCD   the whole validator",
+        "layers": "ABCD",
+        "config": {
+          "structural": true,
+          "grounding": true,
+          "judge": true,
+          "conformance": true
+        }
+      }
+    ],
+    "extra": {
+      "retry_max_retries": 2,
+      "budget_max_calls": 2400,
+      "budget_max_judge_calls": 600,
+      "max_wall_minutes": 1200.0
+    },
+    "note": "Phase 0, complete three-arm set, first run on a repaired instrument (D017). Every previous arm is void: NVIDIAProvider returned the HTTP envelope as raw_output and validator.grounding.extract_json takes the first BALANCED JSON object, so the validator read the envelope as the model's answer; supported is absent from an envelope, so all 68 decided items were flagged not_answerable_from_passage. 91 of 94 grounding calls. Also fixed: content_of concatenated content and reasoning_content, costing 93 of 340 parses; and a reply truncated at max_tokens was scavenged for a JSON fragment out of the model's reasoning. max_tokens 1024 to 4096 in all three layers, measured from 63 of 340 replies truncating at exactly 1024 with 52 emitting no answer, which put the clean arm below the 35-item floor its own gate needs. Pairing unchanged and re-derived by the D011 rule; thresholds, corpus, prompts, temperature, retry policy and call budget unchanged.",
+    "created_at": "2026-09-03T04:06:58Z",
+    "digest": "acd21b3687b91d8c52d80aa7c86f66b487c77a82304b2c526887cbb758de6197"
+  },
+  "ablation": {
+    "candidate_model": "deepseek-ai/deepseek-v4-flash-0731",
+    "judge_model": "nvidia/ising-calibration-1.5-31b",
+    "arms": [
+      {
+        "name": "1  A+B+D  validator without the judge",
+        "layers": "ABD",
+        "sensitivity": 0.90625,
+        "specificity": 0.3888888888888889,
+        "false_positive": 22,
+        "false_negative": 3,
+        "abstained": 2,
+        "outages": 12,
+        "items_expected": 80,
+        "items_decided": 70,
+        "edge_abstention_rate": 0.0,
+        "completeness": "INCOMPLETE"
+      },
+      {
+        "name": "2  C      the independent judge alone",
+        "layers": "C",
+        "sensitivity": 0.175,
+        "specificity": 1.0,
+        "false_positive": 0,
+        "false_negative": 33,
+        "abstained": 0,
+        "outages": 0,
+        "items_expected": 80,
+        "items_decided": 80,
+        "edge_abstention_rate": 0.0,
+        "completeness": "COMPLETE"
+      },
+      {
+        "name": "3  ABCD   the whole validator",
+        "layers": "ABCD",
+        "sensitivity": 1.0,
+        "specificity": 0.40625,
+        "false_positive": 19,
+        "false_negative": 0,
+        "abstained": 2,
+        "outages": 14,
+        "items_expected": 80,
+        "items_decided": 69,
+        "edge_abstention_rate": 0.0,
+        "completeness": "INCOMPLETE"
+      }
+    ],
+    "judge_contribution": {
+      "layer": "C",
+      "status": "INCOMPLETE -- NOT COMPARABLE",
+      "incomplete_runs": [
+        "3  ABCD   the whole validator",
+        "1  A+B+D  validator without the judge"
+      ],
+      "why": "a run that did not reach every item cannot be subtracted from one that did; the difference would be mostly the missing items"
+    },
+    "judge_alone": {
+      "name": "2  C      the independent judge alone",
+      "layers": "C",
+      "sensitivity": 0.175,
+      "specificity": 1.0,
+      "false_positive": 0,
+      "false_negative": 33,
+      "abstained": 0,
+      "outages": 0,
+      "items_expected": 80,
+      "items_decided": 80,
+      "edge_abstention_rate": 0.0,
+      "completeness": "COMPLETE"
+    },
+    "experiment_conclusion": {
+      "question": "does the independent judge add information the other layers do not already have?",
+      "answer": "not determined: a run that did not reach every item cannot be subtracted from one that did; the difference would be mostly the missing items"
+    },
+    "model_conclusion": {
+      "question": "is nvidia/ising-calibration-1.5-31b fit to serve as the independent judge for candidate deepseek-ai/deepseek-v4-flash-0731?",
+      "answer": "DEFERRED",
+      "why": "one model measured against one development corpus does not settle model selection. That needs the same frozen configuration run against the alternative, compared on sensitivity, specificity, false positives, false negatives, latency, cost and edge calibration -- and a poor absolute score here does not by itself disqualify a model whose contribution to the ablation was positive."
+    },
+    "comparable": false
+  }
+}

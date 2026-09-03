@@ -439,3 +439,63 @@ to `a438d091e1d4...`, freeze `919cd25bc306` is retired, and its journal is
 refused rather than replayed: those replies were collected under a
 configuration that truncated at 1024 and cannot be mixed with replies that do
 not. Suite: 1283 passed, 4 skipped.
+
+## D018 -- Phase 0 terminated INCOMPLETE. The Layer-C decision is not determined, and the reason is item attrition, not budget or time
+
+The complete three-arm set ran to the end under freeze `acd21b3687b9` on the
+instrument repaired in D017. All three arms executed. Nothing was retried
+selectively, no model was substituted, and the frozen configuration was not
+touched while it ran.
+
+    arm                              sens   spec   FP   FN  abst  out  status
+    1  A+B+D  without the judge       91%    39%   22    3     2   12  INCOMPLETE
+    2  C      the judge alone         18%   100%    0   33     0    0  COMPLETE
+    3  ABCD   the whole validator    100%    41%   19    0     2   14  INCOMPLETE
+
+    LAYER C (ABCD - ABD): NOT COMPUTED
+    EXPERIMENT CONCLUSION:  not determined
+    MODEL CONCLUSION:       DEFERRED
+
+WHY IT IS INCOMPLETE
+
+Not budget: 588 of 2400 candidate attempts and 189 of 600 judge attempts, 25%
+of the ceiling. Not wall clock: 500.3 of 1200 minutes, 42%. The run had ample
+headroom in both and stopped because it finished, not because it was cut off.
+
+It is incomplete because arms 1 and 3 could not decide 12 and 14 items: the
+model returned replies that did not parse, and an unparseable validator is an
+outage rather than a clean item. The harness then refused the subtraction on
+its own terms -- "a run that did not reach every item cannot be subtracted
+from one that did; the difference would be mostly the missing items." Arm 3
+separately reads INSUFFICIENT_EVIDENCE because attrition left its clean arm at
+32 items where 35 are needed for a flawless run to reach a 90% lower bound.
+
+WHAT MUST NOT BE READ INTO IT
+
+Arm 3 shows 100% sensitivity and specificity 41% against arm 1's 39%. That
++2-point difference is NOT evidence that the judge earns its place. The two
+arms are not comparable -- 26 items are missing between them -- and the
+difference is smaller than the attrition. Reporting it as a positive
+contribution would be exactly the reinterpretation this protocol forbids.
+
+Equally, arm 2's 18% sensitivity is not a verdict on the judge model. Layer C
+is decided by the incremental contribution, never by C's standalone score, and
+that contribution is undetermined.
+
+WHAT THE RUN DID ESTABLISH
+
+The validator discriminates. Before D017 it flagged all 68 decided items, 0%
+discrimination on 29 matched pairs. It now separates clean from defective at
+39-41% across arms 1 and 3, fails on calibration rather than blindness, and
+its false positives are concentrated in two named conformance checks
+(`below_declared_difficulty`, `answerable_from_wording_alone`) rather than
+spread across the layer. That is a working instrument producing an honest
+negative result.
+
+CONSEQUENCE
+
+Phase 1 does NOT open: its precondition is a legitimately complete Phase 0.
+The holdout remains at 0 scoring runs of MAX_USES 5. No further inference is
+authorized against this configuration, and no replacement experiment is run.
+Closing the gap would need the conformance checks recalibrated and the item
+attrition reduced, both of which are V2 work.
