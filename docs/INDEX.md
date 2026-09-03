@@ -1,5 +1,22 @@
 # Document Index and Reading Order v0.4
 
+## Governance
+
+Three documents govern how this project is changed and are read before any
+other:
+
+| Document | Role |
+|---|---|
+| `CHANGE_PROTOCOL.md` | **Mandatory.** Inspect freely; propose, quiz and obtain a pass before any mutation. Tool permissions do not override it. |
+| `DECISIONS.md` | Architectural decision record, ADR-001 onward, with provenance labels distinguishing reconstructed from contemporaneous rationale |
+| `FLOW.md` | Actual execution paths, traced from source with file and line references |
+
+`DECISION_LOG.md` (D001–D019) remains the primary contemporaneous record;
+`DECISIONS.md` is the architectural spine that cites it.
+
+Current authoritative state is in `FINAL_STATUS.md`:
+**NO MODEL QUALIFIED / INSUFFICIENT EVIDENCE**, holdout 0/5.
+
 ## Authority hierarchy
 
 When documents conflict, resolve in this order:
