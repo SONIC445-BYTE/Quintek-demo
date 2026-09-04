@@ -1,5 +1,10 @@
 # Document Index and Reading Order v0.4
 
+## Testing
+
+* [`ANDROID_MANUAL_TEST.md`](ANDROID_MANUAL_TEST.md) — the on-device
+  end-to-end checklist. The APK builds; it has never been run.
+
 ## Governance
 
 Three documents govern how this project is changed and are read before any

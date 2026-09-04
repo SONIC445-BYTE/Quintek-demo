@@ -336,42 +336,121 @@ explicitly configured. Tested in `tests/test_production_safety.py`.
 
 # PART 2 — OPEN AND UNRESOLVED
 
-## ADR-020 — SQLite is unsuitable as production persistence on Render
+## ADR-020 — PostgreSQL for production persistence, SQLite retained
 
-**Date/phase:** 2026-09-03 (`3a59efb`) · **Status:** OPEN — DECISION REQUIRED
+**Date/phase:** 2026-09-03 opened (`3a59efb`) · 2026-09-04 implemented
+(`9c54fa0`, `edee5b4`) · **Status:** IMPLEMENTED
 
 **Problem:** Render's filesystem is ephemeral. Accounts, notebooks, questions,
 attempts, progress, revision schedules and billing reset on every redeploy.
 
-**Measured, not estimated:** ~170 SQL call sites across `student/` and
-`billing/`, 21 tables, 2 immutability triggers, and `psycopg` would be the
-first runtime DB dependency in a codebase whose only runtime dependency is
-`pyyaml`.
+**Decision:** `QUINTEK_DATABASE_URL` unset selects SQLite, set selects
+PostgreSQL from a bounded pool. One variable, which is what makes the rollback
+real — a bad deployment is reverted by clearing it, not by reverting code —
+and what keeps the suite runnable with nothing installed.
 
-**Supporting evidence:** `student/db.py`'s own docstring anticipates it —
-*"Swapping it for Postgres later is a connection string and a dialect pass,
-because nothing below uses a SQLite-only feature except the immutability
-triggers, which have direct equivalents."*
+### The estimate was wrong, and so was the assumption under it
 
-**Not started.** Requires a change proposal per `CHANGE_PROTOCOL.md`. The
-Rule 3 quiz was waived for this change on 2026-09-04 by owner instruction —
-see **ADR-024**, which is procedural only and is not implementation approval.
+This ADR previously recorded *"~170 SQL call sites, 21 tables, 2 immutability
+triggers"*. Measured: **~215 non-test call sites, 33 tables** (22 learner + 9
+billing + 2 inference), **5 triggers**, 724 `?` placeholders.
 
-## ADR-021 — Android build unverified
+More seriously, it leaned on `student/db.py`'s docstring: *"nothing below uses
+a SQLite-only feature except the immutability triggers."* **That was false.**
+An audit against a real PostgreSQL 16 found four incompatibilities, **three of
+them silent** — the DDL loaded with no error and the failure waited for live
+data:
 
-**Status:** BLOCKED — environment
+1. **Nullable column inside a composite `PRIMARY KEY`** (`source_concepts`,
+   `gap_links`). SQLite permits NULL there and then treats two such rows as
+   distinct, so `INSERT OR IGNORE` never deduplicated — a live SQLite bug, not
+   only a portability one. Postgres silently promotes the column to `NOT NULL`
+   and rejects the insert. Replaced with partial unique indexes.
+2. **`BEGIN IMMEDIATE` has no equivalent**, and translating it to a plain
+   `BEGIN` reopens the allowance-overspend bug it exists to prevent: measured,
+   two 200-unit requests authorised 400 against a 300 cap. Replaced with
+   `pg_advisory_xact_lock` keyed per user — stricter where it matters, looser
+   where it does not, since SQLite's database-wide write lock made two
+   learners queue behind each other for no reason.
+3. **Bare column in `GROUP BY`** (`revision.py:86`) — rejected outright.
+4. **32-bit overflow on micro-unit money.** A USD 0.30/M model already in
+   `configs/model_prices.json` is 2,550,000,000 micro-paise. Now `BIGINT`.
 
-No Android SDK, `ANDROID_HOME` unset, no `local.properties`; `./gradlew` fails
-resolving AGP 8.5.2 offline. **No APK has been built or installed, and none is
-claimed.** No signing configuration exists.
+Two further defects surfaced only under test, not by inspection: a caught
+duplicate webhook left a poisoned transaction on the pooled connection (fixed
+by matching `billing/db.py`'s existing autocommit semantics), and re-running
+`schema.sql` per connection deadlocked threads on `pg_proc` (fixed by
+initialising once per process under an advisory lock).
 
-## ADR-022 — Cleartext HTTP is development-only
+**The lesson worth keeping:** *"it looks like standard SQL"* is not evidence of
+portability, and a 1353-test suite proved nothing about it because every test
+drove the forgiving engine. Each finding now has a regression test verified to
+fail on the unported code.
 
-**Status:** OPEN — B-class limitation
+**Consequences:** `psycopg[binary,pool]` is the first runtime database
+dependency; it is imported only when `QUINTEK_DATABASE_URL` is set. Connections
+are returned at the end of each request — `ThreadingHTTPServer` starts a thread
+per request and the caches are thread-local, so without that the ninth
+concurrent request against a pool of eight blocks while the service still looks
+healthy.
 
-`usesCleartextTraffic="true"` with no `networkSecurityConfig`. Needed for LAN
-development against `http://192.168.x.x`; must be removed once an HTTPS origin
-exists. The manifest's own comment says so.
+**Tests:** 1371 passed / 25 skipped on SQLite alone; 1418 passed / 4 skipped
+with `QUINTEK_TEST_POSTGRES_URL` set against PostgreSQL 16.13. Postgres tests
+SKIP without that variable and are never reported as passing.
+
+**Not verified:** no deployment has been made. Supabase and Render remain
+unconfigured, pending credentials. See ADR-025.
+
+## ADR-021 — Android builds; it never had
+
+**Date/phase:** 2026-09-04 (`edee5b4`) · **Status:** RESOLVED, with a caveat
+
+Previously recorded as "BLOCKED — environment: no Android SDK". The SDK was
+installable here, and once installed the build revealed the real problem:
+**the app had never compiled.**
+
+`Settings.kt` documented route prefixes as `/ai/benchmark/*` and `/api/*`
+inside a KDoc block. **Kotlin block comments nest**, unlike Java's, so each
+literal slash-star opened a comment that was never closed and swallowed the
+rest of the file. Symptom: `Unclosed comment`, plus an unresolved `Settings`
+reference from all three activities.
+
+Both variants now build against SDK 34. `app-debug.apk` (15.4 MB) is signed
+with the debug key and installable. `app-release-unsigned.apk` (14.3 MB) is
+unsigned and stays so — **signing needs a keystore, which is a credential, and
+none has been invented.**
+
+**Not verified:** no APK has been installed on a device or emulator, and no
+end-to-end run has happened. Building is not running.
+
+## ADR-022 — Cleartext HTTP is scoped to debug builds
+
+**Date/phase:** 2026-09-04 (`edee5b4`) · **Status:** IMPLEMENTED
+
+The blanket `usesCleartextTraffic="true"` applied to every build and every
+destination, so a shipped APK would have sent a learner's bearer token and
+every answer they gave over plaintext HTTP.
+
+Replaced with a scoped `networkSecurityConfig`: release denies cleartext,
+`src/debug` overrides it so LAN development against `http://192.168.x.x` is
+unchanged. The capability is scoped rather than removed, because removing it
+would have broken the way the app is actually developed.
+
+**Verified in the built binaries, not only in source:** the release APK
+compiles `cleartextTrafficPermitted=false`, the debug APK `true`, and neither
+declares `usesCleartextTraffic`.
+
+**Related, and NOT a defect:** `QUINTEK_CORS_ORIGIN` is `*` because the WebView
+loads from `file:///android_asset/` and its Origin is the literal string
+`null`, which cannot be allowlisted. It is safe because the app authenticates
+with a bearer header, not cookies, and the CORS specification forbids `*`
+alongside credentialed requests. Production requires the value to be SET
+explicitly; it does not require it to be narrow.
+
+**Also not a defect:** `AdminActivity` is `exported="true"` because the
+launcher shortcut starts it by explicit component from another process. It
+carries no privilege — the backend authorises admin routes from the bearer
+token and returns 404 rather than 403.
 
 **Related:** `QUINTEK_CORS_ORIGIN` defaults to `*` because the WebView loads
 from `file:///android_asset/` and its Origin is the literal string `null`,
@@ -429,3 +508,38 @@ other change, and `CHANGE_PROTOCOL.md` itself is unamended.
 **Technical basis unchanged.** The Phase 1 read-only assessment is the
 technical record for this migration and is not reinterpreted or altered by
 this entry.
+
+## ADR-025 — Nothing is deployed; the remaining blockers are credentials
+
+**Date/phase:** 2026-09-04 · **Status:** OPEN — BLOCKED ON OWNER
+
+The code is ready for a deployment that has not happened. Recorded explicitly
+so that "the migration is implemented" is never mistaken for "the service is
+running".
+
+**What is genuinely verified:** the PostgreSQL path, against a real
+PostgreSQL 16.13 server, including the concurrent-reservation invariant, the
+connection pool under more requests than it holds, RLS on every table, and
+both APKs' compiled cleartext policy.
+
+**What is NOT verified, and cannot be from here:**
+
+| Item | Blocked on |
+|---|---|
+| A Supabase project exists | owner |
+| The service is reachable at an HTTPS origin | owner |
+| `/health` answers from a deployed instance | owner |
+| Data survives a real redeploy | a deployment |
+| The APK installs and reaches the backend | a device |
+| A signed release APK | a keystore, which is a credential |
+
+**Credentials required, and only these:** `QUINTEK_DATABASE_URL`, entered in
+the Render dashboard. Supabase's anon key, service-role key and JWT secret are
+**not** used — Quintek connects as a PostgreSQL role over TLS and never goes
+through PostgREST — and must not be set.
+
+**The correction this ADR also carries:** earlier reports in this project
+stated the validator holdout was "0 of 5 used". The ledger contains **one**
+entry, an `inspection` dated 2026-08-21, and `validator/holdout.py:212` counts
+every entry against `MAX_USES`. It is **1 of 5**. The ledger has been unchanged
+since `df99141`; the error was in the reporting, not in the ledger.

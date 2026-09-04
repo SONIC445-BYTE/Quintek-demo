@@ -91,7 +91,7 @@ ThreadingHTTPServer → Handler                       make_handler(api, billing,
     ├─ analytics.owns(path)  → AnalyticsMount.handle(method, path, parse_qs(query))
     │      benchmark/analytics_mount.py  — dict[str, list[str]], NOT the flattened form
     │      non-GET → 405
-    ├─ billing.owns(path)    → BillingMount.handle(...)   billing/mount.py:105
+    ├─ billing.owns(path)    → BillingMount.handle(...)   billing/mount.py:147
     │      is_admin resolved from the bearer token against the student DB, never the body
     └─ else                  → StudentAPI.handle(method, path, params, body, token)
     _send(status, body)  →  Access-Control-Allow-Origin: CORS_ORIGIN (env, default "*")
@@ -190,7 +190,7 @@ GET /billing/admin/economics                  → BillingMount → BillingAPI._r
 **Authorization boundary:** `billing/api.py:106` — `if seg[0] == "admin"` and
 `not is_admin`, it returns **404, not 403**, deliberately: whether an admin
 surface exists is itself not disclosed. `is_admin` comes from the user row's
-`role`, resolved from the bearer token (`billing/mount.py:128`).
+`role`, resolved from the bearer token (`billing/mount.py:147`).
 
 **Promotion is not reachable through the mount** — non-GET returns 405.
 
@@ -198,27 +198,53 @@ surface exists is itself not disclosed. `is_admin` comes from the user row's
 
 # 7 · DATABASE
 
+One variable chooses the backend. Nothing else in the application knows which
+one it got.
+
 ```
-Database(path)                                  student/db.py:60
-  ├─ connect()                                  :67   PRAGMA foreign_keys=ON per connection,
-  │                                                    WAL, busy_timeout — FKs are per-connection
-  │                                                    and silently off by default in SQLite
-  ├─ initialise() → schema.sql                  :89
-  ├─ _apply_additive_migrations(conn)           :95
-  └─ execute / query / query_one                :125-134
+persistence.connect(schema=, sqlite_path=, sqlite_factory=)   persistence/__init__.py:71
+  ├─ QUINTEK_DATABASE_URL unset → sqlite_factory(path)         → sqlite3.Connection
+  └─ set → require_tls(url)                                    :55   adds sslmode=require
+           → Pool.shared(url, schema).connect()                persistence/postgres.py:253
+                                                               bounded 1..8, autocommit,
+                                                               prepare_threshold=None
+
+Database(path)                                  student/db.py:84
+  ├─ connect()                                  :105  thread-local; on Postgres this
+  │                                                   CHECKS OUT of the pool
+  ├─ release()                                  :128  returns it — called from the
+  │                                                   request `finally` in server.py:182
+  ├─ initialise() → schema.sql                  :148  once per process, advisory-locked
+  └─ execute / query / query_one                :184-193
 ```
 
-**21 tables:** users, sessions_auth, notebooks, sources, source_chunks,
-concepts, concept_aliases, concept_relationships, notebook_concepts,
-source_concepts, question_demos, questions, question_concepts,
-revision_sessions, attempts, knowledge_gaps, gap_links, revision_state,
-concept_state, notification_prefs, notification_log, production_deployments.
+**33 tables in three schemas.** 22 learner (`quintek_student`), 9 billing
+(`quintek_billing`), 2 inference (`quintek_inference`). On SQLite these are
+three separate files. Nothing joins across them — identity crosses the
+boundary in Python as a resolved `user_id` (`student/server.py:239` →
+`billing/mount.py:147`), never as SQL.
 
-**2 triggers:** `attempts_are_immutable_update`, `attempts_are_immutable_delete`
-— an attempt, once recorded, cannot be rewritten.
+**5 triggers:** `attempts_are_immutable_{update,delete}`,
+`usage_ledger_no_{update,delete}`, `cost_ledger_no_delete`. Translated to
+`plpgsql` by `persistence/dialect.py`, preserving the message exactly. Note
+the refusal arrives as SQLSTATE **P0001**, not a 23xxx integrity violation —
+a trigger's refusal is not an integrity violation and the two are deliberately
+not conflated.
 
-**Persistence boundary:** local SQLite files. On Render this is **ephemeral**
-(ADR-020) — this section must be rewritten when Postgres lands.
+**Dialect translation** (`persistence/dialect.py`), applied per statement:
+`?` → `%s` outside string literals, `%` → `%%` everywhere (psycopg's
+placeholder parser is not quote-aware), `INSERT OR IGNORE` →
+`ON CONFLICT DO NOTHING`, `PRAGMA` dropped.
+
+**Concurrency** (`billing/usage.py:119`): `_begin_locked(key)` is
+`BEGIN IMMEDIATE` on SQLite and `BEGIN` + `pg_advisory_xact_lock` on Postgres.
+Not interchangeable — a plain `BEGIN` authorises 400 units against a 300 cap,
+measured. The key is per user for `reserve()` and per reservation for
+`commit()`/`release()`.
+
+**Exposure control** (`persistence/schema.py:_harden_postgres`): every table is
+created outside `public` with RLS enabled and no policies, because Supabase
+serves `public` over PostgREST with a non-secret anon key.
 
 ---
 
@@ -226,7 +252,18 @@ concept_state, notification_prefs, notification_log, production_deployments.
 
 | Path | Status |
 |---|---|
-| Android activity launch, WebView render, on-device journey | **NOT TESTED** — no APK (ADR-021) |
-| HTTPS / TLS to a deployed origin | **NOT TESTED** — nothing deployed |
-| Postgres/Supabase path | **DOES NOT EXIST** (ADR-020) |
+| PostgreSQL persistence | **VERIFIED** against PostgreSQL 16.13 — schema, CRUD, triggers, FK cascade, concurrency invariant, pooling, RLS |
+| SQLite persistence | **VERIFIED** — 1371 passed / 25 skipped with no database installed |
+| APK build | **VERIFIED** — both variants build; debug is signed and installable |
+| Release APK cleartext policy | **VERIFIED IN THE BINARY** — `cleartextTrafficPermitted=false` |
+| Android activity launch, WebView render, on-device journey | **NOT TESTED** — no APK has been installed on a device or emulator. Building is not running |
+| Signed release APK | **NOT PRODUCED** — needs a keystore, which is a credential |
+| HTTPS / TLS to a deployed origin | **NOT TESTED** — nothing is deployed |
+| A real Supabase instance | **DOES NOT EXIST** — blocked on credentials (ADR-025) |
+| Data surviving a real redeploy | **NOT TESTED** — needs a deployment |
 | Production generation end-to-end | **CANNOT BE TESTED** — no qualified model, by design |
+
+The authoritative qualification state is unchanged by any of this work:
+**NO MODEL QUALIFIED / INSUFFICIENT EVIDENCE**. The validator, corpus, freeze
+digest, thresholds and holdout ledger were not touched — `validator/` contains
+zero SQL and is not reachable from the persistence layer.
