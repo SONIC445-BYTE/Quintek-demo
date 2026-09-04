@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  RELEASE network policy: HTTPS only.
+
+  This replaces the blanket `android:usesCleartextTraffic="true"` that used to
+  sit on <application>. That flag was there for one legitimate reason — a
+  developer pointing the app at `http://192.168.x.x` on their LAN — but it
+  applied to every build and every destination, so a shipped APK would have
+  sent a learner's bearer token and every answer they gave over plaintext HTTP
+  to anywhere.
+
+  The fix is not to remove the capability but to scope it: `src/debug`
+  overrides this file with a permissive one, so LAN development still works
+  and only debug builds can do it. A release APK cannot make a cleartext
+  request at all, whatever URL is typed into the backend setting.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

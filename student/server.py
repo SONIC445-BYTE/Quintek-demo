@@ -274,6 +274,21 @@ def serve(*, host: str = "127.0.0.1", port: int = 8500,
           db_path: str | Path | None = None, with_ai: bool = True,
           with_billing: bool = True, billing_db: str | Path | None = None,
           with_console: bool = False, console_kwargs: dict | None = None) -> None:
+    # BEFORE anything is built or any socket is opened. A production
+    # deployment missing persistence, or carrying a development model
+    # override, must not reach the point where it looks like it is working.
+    # Nothing here prints a secret's value -- only whether one is configured.
+    from .production import ProductionMisconfigured, describe, enforce, is_production
+
+    enforce()
+    if is_production():
+        facts = describe()
+        print("Quintek: production mode")
+        print(f"  persistence: {facts['persistence']}")
+        print(f"  CORS origin: {facts['cors_origin']}")
+        print(f"  AI key configured: {facts['ai_key_configured']}"
+              f" · gateway configured: {facts['gateway_configured']}")
+
     billing = build_billing(billing_db) if with_billing else None
     recorder, cost_sink = build_cost_sink(billing)
     api = build_api(db_path, with_ai=with_ai, cost_sink=cost_sink)

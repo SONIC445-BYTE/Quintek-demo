@@ -19,12 +19,22 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.Quintek"
-        android:usesCleartextTraffic="true">
+        android:networkSecurityConfig="@xml/network_security_config">
         <!--
-          usesCleartextTraffic is on because a developer pointing this at a
-          local harness will use http://192.168.x.x:8420 on their own LAN.
-          Narrow it to a scoped network-security-config before any release
-          outside development.
+          The blanket android:usesCleartextTraffic="true" that used to be here
+          is gone. It existed so a developer could point the app at
+          http://192.168.x.x on their LAN, but it applied to every build and
+          every destination — so a shipped APK would have sent a learner's
+          bearer token and every answer they gave over plaintext HTTP.
+
+          The capability is now SCOPED rather than removed:
+
+            res/xml/network_security_config.xml        cleartext DENIED
+            src/debug/res/xml/network_security_config.xml   cleartext ALLOWED
+
+          The debug source set overrides the resource, so LAN development is
+          unchanged for `assembleDebug` and a release APK cannot make a
+          cleartext request at all, whatever URL is entered in Settings.
         -->
 
         <!-- The learner's app. Launching goes straight here. -->

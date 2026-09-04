@@ -11,12 +11,12 @@ import android.content.Context
  *
  * WHICH SERVER. The learner app needs `serve-student` (default port 8500):
  * that process serves the notebooks, questions, progress and billing routes
- * AND the `/ai/eval` and `/ai/benchmark/*` transparency routes, which is why
+ * AND the `/ai/eval` and `/ai/benchmark` transparency routes, which is why
  * one origin is injected into both `__QUINTEK_API__` and
  * `__QUINTEK_STUDENT_API__`.
  *
  * Pass `--with-console` and that same origin also answers the benchmark
- * console's `/api/*` and operator `/ai/*` routes, so ONE setting serves both
+ * console's `/api/` and operator `/ai/` routes, so ONE setting serves both
  * screens. It is opt-in because those are operator routes and the origin a
  * learner's phone points at should not carry them by default.
  *
@@ -25,6 +25,16 @@ import android.content.Context
  * every learner route, so pointing the student app at it leaves notebooks,
  * questions, progress and billing dead while only the transparency screen
  * loads. This help text used to name it, which was exactly that mistake.
+ *
+ * NOTE: the route prefixes above are written WITHOUT a trailing star, and
+ * must stay that way. Kotlin block comments NEST, unlike Java's, so a literal
+ * slash-star sequence inside this KDoc opens a comment that is never closed
+ * and silently swallows the rest of the file.
+ *
+ * That is not a hypothetical style point. It is why this class did not
+ * compile -- "Unclosed comment" -- and why every reference to `Settings` from
+ * MainActivity, AdminActivity and WebScreenActivity was reported as an
+ * unresolved reference. The app had never been built.
  *
  * Bind it where the phone can reach it -- `--host 0.0.0.0`, not the default
  * loopback -- and use the machine's LAN address.

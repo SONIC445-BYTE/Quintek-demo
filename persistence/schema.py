@@ -102,6 +102,42 @@ def initialise(conn, schema_path: str | Path, *, force: bool = False) -> None:
         _BUILT.add(key)
 
 
+def _harden_postgres(conn) -> None:
+    """
+    Close the Supabase exposure path on every table this schema owns.
+
+    THE THREAT, precisely. Supabase runs PostgREST over the database and
+    exposes the `public` schema through it, authenticated with the project's
+    anon key. That key is NOT a secret -- it is designed to ship inside client
+    applications. So a table sitting in `public` with RLS disabled is readable
+    by anyone who has the project URL and that key, entirely outside Quintek's
+    own authorization. For the `users` table that means email addresses and
+    password hashes.
+
+    Two independent fences, because the failure mode is total:
+
+      1. These tables are not in `public`. They live in `quintek_student`,
+         `quintek_billing` and `quintek_inference`, which PostgREST does not
+         expose unless somebody adds them to its exposed-schema list.
+      2. RLS is ENABLED with NO POLICIES on every table. Under PostgREST's
+         anon role that denies everything; a future change that exposes the
+         schema by accident therefore leaks nothing.
+
+    Quintek itself is unaffected: it connects as a PostgreSQL role that owns
+    these tables, and a table owner bypasses RLS by default. That is the
+    reason this is safe to switch on unconditionally -- it removes an
+    unintended reader without removing the intended one. `FORCE ROW LEVEL
+    SECURITY` is deliberately NOT used, because it would apply RLS to the
+    owner too and, with no policies defined, lock the application out of its
+    own data.
+    """
+    for row in conn.execute(
+            "SELECT tablename FROM pg_tables WHERE schemaname = current_schema()"):
+        table = row["tablename"]
+        conn.execute(f'ALTER TABLE "{table}" ENABLE ROW LEVEL SECURITY')
+    conn.commit()
+
+
 def _initialise_postgres(conn, source: str) -> None:
     """
     The DDL, serialised against any other process doing the same thing.
@@ -118,6 +154,7 @@ def _initialise_postgres(conn, source: str) -> None:
             conn.execute(f'DROP TRIGGER IF EXISTS {name} ON "{table}"')
         conn.executescript(schema_to_postgres(source))
         conn.commit()
+        _harden_postgres(conn)
     finally:
         conn.execute("SELECT pg_advisory_unlock(%s, %s)"
                      % (_DDL_LOCK_NAMESPACE, lock_id))

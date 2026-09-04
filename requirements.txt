@@ -1,2 +1,13 @@
+# Runtime.
 pyyaml>=6.0
+
+# PostgreSQL, for production persistence. OPTIONAL: with QUINTEK_DATABASE_URL
+# unset the application runs on stdlib sqlite3 and never imports psycopg, so a
+# local checkout still needs no database and the test suite still runs with
+# nothing installed. [binary] avoids needing a compiler on the build host;
+# [pool] is required -- an unpooled connection per request would open one
+# PostgreSQL backend per HTTP request.
+psycopg[binary,pool]>=3.1
+
+# Development.
 pytest>=7.0

@@ -311,3 +311,54 @@ def _seed_attempt(db) -> str:
                " is_correct, user_colour, created_at) VALUES (?,?,?,?,?,?,?)",
                ("a1", "q1", uid, 0, 1, "GREEN", "2026-01-01T00:00:00Z"))
     return uid
+
+
+# ---------------------------------------------------------------------------
+# Supabase exposure control
+# ---------------------------------------------------------------------------
+
+
+def test_every_table_is_outside_public_and_has_rls_enabled(pg_schema):
+    """
+    The two fences that keep learner data off Supabase's PostgREST surface.
+
+    Supabase exposes the `public` schema over HTTP with the project's anon
+    key, and that key ships inside clients -- it is not a secret. A table in
+    `public` with RLS off is world-readable to anyone with the project URL.
+    For `users` that is email addresses and password hashes.
+    """
+    import psycopg
+
+    from student.db import Database
+    from billing.db import connect as billing_connect
+
+    Database()
+    billing_connect()
+
+    import persistence
+    with psycopg.connect(pytest.importorskip("os").environ[persistence.URL_ENV],
+                         autocommit=True) as raw:
+        for schema in (pg_schema["student"], pg_schema["billing"]):
+            assert schema != "public"
+            rows = raw.execute(
+                "SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = %s",
+                (schema,)).fetchall()
+            assert rows, f"{schema} has no tables, so this proved nothing"
+            unprotected = [name for name, rls in rows if not rls]
+            assert not unprotected, f"RLS is off on: {unprotected}"
+
+
+def test_the_application_can_still_read_its_own_tables_under_rls(pg_schema):
+    """
+    RLS with no policies denies everything -- to everyone EXCEPT the table
+    owner, which is what Quintek connects as.
+
+    Without this test the hardening above could lock the product out of its
+    own database and the failure would look like an empty account.
+    """
+    from student.db import Database
+
+    db = Database()
+    uid = db.create_user("rls@example.com", "password123")
+    assert db.query_one("SELECT email FROM users WHERE id = ?", (uid,))["email"] \
+        == "rls@example.com"

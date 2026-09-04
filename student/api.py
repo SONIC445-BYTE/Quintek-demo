@@ -123,9 +123,18 @@ class StudentAPI:
                 # qualified. Reported as a state, never as an error.
                 generation = "no_qualified_model"
 
+        # Which backend is actually serving, so a deployment that silently
+        # fell back to an ephemeral SQLite file is visible from outside rather
+        # than only after the next redeploy loses the data. No credential
+        # value appears here -- `persistence` is a word, not a URL.
+        from .production import describe as describe_deployment
+        facts = describe_deployment()
+
         body = {
             "status": "ok" if database else "degraded",
             "database": database,
+            "persistence": "postgresql" if facts["database_url_configured"] else "sqlite",
+            "environment": facts["environment"],
             "generation": generation,
             "ai_configured": self.ai is not None,
         }

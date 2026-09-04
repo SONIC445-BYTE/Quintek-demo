@@ -5,41 +5,80 @@
 # answers both of its screens. Splitting them would need two services and two
 # settings in an app that has one.
 #
-# PERSISTENCE WARNING
-# -------------------
-# Render's filesystem is EPHEMERAL. Everything below runs on SQLite files that
-# are destroyed on every redeploy and every restart. That is fine for a
-# staging deployment whose data is disposable and NOT fine for real learners.
-# See docs/DEPLOYMENT.md: production persistence needs an external Postgres
-# (Supabase), which is an open decision, not something this file solves.
+# PERSISTENCE
+# -----------
+# Render's filesystem is EPHEMERAL, so nothing durable may live on it. The
+# service therefore runs on managed PostgreSQL, addressed by a single
+# variable, QUINTEK_DATABASE_URL. With QUINTEK_ENV=production set, the server
+# REFUSES TO START if that variable is missing -- booting onto a container
+# disk would look healthy and lose every account on the next redeploy, which
+# is the failure this blueprint exists to make impossible rather than
+# unlikely.
+#
+# SECRETS
+# -------
+# Every `sync: false` value is entered in the Render dashboard and is never
+# committed here, printed at startup, or included in /health. The boot banner
+# reports whether each one is CONFIGURED, never what it is.
 services:
   - type: web
     name: quintek-api
     runtime: python
     plan: starter
     buildCommand: pip install -r requirements.txt
+    # 0.0.0.0 because Render routes to the container from outside; $PORT is
+    # assigned by the platform and must not be hardcoded.
     startCommand: >-
       python -m benchmark.cli serve-student
       --host 0.0.0.0
       --port $PORT
       --with-console
-      --db $QUINTEK_DB_PATH
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
-      - key: QUINTEK_DB_PATH
-        value: /tmp/quintek.db          # ephemeral -- see the warning above
-      - key: QUINTEK_BILLING_DB
-        value: /tmp/billing.db          # ephemeral -- see the warning above
+
+      # Turns on the startup checks in student/production.py. Without it the
+      # service would happily boot in whatever state it was handed.
+      - key: QUINTEK_ENV
+        value: production
+
+      # The ONLY database credential. A libpq connection string for the
+      # managed PostgreSQL instance, including sslmode=require.
+      #
+      # Entered in the dashboard. Supabase's anon key, service-role key and
+      # JWT secret are NOT used and must not be set: Quintek connects as a
+      # PostgreSQL role over TLS and never goes through PostgREST.
+      - key: QUINTEK_DATABASE_URL
+        sync: false
+
+      # An explicit decision, not a default. "*" is correct for a deployment
+      # serving the Android WebView, whose bundle loads from
+      # file:///android_asset/ and whose Origin is therefore the literal
+      # string "null" -- which cannot be allowlisted. It is safe here because
+      # the app authenticates with a bearer header rather than cookies, and
+      # the CORS specification forbids "*" from being combined with
+      # credentialed requests. Narrow it to a single origin if this deployment
+      # ever stops serving the WebView.
       - key: QUINTEK_CORS_ORIGIN
-        value: "*"                      # the WebView's origin is "null"
-      # Secrets are entered in the Render dashboard, never committed here.
+        value: "*"
+
+      # Optional: only the production AI path uses it. Absent, the server
+      # starts and generation refuses -- which is the CORRECT state while
+      # nothing is qualified, not a fault to configure away.
       - key: NVIDIA_API_KEY
-        sync: false                     # optional: only the production AI path needs it
+        sync: false
+
+      # Optional: absent, the server announces gateway=NONE at boot and
+      # checkout refuses. Everything else works.
       - key: RAZORPAY_KEY_ID
-        sync: false                     # optional: checkout refuses without it
+        sync: false
       - key: RAZORPAY_KEY_SECRET
         sync: false
       - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
+
+      # QUINTEK_DEV_CANDIDATE is deliberately ABSENT and must stay absent. It
+      # bypasses promotion and routing, so setting it here would put an
+      # unqualified model in front of learners' medical questions. With
+      # QUINTEK_ENV=production the server refuses to start if it is set.

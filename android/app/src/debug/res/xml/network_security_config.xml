@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG network policy: cleartext allowed.
+
+  This file exists only in `src/debug`, so it applies to `assembleDebug` and
+  never to a release APK. It is what lets an engineer point the app at
+  `http://192.168.1.20:8500` while the backend runs on their laptop.
+
+  If you are reading this because a RELEASE build cannot reach your server:
+  that is the control working. Serve it over HTTPS, or install the debug
+  build.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
