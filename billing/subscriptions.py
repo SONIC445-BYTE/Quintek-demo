@@ -30,6 +30,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+
+from persistence.errors import integrity_errors
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -174,7 +176,10 @@ class SubscriptionService:
                 "process it")
 
         # The UNIQUE constraint IS the lock. A duplicate fails here, before
-        # anything is applied.
+        # anything is applied. `integrity_errors()` is the portable tuple:
+        # sqlite3.IntegrityError on one backend, psycopg's UniqueViolation on
+        # the other. Catching only the sqlite3 one would have turned a
+        # harmless gateway replay into a 500 on Postgres.
         try:
             self.conn.execute(
                 "INSERT INTO webhook_events (id, gateway, gateway_event_id, event_type,"
@@ -183,7 +188,12 @@ class SubscriptionService:
                 (new_id("whk"), event.gateway, event.event_id, event.event_type,
                  body.decode("utf-8", "replace"), now_iso()))
             self.conn.commit()
-        except sqlite3.IntegrityError:
+        except integrity_errors():
+            # Roll back before returning. On SQLite the failed INSERT left
+            # nothing to undo, but on Postgres a failure inside a transaction
+            # aborts it, and returning here without a rollback would hand a
+            # poisoned connection back to the pool for the next request.
+            self.conn.rollback()
             return ProcessResult("IGNORED",
                                  f"event {event.event_id} has already been processed")
 

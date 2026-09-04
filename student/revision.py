@@ -83,7 +83,21 @@ class PriorityEngine:
               JOIN notebook_concepts nc ON nc.concept_id = c.id
               JOIN notebooks n ON n.id = nc.notebook_id AND n.owner_id = ?
               LEFT JOIN concept_state cs ON cs.concept_id = c.id AND cs.user_id = ?
-             GROUP BY c.id
+             -- Every selected column is grouped, not just `c.id`.
+             --
+             -- The GROUP BY exists to collapse the duplicate rows the
+             -- notebook_concepts join produces for a concept that appears in
+             -- several notebooks. SQLite allowed `GROUP BY c.id` alone and
+             -- picked an arbitrary row for the ungrouped columns; PostgreSQL
+             -- rejects it -- functional dependency on a primary key covers
+             -- other columns OF THAT TABLE, and `cs.*` belongs to
+             -- concept_state. Listing them is exactly equivalent here rather
+             -- than merely legal: concept_state's primary key is
+             -- (user_id, concept_id) and the join pins both, so at most one
+             -- cs row can match and there was never a choice to make.
+             GROUP BY c.id, c.canonical_name, c.subject, cs.colour,
+                      cs.correct_count, cs.wrong_count, cs.consecutive_correct,
+                      cs.last_seen_at
             """, (user_id, user_id, user_id, user_id))
         return [dict(r) for r in rows]
 

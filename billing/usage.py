@@ -15,11 +15,25 @@ therefore sees the first one's hold.
     AVAILABLE -> RESERVE (atomic) -> PROCESS -> COMMIT actual usage
                                              \-> RELEASE the unused part
 
-`BEGIN IMMEDIATE` is the load-bearing detail. SQLite's default deferred
-transaction takes a read lock first and upgrades on write, which can fail with
-SQLITE_BUSY after the read -- exactly the window this is trying to close.
-IMMEDIATE takes the write lock up front, so the check and the hold are
-genuinely one step.
+The LOCK is the load-bearing detail, and it is spelled differently on each
+backend because the two engines make a read-check-write safe in genuinely
+different ways.
+
+On SQLite, `BEGIN IMMEDIATE`. The default deferred transaction takes a read
+lock first and upgrades on write, which can fail with SQLITE_BUSY after the
+read -- exactly the window this is trying to close. IMMEDIATE takes the write
+lock up front, so the check and the hold are one step.
+
+On PostgreSQL a transaction alone is NOT enough, and translating
+`BEGIN IMMEDIATE` to a plain `BEGIN` silently reopens this bug. Readers do not
+block readers under MVCC, so two concurrent reservations each read the same
+pre-existing usage, each conclude there is room, and both commit. Measured
+rather than assumed: two 200-unit requests against a 300 cap authorised 400.
+So `_begin_locked` takes a transaction-scoped advisory lock before reading.
+
+Keying the lock to the USER is better than what SQLite does, not merely
+equivalent: SQLite's write lock is database-wide, so two different learners'
+reservations serialise behind one another for no reason. These do not.
 
 WHY RESERVE RATHER THAN DEDUCT AFTER
 ------------------------------------
@@ -102,6 +116,26 @@ class UsageService:
 
     # ---------- the atomic reservation ----------
 
+    def _begin_locked(self, key: str) -> None:
+        """
+        Open a transaction and take the lock that makes a read-check-write one
+        step, in whichever way this backend requires.
+
+        `key` names what is being protected -- a user's allowance, or one
+        reservation's settlement. On SQLite the lock is database-wide and the
+        key is ignored; on Postgres it is exactly the granularity that matters.
+
+        Both forms release on COMMIT or ROLLBACK, so neither needs a `finally`
+        a later edit could drop, and a pooled Postgres connection can never be
+        returned still holding one.
+        """
+        if getattr(self.conn, "is_postgres", False):
+            self.conn.execute("BEGIN")
+            self.conn.advisory_lock(key)
+        else:
+            self.conn.execute("BEGIN IMMEDIATE")
+
+
     def reserve(self, user_id: str, requested: int, *, question_type: str = "mcq",
                 batch_id: str = "", allow_partial: bool = True,
                 hold_minutes: int = DEFAULT_HOLD_MINUTES,
@@ -120,7 +154,7 @@ class UsageService:
         day, period = today_iso(moment), period_start_for(moment)
         expires = (moment + timedelta(minutes=hold_minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        self.conn.execute("BEGIN IMMEDIATE")
+        self._begin_locked(f"quintek.allowance:{user_id}")
         try:
             decision = self.engine.authorize(user_id, requested, at=moment,
                                              allow_partial=allow_partial)
@@ -160,7 +194,7 @@ class UsageService:
         accepting the overage would hide it and overspend the user's
         allowance.
         """
-        self.conn.execute("BEGIN IMMEDIATE")
+        self._begin_locked(f"quintek.reservation:{reservation_id}")
         try:
             row = self.conn.execute("SELECT * FROM reservations WHERE id=?",
                                     (reservation_id,)).fetchone()
@@ -200,7 +234,7 @@ class UsageService:
 
     def release(self, reservation_id: str, *, reason: str = "") -> dict:
         """Return an unused hold. Nothing is written to the usage ledger."""
-        self.conn.execute("BEGIN IMMEDIATE")
+        self._begin_locked(f"quintek.reservation:{reservation_id}")
         try:
             row = self.conn.execute("SELECT * FROM reservations WHERE id=?",
                                     (reservation_id,)).fetchone()

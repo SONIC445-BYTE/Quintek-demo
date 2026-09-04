@@ -1,25 +1,50 @@
 """
 Persistence for the student engine.
 
-SQLite, from the standard library, for the same reason the rest of this
-repository is stdlib-only: the harness has to run anywhere with no install
-step. SQLite is also a genuinely good fit here -- a learner's knowledge state
-is one user's data with heavy relational structure and modest volume, which is
-the case it is strongest at. Swapping it for Postgres later is a connection
-string and a dialect pass, because nothing below uses a SQLite-only feature
-except the immutability triggers, which have direct equivalents.
+Two backends, chosen by one environment variable.
 
-Two things this module insists on:
+`QUINTEK_DATABASE_URL` unset -> SQLite, from the standard library, for the
+reason the rest of this repository is stdlib-only: the harness runs anywhere
+with no install step. Set -> PostgreSQL from a bounded pool. See
+`persistence/`.
+
+A CORRECTION TO WHAT THIS DOCSTRING USED TO CLAIM
+-------------------------------------------------
+It said: *"Swapping it for Postgres later is a connection string and a dialect
+pass, because nothing below uses a SQLite-only feature except the immutability
+triggers, which have direct equivalents."*
+
+That was wrong, and it was the sentence the migration decision leaned on. An
+audit against a real PostgreSQL 16 found four incompatibilities, three of them
+silent -- the DDL loaded without error and the failure waited for live data:
+
+  1. `source_concepts` and `gap_links` put a NULLABLE column inside a
+     composite PRIMARY KEY. SQLite permits it (and, worse, then accepted
+     duplicate rows, so `INSERT OR IGNORE` did not deduplicate); Postgres
+     silently promotes the column to NOT NULL and rejects the insert. Fixed in
+     `schema.sql` with partial unique indexes.
+  2. `billing/usage.py`'s `BEGIN IMMEDIATE` has no Postgres equivalent, and
+     the obvious translation reopens the allowance-overspend bug it exists to
+     prevent.
+  3. `revision.py`'s bare-column `GROUP BY` is rejected outright.
+  4. `cost_ledger`'s micro-unit columns overflow a 32-bit INTEGER at prices
+     already in `configs/model_prices.json`.
+
+The lesson worth keeping: "it looks like standard SQL" is not evidence of
+portability. Each of the four now has a regression test that fails on the
+unported code.
+
+Two things this module insists on, unchanged:
 
   * **Foreign keys on, every connection.** SQLite disables them by default,
     per-connection, silently. A schema full of REFERENCES clauses that are
     never enforced is worse than no schema at all, because it reads as if it
-    guarantees something.
+    guarantees something. Postgres enforces them always.
 
   * **One writer at a time, WAL for readers.** The ingestion pipeline writes
     from a worker thread while HTTP requests read. WAL makes that safe without
     a lock dance, and `busy_timeout` turns the rare contention into a wait
-    rather than an error.
+    rather than an error. Postgres needs neither.
 """
 
 from __future__ import annotations
@@ -32,6 +57,9 @@ import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import persistence
+from persistence import schema as schema_support
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
@@ -64,21 +92,52 @@ class Database:
 
     # ---------- connections ----------
 
-    def connect(self) -> sqlite3.Connection:
-        """One connection per thread. SQLite objects are not safe to share
-        across threads, and the API server is threaded."""
-        conn = getattr(self._local, "conn", None)
-        if conn is not None:
-            return conn
+    def _sqlite(self, path) -> sqlite3.Connection:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(self.path, timeout=30.0)
+        conn = sqlite3.connect(path, timeout=30.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA busy_timeout = 30000")
         conn.execute("PRAGMA synchronous = NORMAL")
+        return conn
+
+    def connect(self):
+        """
+        One connection per thread.
+
+        SQLite objects are not safe to share across threads and the API server
+        is threaded, so the cache is thread-local either way.
+
+        On Postgres this checks one OUT OF A BOUNDED POOL, and the difference
+        matters more than it looks. `ThreadingHTTPServer` starts a new thread
+        per request, so a thread-local cache is empty on every request: with
+        SQLite that costs a file handle, with Postgres it would be a new
+        backend per request against a finite server limit. `release()` returns
+        it; `student/server.py` calls that at the end of each request.
+        """
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            return conn
+        conn = persistence.connect(schema=persistence.STUDENT_SCHEMA,
+                                   sqlite_path=self.path,
+                                   sqlite_factory=self._sqlite)
         self._local.conn = conn
         return conn
+
+    def release(self) -> None:
+        """
+        Give this thread's connection back.
+
+        On Postgres it returns to the pool; on SQLite it is a no-op, because
+        reopening a file per request is pure cost and the handle is cheap to
+        keep. Safe to call when no connection was ever opened.
+        """
+        conn = getattr(self._local, "conn", None)
+        if conn is None or not getattr(conn, "is_postgres", False):
+            return
+        conn.close()
+        self._local.conn = None
 
     def close(self) -> None:
         conn = getattr(self._local, "conn", None)
@@ -88,7 +147,7 @@ class Database:
 
     def initialise(self) -> None:
         conn = self.connect()
-        conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        schema_support.initialise(conn, SCHEMA_PATH)
         self._apply_additive_migrations(conn)
         conn.commit()
 
@@ -114,7 +173,7 @@ class Database:
             ("sources", "byte_size", "INTEGER NOT NULL DEFAULT 0"),
         ]
         for table, column, ddl in migrations:
-            existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+            existing = schema_support.columns_of(conn, table)
             if not existing:
                 continue  # table absent entirely; schema.sql owns creating it
             if column not in existing:
@@ -122,16 +181,16 @@ class Database:
 
     # ---------- helpers ----------
 
-    def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
+    def execute(self, sql: str, params: tuple = ()):
         conn = self.connect()
         cur = conn.execute(sql, params)
         conn.commit()
         return cur
 
-    def query(self, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
+    def query(self, sql: str, params: tuple = ()) -> list:
         return self.connect().execute(sql, params).fetchall()
 
-    def query_one(self, sql: str, params: tuple = ()) -> sqlite3.Row | None:
+    def query_one(self, sql: str, params: tuple = ()):
         return self.connect().execute(sql, params).fetchone()
 
     # ---------- identity ----------
@@ -186,7 +245,7 @@ class Database:
         )
         return token
 
-    def user_for_token(self, token: str | None) -> sqlite3.Row | None:
+    def user_for_token(self, token: str | None):
         if not token:
             return None
         row = self.query_one(

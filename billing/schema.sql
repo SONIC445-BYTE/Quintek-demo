@@ -180,8 +180,16 @@ CREATE TABLE IF NOT EXISTS cost_ledger (
     cached_tokens        INTEGER,
     -- Provider-reported price per million tokens, in micro-minor-units so a
     -- fraction of a paise survives without a float.
-    price_in_micro       INTEGER,
-    price_out_micro      INTEGER,
+    --
+    -- BIGINT, NOT INTEGER, and this is not precautionary. A price of USD 0.30
+    -- per million output tokens -- a CHEAP model, and one in
+    -- configs/model_prices.json today -- converts to
+    -- 0.30 * 8500 paise/USD * 1_000_000 = 2,550,000,000 micro-paise, which is
+    -- past the 2,147,483,647 ceiling of a 32-bit integer. SQLite never
+    -- complained because its INTEGER is 64-bit whatever the column says;
+    -- PostgreSQL's INTEGER is 32-bit and rejects the row outright.
+    price_in_micro       BIGINT,
+    price_out_micro      BIGINT,
     -- MICRO minor units (millionths of a paise), not paise.
     --
     -- A single generation call costs a fraction of a paise. Storing that as
@@ -189,7 +197,13 @@ CREATE TABLE IF NOT EXISTS cost_ledger (
     -- row inflated a measured 10,000-call total from Rs 30 to Rs 100 -- a
     -- 3.3x over-report of the single line the economics dashboard exists to
     -- get right. Precision is kept here and rounded ONCE at aggregation.
-    cost_micro           INTEGER NOT NULL DEFAULT 0,
+    --
+    -- BIGINT for the same reason as the price columns above. A single call's
+    -- cost is far smaller than the per-million rate, so this one is headroom
+    -- rather than an observed overflow -- but SUM() over it is the number the
+    -- economics dashboard reports, and a 32-bit column is a poor place to
+    -- discover that a month of inference does not fit.
+    cost_micro           BIGINT NOT NULL DEFAULT 0,
     currency             TEXT NOT NULL DEFAULT 'INR',
     compute_units        INTEGER NOT NULL DEFAULT 0,
     questions_produced   INTEGER NOT NULL DEFAULT 0,

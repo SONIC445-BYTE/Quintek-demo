@@ -180,6 +180,28 @@ def make_handler(api: StudentAPI, billing=None, analytics=None):
             self.wfile.write(payload)
 
         def _dispatch(self, method: str) -> None:
+            """
+            Serve one request, and give the database connection back afterwards.
+
+            The `finally` is not defensive tidying; on Postgres it is what
+            keeps the service alive. `ThreadingHTTPServer` starts a NEW THREAD
+            per request and the connection caches are thread-local, so every
+            request checks a connection out of a bounded pool. Without the
+            return, the ninth concurrent request against a pool of eight
+            blocks until it times out, and the service stops answering while
+            looking perfectly healthy.
+
+            On SQLite `release()` is a no-op: reopening a file per request is
+            pure cost, and the handle is cheap to keep.
+            """
+            try:
+                self._serve(method)
+            finally:
+                api.db.release()
+                if billing is not None:
+                    billing.release()
+
+        def _serve(self, method: str) -> None:
             parsed = urlparse(self.path)
             params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
 

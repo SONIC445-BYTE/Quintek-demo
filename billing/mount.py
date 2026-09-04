@@ -65,6 +65,25 @@ class BillingMount:
             self._local.conn = conn
         return conn
 
+    def release(self) -> None:
+        """
+        Return this thread's connection, and drop the API bound to it.
+
+        On Postgres the connection goes back to a bounded pool, so a threaded
+        server does not open one backend per request. The cached `BillingAPI`
+        has to go with it: it holds the connection, and reusing it on the next
+        request would reach through a returned handle.
+
+        A no-op on SQLite, where the connection is a cheap file handle worth
+        keeping for the life of the thread.
+        """
+        conn = getattr(self._local, "conn", None)
+        if conn is None or not getattr(conn, "is_postgres", False):
+            return
+        conn.close()
+        self._local.conn = None
+        self._local.api = None
+
     def _api(self) -> BillingAPI:
         api = getattr(self._local, "api", None)
         if api is None:

@@ -136,12 +136,28 @@ CREATE TABLE IF NOT EXISTS notebook_concepts (
     PRIMARY KEY (notebook_id, concept_id)
 );
 
+-- `chunk_id` is nullable: a concept can be attributed to a source without a
+-- specific chunk. It is therefore NOT part of a PRIMARY KEY.
+--
+-- It used to be. SQLite tolerated that -- it permits NULL in a PRIMARY KEY
+-- column, a documented legacy quirk -- but the tolerance cost correctness:
+-- two identical rows with a NULL chunk_id were both accepted, so the
+-- `INSERT OR IGNORE` in student/concepts.py did not actually deduplicate.
+-- PostgreSQL does not tolerate it at all; it silently promotes the column to
+-- NOT NULL and then rejects the insert on live data.
+--
+-- Two partial unique indexes express the real intent on both engines: the
+-- triple is unique when a chunk is named, and the pair is unique when one is
+-- not.
 CREATE TABLE IF NOT EXISTS source_concepts (
     source_id  TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
     concept_id TEXT NOT NULL REFERENCES concepts(id) ON DELETE CASCADE,
-    chunk_id   TEXT REFERENCES source_chunks(id) ON DELETE SET NULL,
-    PRIMARY KEY (source_id, concept_id, chunk_id)
+    chunk_id   TEXT REFERENCES source_chunks(id) ON DELETE SET NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS ux_source_concepts_chunk
+    ON source_concepts(source_id, concept_id, chunk_id) WHERE chunk_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_source_concepts_nochunk
+    ON source_concepts(source_id, concept_id) WHERE chunk_id IS NULL;
 
 -- ---------------------------------------------------------------------------
 -- Questions
@@ -259,10 +275,15 @@ CREATE TABLE IF NOT EXISTS knowledge_gaps (
 );
 CREATE INDEX IF NOT EXISTS ix_gaps_user ON knowledge_gaps(user_id, resolved_at);
 
+-- `attempt_id` is NOT NULL because it is a primary key column and every
+-- caller supplies it: KnowledgeService._record_gap takes `attempt_id: str`
+-- and is only reached after the attempt has been written. Leaving it nullable
+-- was the same latent defect as source_concepts above -- SQLite accepted NULL
+-- in the key, PostgreSQL would have rejected the row.
 CREATE TABLE IF NOT EXISTS gap_links (
     gap_id      TEXT NOT NULL REFERENCES knowledge_gaps(id) ON DELETE CASCADE,
     question_id TEXT REFERENCES questions(id) ON DELETE CASCADE,
-    attempt_id  TEXT REFERENCES attempts(id) ON DELETE CASCADE,
+    attempt_id  TEXT NOT NULL REFERENCES attempts(id) ON DELETE CASCADE,
     notebook_id TEXT REFERENCES notebooks(id) ON DELETE CASCADE,
     source_id   TEXT REFERENCES sources(id) ON DELETE SET NULL,
     chunk_id    TEXT REFERENCES source_chunks(id) ON DELETE SET NULL,

@@ -40,6 +40,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+import persistence
+from persistence.dialect import schema_to_postgres
+
 SCHEMA = """
 PRAGMA journal_mode = WAL;
 
@@ -147,15 +150,26 @@ class InferenceLog:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()
-        self._connect().executescript(SCHEMA)
+        conn = self._connect()
+        if getattr(conn, "is_postgres", False):
+            conn.executescript(schema_to_postgres(SCHEMA))
+        else:
+            conn.executescript(SCHEMA)
+        conn.commit()
 
-    def _connect(self) -> sqlite3.Connection:
+    def _sqlite(self, path) -> sqlite3.Connection:
+        conn = sqlite3.connect(path, timeout=30, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA busy_timeout = 30000")
+        return conn
+
+    def _connect(self):
         conn = getattr(self._local, "conn", None)
         if conn is None:
-            conn = sqlite3.connect(self.path, timeout=30, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA foreign_keys = ON")
-            conn.execute("PRAGMA busy_timeout = 30000")
+            conn = persistence.connect(schema=persistence.INFERENCE_SCHEMA,
+                                       sqlite_path=self.path,
+                                       sqlite_factory=self._sqlite)
             self._local.conn = conn
         return conn
 
