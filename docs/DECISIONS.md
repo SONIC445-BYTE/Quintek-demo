@@ -353,7 +353,9 @@ first runtime DB dependency in a codebase whose only runtime dependency is
 because nothing below uses a SQLite-only feature except the immutability
 triggers, which have direct equivalents."*
 
-**Not started.** Requires a change proposal and quiz per `CHANGE_PROTOCOL.md`.
+**Not started.** Requires a change proposal per `CHANGE_PROTOCOL.md`. The
+Rule 3 quiz was waived for this change on 2026-09-04 by owner instruction —
+see **ADR-024**, which is procedural only and is not implementation approval.
 
 ## ADR-021 — Android build unverified
 
@@ -389,3 +391,41 @@ selected the slowest qualified model. Whether that was intentional design or
 an unexamined omission — **RATIONALE NOT RECOVERED, requires confirmation.**
 
 No policy has been invented. Documented as a V2 decision.
+
+## ADR-024 — Rule 3 quiz waived for ADR-020 (procedural only)
+
+**Date/phase:** 2026-09-04 · **Status:** RECORDED — governance decision
+**Provenance:** CONTEMPORANEOUS — owner instruction, verbatim below
+
+**Decision, as instructed by the project owner:**
+
+> Rule 3 quiz waived for ADR-020 Supabase/PostgreSQL migration by explicit
+> owner instruction. The waiver is procedural only and does not constitute
+> implementation approval. Existing Phase 1 findings and migration assessment
+> remain the technical basis for the decision.
+
+**Why the quiz was waived:** token and time efficiency. The Phase 1 assessment
+and the re-quiz were consuming budget out of proportion to what they added.
+
+**What this waiver does NOT do.** It does not waive, weaken or shorten:
+
+* testing — the Phase 1 test plan stands, including a failing-first test for
+  every compatibility finding and the concurrent-reservation invariant run
+  against PostgreSQL;
+* review;
+* security checks — including the Supabase schema-exposure and RLS
+  requirement;
+* any acceptance gate.
+
+**Implementation still requires the owner's explicit authorization.** The
+waiver removes the quiz step of `CHANGE_PROTOCOL.md` Rule 3 for this change
+and nothing else. `CHANGE_PROTOCOL.md` Rule 4 ("no mutation until authorized")
+is unaffected: as of this record, no implementation has begun, and none may
+begin without a separate explicit instruction.
+
+**Scope:** this waiver applies to ADR-020 only. It sets no precedent for any
+other change, and `CHANGE_PROTOCOL.md` itself is unamended.
+
+**Technical basis unchanged.** The Phase 1 read-only assessment is the
+technical record for this migration and is not reinterpreted or altered by
+this entry.
