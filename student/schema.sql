@@ -74,7 +74,20 @@ CREATE TABLE IF NOT EXISTS sources (
                 CHECK (status IN ('uploaded','chunking','processing','extracted','failed')),
     page_count  INTEGER NOT NULL DEFAULT 0,
     error       TEXT,
-    uploaded_at TEXT NOT NULL
+    uploaded_at TEXT NOT NULL,
+    -- Content hash of the stored bytes. Two uploads of the same file into one
+    -- notebook are ONE source: duplicates otherwise produce duplicate concepts
+    -- feeding a single revision schedule, so the same fact is scheduled twice
+    -- and the learner is drilled on it twice for no reason. Empty for sources
+    -- that carry no file (text, link, video).
+    checksum_sha256 TEXT NOT NULL DEFAULT '',
+    -- The quality gate's verdict on this source, and why. `rejected` never
+    -- reaches concept extraction.
+    quality     TEXT NOT NULL DEFAULT 'ok'
+                CHECK (quality IN ('ok','degraded','rejected')),
+    quality_reasons TEXT NOT NULL DEFAULT '[]',
+    mean_confidence REAL NOT NULL DEFAULT 1.0,
+    low_confidence_ratio REAL NOT NULL DEFAULT 0.0
 );
 CREATE INDEX IF NOT EXISTS ix_sources_notebook ON sources(notebook_id);
 
@@ -87,6 +100,13 @@ CREATE TABLE IF NOT EXISTS source_chunks (
     ordinal      INTEGER NOT NULL,
     text         TEXT NOT NULL,
     locator_json TEXT NOT NULL DEFAULT '{}',
+    -- How sure the extractor was about THIS text, and how it was produced.
+    -- Confidence must travel with the text: without it, OCR that misread a
+    -- drug dose is indistinguishable downstream from an exact text layer, and
+    -- every later stage reports success on a number nobody verified.
+    confidence   REAL NOT NULL DEFAULT 1.0,
+    extraction_method TEXT NOT NULL DEFAULT '',
+    needs_review INTEGER NOT NULL DEFAULT 0,
     status       TEXT NOT NULL DEFAULT 'pending'
                  CHECK (status IN ('pending','processing','processed','failed')),
     error        TEXT,

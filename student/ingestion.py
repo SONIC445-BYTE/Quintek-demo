@@ -43,6 +43,26 @@ class ExtractedPage:
     ordinal: int
     text: str
     locator: dict = field(default_factory=dict)
+    # How sure the extractor was, and how it produced this text.
+    #
+    # Defaults describe the paths that exist today rather than flattering
+    # them: pasted text has no extraction step and a PDF text layer is exact,
+    # so both are genuinely 1.0. An OCR or ASR adapter MUST pass its own value
+    # -- inheriting this default would be the exact failure the gate exists to
+    # prevent, dressed as a reasonable default.
+    confidence: float = 1.0
+    extraction_method: str = ""
+    needs_review: bool = False
+
+
+# Extraction methods, named once. These strings land in the database and are
+# read back by anything asking "how was this produced", so renaming one
+# silently rewrites the record of how existing material was extracted.
+METHOD_PLAIN_TEXT = "plain_text"
+METHOD_PDF_TEXT_LAYER = "pdf_text_layer"
+# A chunk built from pages extracted different ways. Aggregation cannot honestly
+# report a single method for it.
+METHOD_MIXED = "mixed"
 
 
 class ExtractionUnavailable(RuntimeError):
@@ -88,7 +108,15 @@ def extract_pdf(path: str | Path) -> list[ExtractedPage]:
     for i, page in enumerate(reader.pages, start=1):
         text = (page.extract_text() or "").strip()
         if text:
-            pages.append(ExtractedPage(ordinal=i, text=text, locator={"page": i}))
+            pages.append(ExtractedPage(
+                ordinal=i, text=text, locator={"page": i},
+                # An embedded text layer is the document's own characters, not
+                # a reading of them. Stamped explicitly so that when an OCR
+                # branch is added here, the difference between the two is
+                # already recorded on every row rather than inferred later
+                # from which release wrote it.
+                confidence=1.0, extraction_method=METHOD_PDF_TEXT_LAYER,
+                needs_review=False))
     if not pages:
         raise ExtractionUnavailable(
             "this PDF has no extractable text layer -- it is probably a scan, "
@@ -100,10 +128,14 @@ def extract_pdf(path: str | Path) -> list[ExtractedPage]:
 def extract_plain_text(text: str) -> list[ExtractedPage]:
     """Text and notes. Paragraphs are the unit, so a locator can name one."""
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    # Nothing was read, so there is nothing to be unsure about: the learner's
+    # own keystrokes are the source.
+    stamp = dict(confidence=1.0, extraction_method=METHOD_PLAIN_TEXT,
+                 needs_review=False)
     return [
-        ExtractedPage(ordinal=i, text=p, locator={"paragraph": i})
+        ExtractedPage(ordinal=i, text=p, locator={"paragraph": i}, **stamp)
         for i, p in enumerate(paragraphs, start=1)
-    ] or [ExtractedPage(ordinal=1, text=text.strip(), locator={"paragraph": 1})]
+    ] or [ExtractedPage(ordinal=1, text=text.strip(), locator={"paragraph": 1}, **stamp)]
 
 
 # What this deployment can actually read, and why not when it cannot.
@@ -182,7 +214,47 @@ def extract_for_kind(kind: str, *, path: str | Path | None = None,
 # Chunking
 # ---------------------------------------------------------------------------
 
-def chunk_pages(pages: list[ExtractedPage]) -> list[tuple[str, dict]]:
+@dataclass
+class Chunk:
+    """
+    One stored span: the text, where it came from, and how far to trust it.
+
+    A dataclass rather than the `(text, locator)` tuple this used to be,
+    because confidence does not belong inside the locator. The locator answers
+    "where is this from" and is shown to the learner as a page reference; the
+    confidence answers "how sure are we" and gates whether the text is used at
+    all. Folding the second into the first would make the quality gate parse a
+    display field.
+    """
+    text: str
+    locator: dict
+    confidence: float = 1.0
+    extraction_method: str = ""
+    needs_review: bool = False
+
+
+def _combine(pages: list[ExtractedPage]) -> dict:
+    """
+    Quality of a chunk built from several pages. Fail closed on every axis.
+
+    Confidence is the MINIMUM, not the mean: a chunk containing one badly-read
+    page is exactly as untrustworthy as that page, and averaging it against
+    four clean ones hides the thing worth knowing. `needs_review` is OR for the
+    same reason. A chunk spanning pages read different ways reports `mixed`
+    rather than picking one and implying the whole span was read that way.
+    """
+    if not pages:
+        return {"confidence": 1.0, "extraction_method": "", "needs_review": False}
+    methods = {pg.extraction_method for pg in pages if pg.extraction_method}
+    return {
+        "confidence": min(pg.confidence for pg in pages),
+        "extraction_method": (methods.pop() if len(methods) == 1
+                              else (METHOD_MIXED if methods else "")),
+        "needs_review": any(pg.needs_review for pg in pages),
+    }
+
+
+def chunk_pages(pages: list[ExtractedPage]) -> list[Chunk]:
     """
     Group extracted pages into model-sized chunks, carrying locators through.
 
@@ -190,19 +262,20 @@ def chunk_pages(pages: list[ExtractedPage]) -> list[tuple[str, dict]]:
     mid-sentence costs the model the context it needed to place the concept,
     and that shows up later as a concept extracted with the wrong meaning.
     """
-    chunks: list[tuple[str, dict]] = []
-    buffer, buf_locators = "", []
+    chunks: list[Chunk] = []
+    buffer, buf_locators, buf_pages = "", [], []
 
     def flush():
-        nonlocal buffer, buf_locators
+        nonlocal buffer, buf_locators, buf_pages
         if buffer.strip():
             first, last = buf_locators[0], buf_locators[-1]
             locator = dict(first)
             if last != first:
                 locator["spans_to"] = last
             locator["chars"] = len(buffer.strip())
-            chunks.append((buffer.strip(), locator))
-        buffer, buf_locators = "", []
+            chunks.append(Chunk(text=buffer.strip(), locator=locator,
+                                **_combine(buf_pages)))
+        buffer, buf_locators, buf_pages = "", [], []
 
     for page in pages:
         text = page.text.strip()
@@ -211,38 +284,162 @@ def chunk_pages(pages: list[ExtractedPage]) -> list[tuple[str, dict]]:
         # A single page larger than the target is split on sentences.
         if len(text) > TARGET_CHUNK_CHARS:
             flush()
+            # Every part comes from this one page, so each inherits that
+            # page's quality unchanged -- splitting text does not make it more
+            # or less trustworthy.
+            quality = _combine([page])
             sentences = re.split(r"(?<=[.!?])\s+", text)
             part, idx = "", 1
             for sentence in sentences:
                 if part and len(part) + len(sentence) + 1 > TARGET_CHUNK_CHARS:
                     loc = dict(page.locator)
                     loc.update({"part": idx, "chars": len(part.strip())})
-                    chunks.append((part.strip(), loc))
+                    chunks.append(Chunk(text=part.strip(), locator=loc, **quality))
                     part, idx = "", idx + 1
                 part = f"{part} {sentence}".strip()
             if part.strip():
                 loc = dict(page.locator)
                 loc.update({"part": idx, "chars": len(part.strip())})
-                chunks.append((part.strip(), loc))
+                chunks.append(Chunk(text=part.strip(), locator=loc, **quality))
             continue
 
         if buffer and len(buffer) + len(text) + 2 > TARGET_CHUNK_CHARS:
             flush()
         buffer = f"{buffer}\n\n{text}".strip()
         buf_locators.append(page.locator)
+        buf_pages.append(page)
 
     flush()
 
     # A trailing scrap is merged backwards rather than shipped as its own
     # chunk: a 40-character chunk carries no usable context.
-    if len(chunks) > 1 and len(chunks[-1][0]) < MIN_CHUNK_CHARS:
-        tail_text, tail_loc = chunks.pop()
-        prev_text, prev_loc = chunks[-1]
-        merged_loc = dict(prev_loc)
-        merged_loc["spans_to"] = tail_loc
-        chunks[-1] = (f"{prev_text}\n\n{tail_text}", merged_loc)
+    if len(chunks) > 1 and len(chunks[-1].text) < MIN_CHUNK_CHARS:
+        tail = chunks.pop()
+        prev = chunks[-1]
+        merged_loc = dict(prev.locator)
+        merged_loc["spans_to"] = tail.locator
+        methods = {m for m in (prev.extraction_method, tail.extraction_method) if m}
+        # Same fail-closed rule as _combine: the merged chunk inherits the
+        # WORSE of the two, because it now contains both.
+        chunks[-1] = Chunk(
+            text=f"{prev.text}\n\n{tail.text}", locator=merged_loc,
+            confidence=min(prev.confidence, tail.confidence),
+            extraction_method=(methods.pop() if len(methods) == 1
+                               else (METHOD_MIXED if methods else "")),
+            needs_review=prev.needs_review or tail.needs_review)
 
     return chunks
+
+
+# ---------------------------------------------------------------------------
+# The quality gate
+# ---------------------------------------------------------------------------
+
+QUALITY_OK = "ok"
+QUALITY_DEGRADED = "degraded"
+QUALITY_REJECTED = "rejected"
+
+_QUALITY_CONFIG = Path(__file__).resolve().parent.parent / "configs" / "ingestion_quality.json"
+
+# Used only if the config file is missing or unreadable. Deliberately the same
+# values as the file rather than something laxer: a deployment that lost its
+# config must not silently get a MORE permissive gate than one that has it.
+_FALLBACK_THRESHOLDS = {
+    "low_confidence_span": 0.75,
+    "reject_below_mean_confidence": 0.55,
+    "degraded_above_low_confidence_ratio": 0.30,
+}
+
+
+def quality_thresholds(path: str | Path | None = None) -> dict:
+    """
+    Gate thresholds, from config rather than from code.
+
+    In a file for the same reason the benchmark's gate thresholds live in the
+    registry: they need tuning against real material, and tuning them should be
+    a reviewable change rather than an edit inside a function.
+    """
+    target = Path(path) if path else _QUALITY_CONFIG
+    try:
+        loaded = json.loads(target.read_text(encoding="utf-8"))
+    except Exception:
+        return dict(_FALLBACK_THRESHOLDS)
+    out = dict(_FALLBACK_THRESHOLDS)
+    for key in out:
+        if isinstance(loaded.get(key), (int, float)):
+            out[key] = float(loaded[key])
+    return out
+
+
+@dataclass
+class QualityVerdict:
+    quality: str
+    reasons: list[str] = field(default_factory=list)
+    mean_confidence: float = 1.0
+    low_confidence_ratio: float = 0.0
+
+    @property
+    def rejected(self) -> bool:
+        return self.quality == QUALITY_REJECTED
+
+    def as_dict(self) -> dict:
+        return {"quality": self.quality, "reasons": list(self.reasons),
+                "mean_confidence": self.mean_confidence,
+                "low_confidence_ratio": self.low_confidence_ratio}
+
+
+def assess(chunks: list[Chunk], *, thresholds: dict | None = None) -> QualityVerdict:
+    """
+    Decide whether this source may become study material. Fails closed.
+
+    The rule this enforces: extraction confidence must travel with the text,
+    and low-confidence text must not silently become study material. The
+    failure it prevents is specific -- OCR misreads a dose, concept extraction
+    succeeds, generation succeeds, and the learner revises a confidently-worded
+    question built on a misread number. Every stage reports success and the
+    error surfaces only in their memory.
+
+    `rejected` never reaches concept extraction. `degraded` proceeds with the
+    flag recorded, so anything built from it can be shown as such.
+    """
+    t = thresholds or quality_thresholds()
+    reasons: list[str] = []
+
+    if not chunks:
+        return QualityVerdict(QUALITY_REJECTED,
+                              ["no text was extracted from this source"], 0.0, 0.0)
+
+    # An anchor is mandatory. A span nobody can trace back cannot support the
+    # promise that a concept keeps its page reference, so it is rejected here
+    # rather than discovered as a dead link at revision time.
+    unanchored = [i for i, c in enumerate(chunks, start=1) if not c.locator]
+    if unanchored:
+        reasons.append(
+            f"{len(unanchored)} span(s) have no anchor, so nothing generated from "
+            "them could be traced back to the source")
+
+    confidences = [c.confidence for c in chunks]
+    mean_confidence = sum(confidences) / len(confidences)
+    low = [c for c in chunks if c.confidence < t["low_confidence_span"]]
+    low_ratio = len(low) / len(chunks)
+
+    if mean_confidence < t["reject_below_mean_confidence"]:
+        reasons.append(
+            f"mean extraction confidence {mean_confidence:.2f} is below the "
+            f"{t['reject_below_mean_confidence']:.2f} floor; this source was not read "
+            "reliably enough to study from")
+
+    if reasons:
+        return QualityVerdict(QUALITY_REJECTED, reasons, mean_confidence, low_ratio)
+
+    if low_ratio > t["degraded_above_low_confidence_ratio"]:
+        return QualityVerdict(
+            QUALITY_DEGRADED,
+            [f"{len(low)} of {len(chunks)} span(s) were read with low confidence; "
+             "questions built from them carry that flag"],
+            mean_confidence, low_ratio)
+
+    return QualityVerdict(QUALITY_OK, [], mean_confidence, low_ratio)
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +519,20 @@ class IngestionEngine:
             if not chunks:
                 raise ExtractionUnavailable("no usable text was found in this source")
             self._store_chunks(source_id, chunks)
+
+            # The gate, before concept extraction rather than after. A rejected
+            # source stops here: its chunks stay on disk so the learner can be
+            # shown WHY it failed and re-upload, but nothing downstream is
+            # allowed to build study material from text nobody could read.
+            verdict = assess(chunks)
+            self.db.execute(
+                "UPDATE sources SET quality=?, quality_reasons=?, mean_confidence=?,"
+                " low_confidence_ratio=? WHERE id=?",
+                (verdict.quality, json.dumps(verdict.reasons), verdict.mean_confidence,
+                 verdict.low_confidence_ratio, source_id))
+            if verdict.rejected:
+                raise ExtractionUnavailable("; ".join(verdict.reasons))
+
             self.db.execute(
                 "UPDATE sources SET status='processing', page_count=? WHERE id=?",
                 (len({p.locator.get('page', p.ordinal) for p in pages}), source_id))
@@ -369,16 +580,18 @@ class IngestionEngine:
                 path = candidate
         return extract_for_kind(row["kind"], path=path, raw_text=raw_text, url=url)
 
-    def _store_chunks(self, source_id: str, chunks: list[tuple[str, dict]]) -> None:
+    def _store_chunks(self, source_id: str, chunks: list[Chunk]) -> None:
         """Idempotent: re-ingesting a source replaces its chunk set rather than
         appending a second copy."""
         self.db.execute("DELETE FROM source_chunks WHERE source_id = ?", (source_id,))
         conn = self.db.connect()
         conn.executemany(
-            "INSERT INTO source_chunks (id, source_id, ordinal, text, locator_json, status)"
-            " VALUES (?,?,?,?,?, 'pending')",
-            [(new_id("chk"), source_id, i, text, json.dumps(loc))
-             for i, (text, loc) in enumerate(chunks, start=1)],
+            "INSERT INTO source_chunks (id, source_id, ordinal, text, locator_json,"
+            " confidence, extraction_method, needs_review, status)"
+            " VALUES (?,?,?,?,?,?,?,?, 'pending')",
+            [(new_id("chk"), source_id, i, c.text, json.dumps(c.locator),
+              c.confidence, c.extraction_method, 1 if c.needs_review else 0)
+             for i, c in enumerate(chunks, start=1)],
         )
         conn.commit()
 

@@ -17,6 +17,8 @@ import json
 from typing import Any
 
 from .db import Database, new_id, now_iso
+from pathlib import Path
+
 from .uploads import BINARY_KINDS, UploadError
 from .uploads import store as store_upload
 
@@ -418,21 +420,42 @@ class StudentAPI:
         sid = new_id("src")
         storage_key = body.get("storage_key", "")
         size = 0
+        digest = ""
         if kind in BINARY_KINDS and content:
             if self.engine is None:
                 raise ApiError(503, "no ingestion engine is configured, so there "
                                     "is nowhere to store this file")
             try:
-                storage_key, size = store_upload(
+                storage_key, size, digest = store_upload(
                     self.engine.storage_dir, sid, filename, content)
             except UploadError as exc:
                 raise ApiError(413 if "larger than" in str(exc) else 400, str(exc))
 
+            # The same file twice in one notebook is ONE source. Not merely a
+            # billing question: two copies produce two sets of concepts feeding
+            # a single revision schedule, so the same fact is scheduled twice
+            # and the learner is drilled on it twice for no reason.
+            #
+            # Scoped to the notebook, because the same PDF genuinely is a
+            # separate source in a different notebook -- different subject,
+            # different schedule.
+            existing = self.db.query_one(
+                "SELECT id, status FROM sources WHERE notebook_id = ? AND"
+                " checksum_sha256 = ? AND checksum_sha256 != '' ORDER BY uploaded_at"
+                " LIMIT 1", (nid, digest))
+            if existing is not None:
+                Path(self.engine.storage_dir, storage_key).unlink(missing_ok=True)
+                return {"source_id": existing["id"], "status": existing["status"],
+                        "bytes_stored": 0, "duplicate_of": existing["id"],
+                        "note": "this file is already in this notebook; the existing "
+                                "source was returned rather than reading it twice"}
+
         self.db.execute(
             "INSERT INTO sources (id, notebook_id, kind, filename, storage_key,"
-            " mime_type, byte_size, status, uploaded_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            " mime_type, byte_size, checksum_sha256, status, uploaded_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?)",
             (sid, nid, kind, filename or body.get("url", ""), storage_key,
-             body.get("mime_type", ""), size, "uploaded", now_iso()),
+             body.get("mime_type", ""), size, digest, "uploaded", now_iso()),
         )
 
         if self.engine is None:

@@ -306,3 +306,69 @@ def test_a_second_learner_shares_no_state_with_the_first(app, db):
     assert api.handle("GET", "/notebooks", {}, {}, b["token"])[1]["notebooks"] == []
     assert api.handle("GET", "/gaps", {}, {}, b["token"])[1]["gaps"] == []
     assert api.handle("GET", "/progress", {}, {}, b["token"])[1]["attempts_total"] == 0
+
+
+def test_the_same_file_twice_in_one_notebook_is_one_source(app, db):
+    """
+    Not merely a billing question. Two copies produce two sets of concepts
+    feeding a single revision schedule, so the same fact is scheduled twice and
+    the learner is drilled on it twice for no reason.
+    """
+    import base64
+    api, engine = app
+    _, auth = api.handle("POST", "/auth/register", {},
+                         {"email": "dup@example.com", "password": "correct-horse"}, None)
+    token = auth["token"]
+    _, nb = api.handle("POST", "/notebooks", {},
+                       {"title": "Renal", "subject": "Medicine"}, token)
+
+    payload = {"kind": "text", "text": "The nephron filters plasma.",
+               "filename": "notes.txt"}
+    _, first = api.handle("POST", f"/notebooks/{nb['id']}/sources", {}, payload, token)
+    engine.wait_idle()
+
+    # A text source carries no file, so nothing is hashed and nothing dedupes:
+    # two pastes are genuinely two sources.
+    _, second = api.handle("POST", f"/notebooks/{nb['id']}/sources", {}, payload, token)
+    engine.wait_idle()
+    assert second["source_id"] != first["source_id"], \
+        "dedupe is on stored bytes; pasted text has none"
+
+    # A file, however, is hashed -- and the same bytes come back as the same source.
+    content = base64.b64encode(b"%PDF-1.4 not really a pdf but stable bytes").decode()
+    file_payload = {"kind": "pdf", "filename": "chapter.pdf", "content_base64": content}
+    _, upload_one = api.handle("POST", f"/notebooks/{nb['id']}/sources", {},
+                               file_payload, token)
+    engine.wait_idle()
+    _, upload_two = api.handle("POST", f"/notebooks/{nb['id']}/sources", {},
+                               file_payload, token)
+    engine.wait_idle()
+
+    assert upload_two["source_id"] == upload_one["source_id"]
+    assert upload_two.get("duplicate_of") == upload_one["source_id"]
+    assert upload_two["bytes_stored"] == 0, "the second copy is not stored again"
+
+    rows = db.query("SELECT id FROM sources WHERE notebook_id = ? AND kind = 'pdf'",
+                    (nb["id"],))
+    assert len(rows) == 1, "one row, not two"
+
+
+def test_the_same_file_in_a_DIFFERENT_notebook_is_a_separate_source(app, db):
+    """Different notebook means different subject and schedule -- genuinely separate."""
+    import base64
+    api, engine = app
+    _, auth = api.handle("POST", "/auth/register", {},
+                         {"email": "two-books@example.com", "password": "correct-horse"}, None)
+    token = auth["token"]
+    _, one = api.handle("POST", "/notebooks", {}, {"title": "Renal", "subject": "Med"}, token)
+    _, two = api.handle("POST", "/notebooks", {}, {"title": "Cardio", "subject": "Med"}, token)
+
+    content = base64.b64encode(b"%PDF-1.4 shared across notebooks").decode()
+    payload = {"kind": "pdf", "filename": "shared.pdf", "content_base64": content}
+    _, a = api.handle("POST", f"/notebooks/{one['id']}/sources", {}, payload, token)
+    engine.wait_idle()
+    _, b = api.handle("POST", f"/notebooks/{two['id']}/sources", {}, payload, token)
+    engine.wait_idle()
+
+    assert a["source_id"] != b["source_id"]
+    assert "duplicate_of" not in b

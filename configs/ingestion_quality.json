@@ -1,0 +1,8 @@
+{
+  "_note": "Thresholds for the ingestion quality gate. In a config file rather than in code for the same reason the benchmark's gate thresholds live in the registry: they need tuning against real material, and tuning them should be a visible, reviewable change rather than an edit buried in a function.",
+  "_calibration_state": "UNCALIBRATED - engineering starting points. No path in this deployment currently produces a confidence below 1.0 (pasted text has no extraction step; a PDF text layer is exact), so these numbers have never been exercised against real low-confidence material. They must be calibrated on real OCR/ASR output before any path that produces uncertainty is shipped.",
+
+  "low_confidence_span": 0.75,
+  "reject_below_mean_confidence": 0.55,
+  "degraded_above_low_confidence_ratio": 0.30
+}
