@@ -33,7 +33,7 @@ def b64(raw: bytes) -> str:
 # ------------------------------------------------------------------ storing
 
 def test_a_file_is_written_where_ingestion_will_look_for_it(tmp_path) -> None:
-    key, size = store(tmp_path, "src_1", "iron handling.pdf", b64(b"%PDF-1.4 body"))
+    key, size, digest = store(tmp_path, "src_1", "iron handling.pdf", b64(b"%PDF-1.4 body"))
     assert (tmp_path / key).read_bytes() == b"%PDF-1.4 body"
     assert size == len(b"%PDF-1.4 body")
 
@@ -43,22 +43,22 @@ def test_the_stored_name_comes_from_the_source_id_not_the_client(tmp_path) -> No
     `../../etc/passwd` is a valid filename. The key is derived from an id the
     SERVER generated, so a crafted name cannot choose where the bytes land.
     """
-    key, _ = store(tmp_path, "src_9", "../../etc/passwd", b64(b"x"))
+    key, _, _ = store(tmp_path, "src_9", "../../etc/passwd", b64(b"x"))
     assert key.startswith("src_9")
     assert "/" not in key and ".." not in key
     assert (tmp_path / key).exists()
 
 
 def test_two_learners_uploading_the_same_filename_do_not_collide(tmp_path) -> None:
-    first, _ = store(tmp_path, "src_a", "notes.pdf", b64(b"one"))
-    second, _ = store(tmp_path, "src_b", "notes.pdf", b64(b"two"))
+    first, _, _ = store(tmp_path, "src_a", "notes.pdf", b64(b"one"))
+    second, _, _ = store(tmp_path, "src_b", "notes.pdf", b64(b"two"))
     assert first != second
     assert (tmp_path / first).read_bytes() == b"one"
     assert (tmp_path / second).read_bytes() == b"two"
 
 
 def test_an_odd_extension_is_dropped_rather_than_trusted(tmp_path) -> None:
-    key, _ = store(tmp_path, "src_c", "notes.p df/../x", b64(b"x"))
+    key, _, _ = store(tmp_path, "src_c", "notes.p df/../x", b64(b"x"))
     assert key == "src_c"
 
 
@@ -270,11 +270,11 @@ def test_a_demonstration_belongs_to_the_learner_who_wrote_it(tmp_path) -> None:
 
     generator = QuestionGenerator(db, ai=None)
 
-    assert [d["id"] for d in generator._demos([mine["id"]], a)] == [mine["id"]]
-    assert generator._demos([theirs["id"]], a) == [], (
+    assert [d["id"] for d in generator._demos([mine["id"]], owner_id=a)] == [mine["id"]]
+    assert generator._demos([theirs["id"]], owner_id=a) == [], (
         "one learner read another learner's reference question")
     # Asking for both returns only your own.
-    assert [d["id"] for d in generator._demos([mine["id"], theirs["id"]], a)] \
+    assert [d["id"] for d in generator._demos([mine["id"], theirs["id"]], owner_id=a)] \
         == [mine["id"]]
 
 
@@ -291,7 +291,7 @@ def test_a_demonstrations_text_cannot_reach_another_learners_prompt(tmp_path) ->
     prompt = generator.build_prompt(
         count=1, passages=[{"text": "A passage.", "locator_json": "{}"}],
         target_names=["Ferritin"], related_names=[],
-        demos=generator._demos([theirs["id"]], a),
+        demos=generator._demos([theirs["id"]], owner_id=a),
         family="", difficulty="", reasoning_depth="", constraints="")
     assert secret not in prompt
 
@@ -312,9 +312,31 @@ def test_the_grounding_rule_travels_with_every_demonstration(tmp_path) -> None:
     prompt = generator.build_prompt(
         count=1, passages=[{"text": "A passage.", "locator_json": "{}"}],
         target_names=["Ferritin"], related_names=[],
-        demos=generator._demos([demo["id"]], a),
+        demos=generator._demos([demo["id"]], owner_id=a),
         family="", difficulty="", reasoning_depth="", constraints="")
 
     assert "DEMONSTRATIONS" in prompt
     assert "STYLE ONLY" in prompt
     assert "Never reuse a clinical fact" in prompt
+
+
+def test_the_checksum_is_over_the_decoded_bytes_not_the_base64(tmp_path):
+    """
+    The same file re-encoded by a different client -- different padding, line
+    wrapping, or a data: prefix -- is the same file and must hash the same.
+    Hashing the transport encoding would make dedupe depend on who uploaded it.
+    """
+    from student.uploads import checksum
+    raw = b"%PDF-1.4 identical bytes"
+    plain = b64(raw)
+    prefixed = "data:application/pdf;base64," + plain
+
+    _, _, one = store(tmp_path, "src_x", "a.pdf", plain)
+    _, _, two = store(tmp_path, "src_y", "a.pdf", prefixed)
+    assert one == two == checksum(raw)
+
+
+def test_different_bytes_hash_differently(tmp_path):
+    _, _, one = store(tmp_path, "src_p", "a.pdf", b64(b"one"))
+    _, _, two = store(tmp_path, "src_q", "a.pdf", b64(b"two"))
+    assert one != two

@@ -97,7 +97,10 @@ class EvalAPI:
             return []
         from .orchestration import ExecutionLog
 
-        return ExecutionLog(self.execution_log_path).all()
+        # measurements(), not all(): test-origin and fixture records share this
+        # file, and this feeds the median latency shown on the learner-facing
+        # /ai/eval screen.
+        return ExecutionLog(self.execution_log_path).measurements()
 
     def _latency_for(self, candidate_id: str) -> float | None:
         lats = [r.latency_ms for r in self._executions()

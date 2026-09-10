@@ -171,6 +171,19 @@ class Database:
         migrations = [
             ("production_deployments", "deactivated_by", "TEXT NOT NULL DEFAULT ''"),
             ("sources", "byte_size", "INTEGER NOT NULL DEFAULT 0"),
+            # Ingestion quality. Existing rows default to the values that were
+            # true when they were written: everything already in the database
+            # came from a text layer or pasted text, both exact, so 1.0 /
+            # 'ok' is a description of those rows rather than an optimistic
+            # guess about them.
+            ("sources", "checksum_sha256", "TEXT NOT NULL DEFAULT ''"),
+            ("sources", "quality", "TEXT NOT NULL DEFAULT 'ok'"),
+            ("sources", "quality_reasons", "TEXT NOT NULL DEFAULT '[]'"),
+            ("sources", "mean_confidence", "REAL NOT NULL DEFAULT 1.0"),
+            ("sources", "low_confidence_ratio", "REAL NOT NULL DEFAULT 0.0"),
+            ("source_chunks", "confidence", "REAL NOT NULL DEFAULT 1.0"),
+            ("source_chunks", "extraction_method", "TEXT NOT NULL DEFAULT ''"),
+            ("source_chunks", "needs_review", "INTEGER NOT NULL DEFAULT 0"),
         ]
         for table, column, ddl in migrations:
             existing = schema_support.columns_of(conn, table)

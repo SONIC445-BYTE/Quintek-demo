@@ -26,6 +26,7 @@ Two rules the caps encode:
 from __future__ import annotations
 
 import base64
+import hashlib
 import binascii
 import re
 from pathlib import Path
@@ -86,10 +87,22 @@ def decode(content_base64: str) -> bytes:
     return raw
 
 
-def store(storage_dir: str | Path, source_id: str, filename: str,
-          content_base64: str) -> tuple[str, int]:
+def checksum(raw: bytes) -> str:
     """
-    Write the bytes and return `(storage_key, size)`.
+    Content hash of the stored bytes.
+
+    Over the DECODED bytes, not the base64 text: the same file re-encoded by a
+    different client, or with different padding or line wrapping, is the same
+    file and must hash the same. Hashing the transport encoding would make
+    dedupe depend on who uploaded it.
+    """
+    return hashlib.sha256(raw).hexdigest()
+
+
+def store(storage_dir: str | Path, source_id: str, filename: str,
+          content_base64: str) -> tuple[str, int, str]:
+    """
+    Write the bytes and return `(storage_key, size, checksum_sha256)`.
 
     The key is derived from the SOURCE ID, which the server generated, so two
     learners uploading `notes.pdf` cannot collide and a crafted name cannot
@@ -106,4 +119,4 @@ def store(storage_dir: str | Path, source_id: str, filename: str,
     if target.parent.resolve() != directory.resolve():
         raise UploadError("refusing to write outside the storage directory")
     target.write_bytes(raw)
-    return key, len(raw)
+    return key, len(raw), checksum(raw)

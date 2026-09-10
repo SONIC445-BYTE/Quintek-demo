@@ -1510,6 +1510,17 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
                   </label>
                 </sc-if>
 
+                <sc-if value="{{ sourceWantsGallery }}" hint-placeholder-val="{{ true }}">
+                  <label style="display:flex;align-items:center;gap:11px;min-height:44px;padding:0 13px;background:#fff;border:1px solid #E0DDD4;border-radius:5px;cursor:pointer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#5d6467" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;flex:none">
+                      <path d="{{ sourceGalleryIcon }}"></path>
+                    </svg>
+                    <span style="flex:1;min-width:0;font-size:12.5px;color:#5d6467">A photo you already took</span>
+                    <span style="flex:none;font-size:11.5px;font-weight:600;color:#1E7A57">Choose from gallery</span>
+                    <input type="file" accept="{{ sourceAccept }}" onChange="{{ setSourceFile }}" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden" />
+                  </label>
+                </sc-if>
+
                 <sc-if value="{{ sourceWantsTextarea }}" hint-placeholder-val="{{ true }}">
                   <textarea value="{{ sourceValue }}" onChange="{{ setSourceValue }}" placeholder="{{ sourcePlaceholder }}" rows="6" style="min-height:120px;padding:11px;background:#FAFAF8;border:1px solid #E0DDD4;border-radius:5px;outline:none;resize:vertical;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;line-height:1.55;color:#16191A"></textarea>
                 </sc-if>
@@ -3768,6 +3779,18 @@ class Component extends DCLogic {
        * document picker. */
       sourceCapture: s.srcType === 'image' ? 'environment' : '',
       sourceFileIcon: ICONS[s.srcType === 'image' ? 'maximize' : 'file'],
+      /* The gallery path, and why it is a SECOND input rather than a flag on
+       * the first. On Android `capture` is not a hint: with it the OS opens
+       * the camera, without it the OS opens the picker. One input therefore
+       * offers exactly one of the two, and the photo kind needs both -- a
+       * board photo taken now, and the ward photo taken yesterday. Two inputs,
+       * two visible actions.
+       *
+       * The gallery input omits `capture` ENTIRELY rather than setting it
+       * empty: `capture=""` is still a present attribute, and some Android
+       * browsers read presence, not value. */
+      sourceWantsGallery: s.srcType === 'image',
+      sourceGalleryIcon: ICONS.layers,
       sourceFileName: s.srcFileName
         || (s.srcType === 'image' ? 'No image chosen yet' : 'No file chosen yet'),
       sourceFileFg: s.srcFileName ? '#16191A' : '#9aa0a2',
@@ -3779,9 +3802,19 @@ class Component extends DCLogic {
        * NAME belongs on screen. */
       setSourceFile: (e) => {
         const file = e && e.target && e.target.files && e.target.files[0];
+        /* Cancellation: the picker fires change with an empty list. Returning
+         * here leaves any previously chosen file exactly as it was, rather
+         * than clearing a good selection because the user changed their mind
+         * about replacing it. */
         if (!file) return;
         this._sourceFile = file;
         this.setState({ srcFileName: file.name, srcValue: file.name });
+        /* Clear the input AFTER the File is captured. Without this, choosing
+         * the same file again fires no change event -- the value is unchanged
+         * -- and the control reads as a dead button. The File object above
+         * stays valid; only the input's value is reset. Assigning '' does not
+         * itself fire change. */
+        if (e.target) e.target.value = '';
       },
       sourceHint: { pdf: 'Read page by page, so every concept keeps its page reference.',
         image: 'Handwriting is read too. The image itself stays as the reference.',

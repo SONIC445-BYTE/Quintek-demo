@@ -76,17 +76,17 @@ def test_generation_without_source_passages_is_refused(db):
                (uid, now_iso()))
     gen = QuestionGenerator(db, _engine(db, _Scripted([])))
     with pytest.raises(GenerationFailed, match="no source passages"):
-        gen.generate(notebook_id="nb", count=3)
+        gen.generate(notebook_id="nb", count=3, owner_id=uid)
 
 
 def test_the_prompt_carries_passages_targets_related_and_the_grounding_rule(db, seeded):
-    _, a, b = seeded
+    uid, a, b = seeded
     provider = _Scripted(['{"questions": []}'])
     gen = QuestionGenerator(db, _engine(db, provider))
     ConceptStore(db).relate(a, b, "measured_by")
 
     with pytest.raises(GenerationFailed):
-        gen.generate(notebook_id="nb", count=1, concept_ids=[a])
+        gen.generate(notebook_id="nb", count=1, concept_ids=[a], owner_id=uid)
 
     prompt = provider.prompts[0]
     assert "fractional excretion of sodium is below 1%" in prompt  # the passage
@@ -107,7 +107,7 @@ def test_demonstrations_are_marked_style_only_and_the_rule_is_repeated(db, seede
     provider = _Scripted(['{"questions": []}'])
     gen = QuestionGenerator(db, _engine(db, provider))
     with pytest.raises(GenerationFailed):
-        gen.generate(notebook_id="nb", count=1, concept_ids=[a], demo_ids=["d1"])
+        gen.generate(notebook_id="nb", count=1, concept_ids=[a], demo_ids=["d1"], owner_id=uid)
 
     prompt = provider.prompts[0]
     assert prompt.count("STYLE ONLY") >= 2
@@ -121,14 +121,14 @@ def test_demonstrations_are_marked_style_only_and_the_rule_is_repeated(db, seede
 # ---------------------------------------------------------------------------
 
 def test_a_generated_question_keeps_full_provenance(db, seeded):
-    _, a, _ = seeded
+    uid, a, _ = seeded
     reply = json.dumps({"questions": [{
         "stem": "A patient has FeNa of 0.4%. What does this indicate?",
         "options": ["Pre-renal AKI", "Intrinsic AKI", "Post-renal AKI", "Normal"],
         "correct_index": 0, "rationale": "FeNa below 1% indicates pre-renal.",
         "concepts_tested": ["Pre-renal AKI"], "passage": 1}]})
     gen = QuestionGenerator(db, _engine(db, _Scripted([reply])))
-    ids = gen.generate(notebook_id="nb", count=1, concept_ids=[a], demo_ids=["d1"])
+    ids = gen.generate(notebook_id="nb", count=1, concept_ids=[a], demo_ids=["d1"], owner_id=uid)
 
     q = db.query_one("SELECT * FROM questions WHERE id = ?", (ids[0],))
     assert q["source_id"] == "src" and q["chunk_id"] == "chk"
@@ -143,24 +143,24 @@ def test_a_generated_question_keeps_full_provenance(db, seeded):
 
 def test_a_malformed_question_is_dropped_not_stored_broken(db, seeded):
     """A key pointing outside its own options can never be answered."""
-    _, a, _ = seeded
+    uid, a, _ = seeded
     reply = json.dumps({"questions": [
         {"stem": "Bad", "options": ["only one"], "correct_index": 0},
         {"stem": "Also bad", "options": ["a", "b"], "correct_index": 7},
         {"stem": "Good one?", "options": ["a", "b"], "correct_index": 1, "passage": 1},
     ]})
     gen = QuestionGenerator(db, _engine(db, _Scripted([reply])))
-    ids = gen.generate(notebook_id="nb", count=3, concept_ids=[a])
+    ids = gen.generate(notebook_id="nb", count=3, concept_ids=[a], owner_id=uid)
     assert len(ids) == 1
     assert db.query_one("SELECT stem FROM questions WHERE id=?", (ids[0],))["stem"] == "Good one?"
 
 
 def test_all_malformed_means_failure_not_silent_success(db, seeded):
-    _, a, _ = seeded
+    uid, a, _ = seeded
     reply = json.dumps({"questions": [{"stem": "x", "options": ["a"], "correct_index": 0}]})
     gen = QuestionGenerator(db, _engine(db, _Scripted([reply])))
     with pytest.raises(GenerationFailed, match="well-formed"):
-        gen.generate(notebook_id="nb", count=1, concept_ids=[a])
+        gen.generate(notebook_id="nb", count=1, concept_ids=[a], owner_id=uid)
 
 
 # ---------------------------------------------------------------------------

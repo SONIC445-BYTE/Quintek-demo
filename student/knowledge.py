@@ -79,7 +79,15 @@ class KnowledgeStore:
                 f"user_colour must be one of {COLOURS}; the learner chooses it and the "
                 "system never infers it")
 
-        question = self.db.query_one("SELECT * FROM questions WHERE id = ?", (question_id,))
+        # Scoped, though `StudentAPI.record_attempt` has already refused an
+        # unowned question before reaching here. Defence in depth: this store
+        # takes a client-supplied id and `user_id` is already required, so
+        # there is no reason for the lookup to be able to read a row the
+        # caller could not have asked for.
+        question = self.db.query_one(
+            "SELECT q.* FROM questions q"
+            " JOIN notebooks n ON n.id = q.primary_notebook_id AND n.owner_id = ?"
+            " WHERE q.id = ?", (user_id, question_id))
         if question is None:
             raise ValueError(f"no such question: {question_id}")
 
