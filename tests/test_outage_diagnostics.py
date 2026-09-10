@@ -369,3 +369,55 @@ def test_every_raise_site_declares_a_mode(module):
     assert not missing, (
         "these raise sites do not say which failure mode they are, so an item lost "
         "there would be unattributable in the artifact:\n  " + "\n  ".join(missing))
+
+
+# ---------------------------------------------------------------------------
+# The false-positive union, which D018 could not answer either
+# ---------------------------------------------------------------------------
+
+def test_false_positives_record_every_item_id_not_a_sample():
+    """
+    D018 stored three examples per check. Afterwards "how many of the 19 false
+    positives would a fix to these two checks remove" was unanswerable, because
+    23 check-hits across 19 items means some carry several flags and which ones
+    was not recoverable. The adjudication that followed had to rebuild the set
+    from the run journal, and recovered only 16 of 17.
+    """
+    from validator.metrics import FLAGGED
+
+    class _V:
+        def __init__(self, item_id, flags):
+            self.item_id = item_id
+            self.verdict = FLAGGED
+            self.flags = flags
+            self.detail = []
+
+    cases = [_Case(dict(ITEM, id=f"c{i}"), CLEAN) for i in range(1, 6)]
+    verdicts = [
+        _V("c1", [("conformance", "below_declared_difficulty")]),
+        _V("c2", [("conformance", "below_declared_difficulty"),
+                  ("conformance", "answerable_from_wording_alone")]),
+        _V("c3", [("conformance", "answerable_from_wording_alone")]),
+        _V("c4", [("grounding", "explanation_contradicts_passage")]),
+        _V("c5", [("conformance", "below_declared_difficulty"),
+                  ("grounding", "explanation_contradicts_passage")]),
+    ]
+    report = analysis.false_positives(cases, verdicts)
+
+    assert report["count"] == 5
+    assert report["check_hits"] == 7, "hits exceed items when a check overlaps"
+    assert report["multi_check_items"] == 2
+
+    # Every id, per check -- not a three-item sample.
+    by_check = {f"{r['layer']}/{r['check']}": r["item_ids"] for r in report["by_check"]}
+    assert by_check["conformance/below_declared_difficulty"] == ["c1", "c2", "c5"]
+    assert by_check["conformance/answerable_from_wording_alone"] == ["c2", "c3"]
+
+    # And the union, which is what prices a fix: fixing BOTH conformance
+    # checks clears c1, c2 and c3 but leaves c4 and c5, because c5 is also
+    # flagged by grounding. That is the question the counts alone cannot answer.
+    per_item = {r["id"]: set(r["checks"]) for r in report["items"]}
+    conformance_only = {i for i, ch in per_item.items()
+                        if all(c.startswith("conformance/") for c in ch)}
+    assert conformance_only == {"c1", "c2", "c3"}
+    assert set(per_item) - conformance_only == {"c4", "c5"}

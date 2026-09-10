@@ -52,6 +52,7 @@ def false_positives(cases, verdicts) -> dict:
     """Clean items the validator flagged, grouped by the check that flagged them."""
     by_id = _index(verdicts)
     by_check: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    per_item: dict[str, list[str]] = {}
     total = 0
     for case in cases:
         if case.label != CLEAN:
@@ -60,6 +61,7 @@ def false_positives(cases, verdicts) -> dict:
         if verdict is None or verdict.verdict != FLAGGED:
             continue
         total += 1
+        per_item[case.id] = [f"{layer}/{check}" for layer, check in verdict.flags]
         for layer, check in verdict.flags:
             by_check[(layer, check)].append(
                 {"id": case.id, "subject": case.item.subject,
@@ -68,7 +70,28 @@ def false_positives(cases, verdicts) -> dict:
     return {
         "count": total,
         "by_check": [{"layer": layer, "check": check, "items": len(items),
+                      # Every id, not a sample. `items` counts hits and one
+                      # item can be hit by several checks, so the counts sum to
+                      # more than `count` and the per-check sets OVERLAP.
+                      "item_ids": [i["id"] for i in items],
                       "examples": items[:3]} for (layer, check), items in ranked],
+        # The union, per item, which is what the counts above cannot give.
+        #
+        # The D018 record stored three examples per check and nothing else, so
+        # afterwards "how many of the 19 false positives would disappear if
+        # these two checks were fixed" was unanswerable: 23 check-hits across
+        # 19 items means at least 4 carry more than one flag, and which 4 was
+        # not recoverable. The adjudication that followed had to reconstruct
+        # the set from the run journal, and could only recover 16 of 17.
+        #
+        # An analysis that cannot say which items a fix would move is an
+        # analysis that cannot price the fix.
+        "items": [
+            {"id": case_id, "checks": checks}
+            for case_id, checks in sorted(per_item.items())
+        ],
+        "multi_check_items": sum(1 for checks in per_item.values() if len(checks) > 1),
+        "check_hits": sum(len(checks) for checks in per_item.values()),
         "worst_check": (f"{ranked[0][0][0]}/{ranked[0][0][1]}" if ranked else ""),
         "concentrated": bool(ranked) and len(ranked[0][1]) >= max(1, total // 2),
     }
