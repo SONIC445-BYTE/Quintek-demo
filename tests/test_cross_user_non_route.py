@@ -124,38 +124,48 @@ def test_a_source_ingested_for_one_learner_produces_no_chunks_the_other_can_reac
 # Helper functions whose safety is a property of their caller
 # ---------------------------------------------------------------------------
 
-def test_validate_pending_without_a_notebook_reaches_every_learners_questions(world):
+def test_validate_pending_refuses_to_cross_the_boundary_by_accident(world):
     """
-    A LATENT cross-user path, recorded rather than left implicit.
+    `validate_pending(notebook_id=None)` used to select every pending question
+    in the database -- a cross-user WRITE reached by omitting an argument. The
+    same shape as `_passages(owner_id="")` before it was made required.
 
-    `validate_pending(notebook_id=None)` selects every pending question in the
-    database. Today the only caller is `generate_questions`, which passes a
-    notebook it has already gated, so nothing reaches this. The default is the
-    same shape as `_passages(owner_id="")` before it was made required: a
-    caller that omits the argument gets everything.
-
-    This test documents the current behaviour so that closing it is a
-    deliberate change, and so that a second caller that omits the argument is
-    not the moment anyone finds out.
+    The sweep itself is a real operation and stays available. What is gone is
+    reaching it by forgetting.
     """
     api, db = world["api"], world["db"]
     for token, nb in ((world["a"], world["nb_a"]), (world["b"], world["nb_b"])):
         api.handle("POST", f"/notebooks/{nb}/questions", {},
                    {"count": 2, "validate": False}, token)
 
-    pending = db.query("SELECT id, primary_notebook_id FROM questions"
+    pending = db.query("SELECT primary_notebook_id FROM questions"
                        " WHERE validation_status = 'pending'")
-    owners = {r["primary_notebook_id"] for r in pending}
-    assert owners == {world["nb_a"], world["nb_b"]}, "both learners must have pending work"
+    assert {r["primary_notebook_id"] for r in pending} == {world["nb_a"], world["nb_b"]}, (
+        "both learners must have pending work for this to test anything")
+
+    with pytest.raises(ValueError, match="all_notebooks"):
+        api.validator.validate_pending()
+
+    with pytest.raises(ValueError, match="not both"):
+        api.validator.validate_pending(notebook_id=world["nb_a"], all_notebooks=True)
 
     scoped = api.validator.validate_pending(notebook_id=world["nb_a"], limit=50)
     assert sum(scoped.values()) <= 2, "scoped by notebook, it touches only that notebook"
 
-    unscoped = api.validator.validate_pending(limit=50)
-    assert sum(unscoped.values()) >= 1, (
-        "validate_pending with no notebook_id crosses the ownership boundary. It is "
-        "unreachable today because generate_questions always passes one -- if that "
-        "stops being true, this is a cross-user write.")
+    still_pending = db.query(
+        "SELECT id FROM questions WHERE validation_status = 'pending'"
+        " AND primary_notebook_id = ?", (world["nb_b"],))
+    assert still_pending, "the other learner's questions must be untouched"
+
+
+def test_the_deliberate_sweep_still_works(world):
+    """Refusing the accident must not remove the operation."""
+    api = world["api"]
+    for token, nb in ((world["a"], world["nb_a"]), (world["b"], world["nb_b"])):
+        api.handle("POST", f"/notebooks/{nb}/questions", {},
+                   {"count": 1, "validate": False}, token)
+    swept = api.validator.validate_pending(all_notebooks=True, limit=50)
+    assert sum(swept.values()) >= 1, "an explicit sweep must still cross notebooks"
 
 
 def test_the_only_caller_of_validate_pending_passes_a_notebook():

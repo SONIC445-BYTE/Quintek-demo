@@ -1939,6 +1939,8 @@ const STEPS = [
 class Component extends DCLogic {
   state = {
     route: 'today', notebook: 'cardio', sel: 'ida', filters: {},
+    learnerState: 'off', learnerError: '',
+    liveProgress: null, liveGaps: null, liveDashboard: null, liveConcepts: null,
     weakFilter: 'All', query: '', cptFrom: 'weak', qCount: 10, strategy: 'WEAKNESS_FIRST',
     studio: {}, studioOut: false, studioAct: null, bankFilter: 'All',
     evalApi: null, evalState: 'loading', howOpen: false, openTrack: null,
@@ -2063,6 +2065,109 @@ class Component extends DCLogic {
       : cur.concat([id]) };
   });
 
+  /* THE MODEL-FREE STATE.
+   *
+   * Progress, gaps, the revision dashboard and the concept graph are all read
+   * from state the engine has already computed. None of it needs an inference
+   * call, so all of it works against a live backend today -- unlike generation
+   * and ingestion, which stay gated on a provider.
+   *
+   * Loaded together because they are read together: a learner opening the app
+   * sees the queue, the weak list and the progress ring on one screen, and
+   * four separate spinners resolving at four different moments is worse than
+   * one honest "loading".
+   *
+   * `learnerState` is the whole contract:
+   *
+   *   'off'      no backend configured -- a design file opened from disk. The
+   *              in-file constants stand, and nobody mistakes that for real.
+   *   'loading'  a request is in flight.
+   *   'ready'    live data. Empty means empty; it does not mean unmeasured.
+   *   'error'    a CONFIGURED backend failed. The screen says so and shows no
+   *              numbers, because a learner told they have 12 due when the
+   *              server thinks otherwise hits a refusal they cannot explain.
+   */
+  /* The model-free screens' data, or the design file's constants, or neither.
+   *
+   * One place rather than a ternary at each use: the three cases have to stay
+   * consistent across the ring, the headline and the list, and scattering the
+   * decision is how a screen ends up half live and half fixture. */
+  learnerView = () => {
+    const s = this.state;
+    const ready = s.learnerState === 'ready';
+    if (!ready) {
+      const blank = s.learnerState === 'error';
+      return {
+        ready: false,
+        headline: blank ? '' : '4 red gaps are unresolved, start with ferritin interpretation.',
+        why: blank ? '' : 'Two questions in two different notebooks failed on the same gap, and you graded both red. The queue leads with it, then covers the surrounding iron-studies section.',
+        colourCounts: blank ? [] : [
+          { n: 4, label: 'Red', color: '#BC4C43', go: this.go('weak') },
+          { n: 5, label: 'Orange', color: '#B5812B', go: this.go('weak') },
+          { n: 96, label: 'Green', color: '#1E7A57', go: this.go('weak') }],
+        topGaps: blank ? [] : GAPS.filter((g) => g[1] !== 'Green').slice(0, 4).map((g, i) => ({
+          rank: String(i + 1).padStart(2, '0'), name: g[0], color: g[2],
+          meta: g[3] + ' · ' + g[6].length + (g[6].length === 1 ? ' question · ' : ' questions · ') + g[5],
+          open: this.openConcept(g[3], g[3] === 'BNP / NT-proBNP' ? 'cardiology' : 'biochemistry', 'today') })),
+      };
+    }
+
+    const counts = (s.liveProgress && s.liveProgress.colour_counts) || {};
+    const gaps = s.liveGaps || [];
+    const unresolved = gaps.filter((g) => (g.colour || '').toUpperCase() !== 'GREEN');
+    const due = (s.liveDashboard && s.liveDashboard.recommended_question_count) || 0;
+    const lead = unresolved[0];
+    return {
+      ready: true,
+      headline: unresolved.length
+        ? unresolved.length + (unresolved.length === 1 ? ' gap is' : ' gaps are')
+          + ' unresolved' + (lead ? ', start with ' + lead.label + '.' : '.')
+        : (due ? due + ' question' + (due === 1 ? '' : 's') + ' are due.'
+               : 'Nothing is due and no gaps are open.'),
+      why: unresolved.length
+        ? 'Built from the attempts you graded, newest first.'
+        : 'Your queue is empty because the engine found nothing outstanding, not because it could not look.',
+      colourCounts: [
+        { n: counts.RED || 0, label: 'Red', color: '#BC4C43', go: this.go('weak') },
+        { n: counts.ORANGE || 0, label: 'Orange', color: '#B5812B', go: this.go('weak') },
+        { n: counts.GREEN || 0, label: 'Green', color: '#1E7A57', go: this.go('weak') }],
+      topGaps: unresolved.slice(0, 4).map((g, i) => ({
+        rank: String(i + 1).padStart(2, '0'),
+        name: g.label,
+        color: (g.colour || '').toUpperCase() === 'RED' ? '#BC4C43' : '#B5812B',
+        meta: (g.concept_name || g.label) + ' · '
+              + (g.evidence_count || 0)
+              + ((g.evidence_count === 1) ? ' question' : ' questions'),
+        open: this.openConcept(g.concept_name || g.label, 'biochemistry', 'today') })),
+    };
+  };
+
+  loadLearnerState = (api) => {
+    const client = api || this.state.studentApi;
+    if (!client || !client.progress) { this.setState({ learnerState: 'off' }); return null; }
+    this.setState({ learnerState: 'loading', learnerError: '' });
+    return Promise.all([
+      client.progress(),
+      client.gaps(),
+      client.revisionDashboard(),
+      client.concepts(),
+    ])
+      .then(([progress, gaps, dashboard, concepts]) => this.setState({
+        learnerState: 'ready', learnerError: '',
+        liveProgress: progress, liveGaps: gaps,
+        liveDashboard: dashboard, liveConcepts: concepts,
+      }))
+      /* No partial render. If one of the four failed, the others may be
+       * consistent with a state the learner is not in, and a screen that is
+       * three-quarters right about someone's revision is not better than one
+       * that admits it could not load. */
+      .catch((err) => this.setState({
+        learnerState: 'error',
+        learnerError: (err && err.message) ? err.message : String(err),
+        liveProgress: null, liveGaps: null, liveDashboard: null, liveConcepts: null,
+      }));
+  };
+
   loadDemos = (api) => {
     const client = api || this.state.studentApi;
     if (!client || !client.listDemos) return;
@@ -2172,6 +2277,7 @@ class Component extends DCLogic {
         this.setState({ studentApi: api.configured ? api : null });
         if (!api.configured || !api.capabilities) return null;
         this.loadDemos(api);
+        this.loadLearnerState(api);
         return api.capabilities()
           .then((caps) => this.setState({ sourceCaps: caps.sources || {} }))
           /* A capability lookup that fails leaves every kind offered. Hiding
@@ -3197,6 +3303,7 @@ class Component extends DCLogic {
 
   renderVals() {
     const s = this.state;
+    const live = this.learnerView();
     const r = s.route;
     const nb = NOTEBOOKS.find((n) => n.id === s.notebook) || NOTEBOOKS[0];
     const heads = {
@@ -3598,15 +3705,25 @@ class Component extends DCLogic {
         vFg: validation === 'Approved' ? '#1E7A57' : validation === 'Flagged' ? '#BC4C43' : '#B5812B',
         vBg: validation === 'Approved' ? 'rgba(30,122,87,.1)' : validation === 'Flagged' ? 'rgba(188,76,67,.1)' : 'rgba(181,129,43,.12)' })),
 
-      todayHeadline: '4 red gaps are unresolved, start with ferritin interpretation.',
-      todayWhy: 'Two questions in two different notebooks failed on the same gap, and you graded both red. The queue leads with it, then covers the surrounding iron-studies section.',
-      colourCounts: [{ n: 4, label: 'Red', color: '#BC4C43', go: this.go('weak') },
-        { n: 5, label: 'Orange', color: '#B5812B', go: this.go('weak') },
-        { n: 96, label: 'Green', color: '#1E7A57', go: this.go('weak') }],
-      topGaps: GAPS.filter((g) => g[1] !== 'Green').slice(0, 4).map((g, i) => ({
-        rank: String(i + 1).padStart(2, '0'), name: g[0], color: g[2],
-        meta: g[3] + ' · ' + g[6].length + (g[6].length === 1 ? ' question · ' : ' questions · ') + g[5],
-        open: this.openConcept(g[3], g[3] === 'BNP / NT-proBNP' ? 'cardiology' : 'biochemistry', 'today') })),
+      /* LIVE WHEN THERE IS A BACKEND, CONSTANTS WHEN THERE IS NOT, AND NEITHER
+       * WHEN A CONFIGURED ONE FAILED. `learnerState` decides, and the three
+       * cases are kept apart deliberately -- see `loadLearnerState`. */
+      learnerLive: s.learnerState === 'ready',
+      learnerLoading: s.learnerState === 'loading',
+      learnerFailed: s.learnerState === 'error',
+      learnerError: s.learnerError,
+      /* Shown instead of any figure when a configured backend failed. */
+      learnerErrorText: s.learnerState === 'error'
+        ? 'Your revision data could not be loaded. Nothing below is current, so nothing is shown.'
+        : '',
+
+      todayHeadline: live.headline,
+      todayWhy: live.why,
+      colourCounts: live.colourCounts,
+      /* Empty is empty. A learner with no gaps sees "no gaps", not a ring of
+       * zeroes borrowed from the design file. */
+      todayEmpty: live.ready && live.topGaps.length === 0,
+      topGaps: live.topGaps,
 
       weakFilters: ['All', 'Red', 'Orange', 'Green'].map((label) => ({ label, set: this.setWeakFilter(label),
         bg: s.weakFilter === label ? 'rgba(30,122,87,.08)' : '#fff',

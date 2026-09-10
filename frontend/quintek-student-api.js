@@ -138,6 +138,112 @@ export async function questionBank(limit) {
   return (await call('GET', '/questions?limit=' + (limit || 50))).questions || [];
 }
 
+/* ------------------------------------------------------------------------
+ * THE MODEL-FREE SURFACE
+ *
+ * Everything below reads state the engine has already computed. None of it
+ * makes an inference call, so none of it depends on a credential, a provider
+ * or a budget -- these screens work against a live backend today.
+ *
+ * Each returns the payload's own shape rather than a normalised one, because
+ * a screen that renders "0 due" and a screen that renders "not measured" are
+ * different screens, and flattening a missing value to a zero here would take
+ * that choice away from the caller. `null` means the engine did not compute
+ * it; `0` means it computed zero.
+ * --------------------------------------------------------------------- */
+
+export async function me() {
+  return call('GET', '/me');
+}
+
+export async function progress() {
+  return call('GET', '/progress');
+}
+
+export async function gaps(opts) {
+  const options = opts || {};
+  const query = [];
+  if (options.colour) query.push('colour=' + encodeURIComponent(options.colour));
+  if (options.includeResolved) query.push('include_resolved=1');
+  const suffix = query.length ? '?' + query.join('&') : '';
+  return (await call('GET', '/gaps' + suffix)).gaps || [];
+}
+
+export async function gapEvidence(gapId) {
+  return (await call('GET', '/gaps/' + encodeURIComponent(gapId))).evidence || [];
+}
+
+export async function gapQuestions(gapId) {
+  return (await call('GET', '/gaps/' + encodeURIComponent(gapId) + '/questions'))
+    .questions || [];
+}
+
+export async function resolveGap(gapId) {
+  return call('POST', '/gaps/' + encodeURIComponent(gapId) + '/resolve', {});
+}
+
+export async function revisionDashboard() {
+  return call('GET', '/revision/dashboard');
+}
+
+export async function concepts() {
+  return (await call('GET', '/concepts')).concepts || [];
+}
+
+export async function conceptDetail(conceptId) {
+  return call('GET', '/concepts/' + encodeURIComponent(conceptId));
+}
+
+export async function graph(notebookId) {
+  const suffix = notebookId ? '?notebook=' + encodeURIComponent(notebookId) : '';
+  return call('GET', '/graph' + suffix);
+}
+
+export async function question(questionId) {
+  return call('GET', '/questions/' + encodeURIComponent(questionId));
+}
+
+/* --- a revision session, end to end. No inference anywhere in here: every
+ * question was generated earlier and is being served from the bank. --- */
+
+export async function startSession(count, strategy) {
+  return call('POST', '/revision/sessions', {
+    count: count || 20, strategy: strategy || 'adaptive',
+  });
+}
+
+export async function nextQuestion(sessionId) {
+  return call('GET', '/revision/next?session=' + encodeURIComponent(sessionId));
+}
+
+/* The answer is revealed by the RESPONSE to this call and is not available
+ * before it. That ordering is the product, not an implementation detail:
+ * "what you thought" versus "what was correct" is only a real comparison if
+ * the second was not visible while deciding the first. */
+export async function recordAttempt(questionId, answerIndex, colour, opts) {
+  const options = opts || {};
+  return call('POST', '/attempts', {
+    question_id: questionId,
+    user_answer: answerIndex,
+    user_colour: colour,
+    session_id: options.sessionId || null,
+    gaps: options.gaps || [],
+  });
+}
+
+export async function completeSession(sessionId) {
+  return call('POST', '/revision/sessions/' + encodeURIComponent(sessionId) +
+              '/complete', {});
+}
+
+export async function notificationPrefs() {
+  return call('GET', '/settings/notifications');
+}
+
+export async function setNotificationPrefs(prefs) {
+  return call('PUT', '/settings/notifications', prefs || {});
+}
+
 /* What this deployment is actually running, for the screen that discloses it. */
 export async function powering() {
   return call('GET', '/ai/benchmark/powering');

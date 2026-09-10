@@ -177,7 +177,35 @@ class QuestionValidator:
             " validated_by_candidate_id = ? WHERE id = ?",
             (status, json.dumps(detail), validator, question_id))
 
-    def validate_pending(self, notebook_id: str | None = None, limit: int = 50) -> dict:
+    def validate_pending(self, notebook_id: str | None = None, limit: int = 50,
+                         *, all_notebooks: bool = False) -> dict:
+        """
+        Validate pending questions in one notebook, or -- deliberately -- in all.
+
+        `notebook_id` stays optional because a sweep across every pending
+        question is a real operation an operator may want. What is no longer
+        possible is reaching that sweep by ACCIDENT: omitting the notebook used
+        to select every learner's questions silently, which is a cross-user
+        write dressed as a default.
+
+        The caller now has to say `all_notebooks=True` and mean it. Same shape
+        as `_passages(owner_id=...)`: a caller that forgets fails rather than
+        succeeding with everything.
+
+        Note this crosses an ownership boundary by design when asked to, so it
+        is not something to expose on a learner route. Its only caller is
+        `generate_questions`, which passes a notebook it has already gated.
+        """
+        if not notebook_id and not all_notebooks:
+            raise ValueError(
+                "validate_pending needs a notebook_id, or all_notebooks=True to sweep "
+                "every learner's pending questions. Omitting both used to mean the "
+                "sweep, which made a cross-user write the default.")
+        if notebook_id and all_notebooks:
+            raise ValueError(
+                "pass a notebook_id or all_notebooks=True, not both: one scopes the "
+                "sweep and the other removes the scope")
+
         sql = "SELECT id FROM questions WHERE validation_status = 'pending'"
         params: tuple = ()
         if notebook_id:
