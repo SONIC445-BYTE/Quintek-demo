@@ -57,13 +57,24 @@ def seeded(tmp_path):
     return db, nb, src, chunk
 
 
+def _owner(db, notebook_id):
+    """The learner whose sources this notebook may be grounded in.
+
+    `generate` requires an owner and refuses an empty one, so a test has to say
+    whose material it is retrieving -- the same thing the HTTP layer says.
+    """
+    return db.query_one(
+        "SELECT owner_id FROM notebooks WHERE id = ?", (notebook_id,))["owner_id"]
+
+
 def run_with_trace(db, nb, payload, tmp_path, name="run-1"):
     ai = AIEngine(db, provider_factory=lambda c: make_provider(payload),
                   development_candidate="cand-dev")
     trace = GenerationTrace(name, root=tmp_path / name)
     generator = QuestionGenerator(db, ai)
     try:
-        ids = generator.generate(notebook_id=nb, count=1, trace=trace)
+        ids = generator.generate(notebook_id=nb, count=1, trace=trace,
+                                 owner_id=_owner(db, nb))
     except GenerationFailed as exc:
         return None, trace, exc
     return ids, trace, None
@@ -185,7 +196,8 @@ def test_a_model_that_cannot_be_reached_records_the_stage_it_died_in(seeded, tmp
                   development_candidate="cand-dev")
     trace = GenerationTrace("run-boom", root=tmp_path / "boom")
     with pytest.raises(Exception):
-        QuestionGenerator(db, ai).generate(notebook_id=nb, count=1, trace=trace)
+        QuestionGenerator(db, ai).generate(notebook_id=nb, count=1, trace=trace,
+                                           owner_id=_owner(db, nb))
 
     final = GenerationTrace.load(trace.root)["final_decision"]
     assert final["decision"] == "failed"
@@ -204,7 +216,8 @@ def test_ungrounded_generation_fails_at_retrieval_and_says_so(tmp_path):
                   development_candidate="cand-dev")
     trace = GenerationTrace("run-empty", root=tmp_path / "empty")
     with pytest.raises(GenerationFailed):
-        QuestionGenerator(db, ai).generate(notebook_id=nb, count=1, trace=trace)
+        QuestionGenerator(db, ai).generate(notebook_id=nb, count=1, trace=trace,
+                                           owner_id=_owner(db, nb))
 
     final = GenerationTrace.load(trace.root)["final_decision"]
     assert final["failed_stage"] == "retrieval"
@@ -253,7 +266,8 @@ def test_tracing_is_off_by_default(seeded, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     ai = AIEngine(db, provider_factory=lambda c: make_provider({"questions": [GOOD_ITEM]}),
                   development_candidate="cand-dev")
-    QuestionGenerator(db, ai).generate(notebook_id=nb, count=1)
+    QuestionGenerator(db, ai).generate(notebook_id=nb, count=1,
+                                       owner_id=_owner(db, nb))
     assert not (tmp_path / "generation_run").exists()
 
 

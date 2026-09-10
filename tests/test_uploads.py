@@ -270,11 +270,11 @@ def test_a_demonstration_belongs_to_the_learner_who_wrote_it(tmp_path) -> None:
 
     generator = QuestionGenerator(db, ai=None)
 
-    assert [d["id"] for d in generator._demos([mine["id"]], a)] == [mine["id"]]
-    assert generator._demos([theirs["id"]], a) == [], (
+    assert [d["id"] for d in generator._demos([mine["id"]], owner_id=a)] == [mine["id"]]
+    assert generator._demos([theirs["id"]], owner_id=a) == [], (
         "one learner read another learner's reference question")
     # Asking for both returns only your own.
-    assert [d["id"] for d in generator._demos([mine["id"], theirs["id"]], a)] \
+    assert [d["id"] for d in generator._demos([mine["id"], theirs["id"]], owner_id=a)] \
         == [mine["id"]]
 
 
@@ -291,7 +291,7 @@ def test_a_demonstrations_text_cannot_reach_another_learners_prompt(tmp_path) ->
     prompt = generator.build_prompt(
         count=1, passages=[{"text": "A passage.", "locator_json": "{}"}],
         target_names=["Ferritin"], related_names=[],
-        demos=generator._demos([theirs["id"]], a),
+        demos=generator._demos([theirs["id"]], owner_id=a),
         family="", difficulty="", reasoning_depth="", constraints="")
     assert secret not in prompt
 
@@ -312,7 +312,7 @@ def test_the_grounding_rule_travels_with_every_demonstration(tmp_path) -> None:
     prompt = generator.build_prompt(
         count=1, passages=[{"text": "A passage.", "locator_json": "{}"}],
         target_names=["Ferritin"], related_names=[],
-        demos=generator._demos([demo["id"]], a),
+        demos=generator._demos([demo["id"]], owner_id=a),
         family="", difficulty="", reasoning_depth="", constraints="")
 
     assert "DEMONSTRATIONS" in prompt

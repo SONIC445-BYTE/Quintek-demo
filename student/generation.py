@@ -168,38 +168,69 @@ class QuestionGenerator:
 
     # -- context assembly --
 
-    def _passages(self, source_id: str | None, concept_ids: list[str],
-                  limit: int = 6, notebook_id: str | None = None) -> list[dict]:
+    # Every chunk this class retrieves passes through this join. It is written
+    # out once here rather than three times below, so a fourth retrieval branch
+    # cannot be added without it.
+    _OWNED_CHUNK = (" FROM source_chunks ch"
+                    " JOIN sources s ON s.id = ch.source_id"
+                    " JOIN notebooks n ON n.id = s.notebook_id AND n.owner_id = ?")
+
+    def _passages(self, *, owner_id: str, source_id: str | None,
+                  concept_ids: list[str], limit: int = 6,
+                  notebook_id: str | None = None) -> list[dict]:
         """
         Grounding text, narrowest source first: the chunks that mention the
         target concepts, else the named source, else anything ingested into
-        this notebook.
+        this notebook -- all three scoped to sources THIS learner owns.
 
         The notebook fallback matters because "make questions from this
         notebook" -- no concept, no source named -- is the ordinary request,
         and without it the common case looks like an ungrounded one.
+
+        `owner_id` is keyword-only and has no default, and an empty one is
+        refused rather than treated as "no filter". Both branches above used
+        to retrieve by a client-supplied id alone:
+
+          * `source_id` accepted any learner's source id;
+          * `concept_ids` needed no borrowed id at all, because concepts are a
+            deliberately GLOBAL vocabulary -- the id a learner reads from their
+            own /concepts is the same row every other learner's sources link
+            to, so the join returned everyone's chunks on that topic.
+
+        Both wrote the retrieved passage into the caller's own question rows,
+        where it then passed every later ownership check. Concepts stay global;
+        what is scoped is which CHUNKS a concept may reach.
         """
+        if not owner_id:
+            raise ValueError(
+                "_passages requires the owner whose sources may be read; passing an "
+                "empty owner_id would retrieve every learner's chunks")
+
         if concept_ids:
             marks = ",".join("?" for _ in concept_ids)
             rows = self.db.query(
-                f"""SELECT DISTINCT ch.id, ch.text, ch.locator_json, ch.source_id
-                      FROM source_concepts sc JOIN source_chunks ch ON ch.id = sc.chunk_id
-                     WHERE sc.concept_id IN ({marks}) ORDER BY ch.ordinal LIMIT ?""",
-                (*concept_ids, limit))
+                "SELECT DISTINCT ch.id, ch.text, ch.locator_json, ch.source_id"
+                + self._OWNED_CHUNK
+                + " JOIN source_concepts sc ON sc.chunk_id = ch.id"
+                + f" WHERE sc.concept_id IN ({marks}) ORDER BY ch.ordinal LIMIT ?",
+                (owner_id, *concept_ids, limit))
             if rows:
                 return [dict(r) for r in rows]
         if source_id:
             rows = self.db.query(
-                "SELECT id, text, locator_json, source_id FROM source_chunks"
-                " WHERE source_id = ? ORDER BY ordinal LIMIT ?", (source_id, limit))
+                "SELECT ch.id, ch.text, ch.locator_json, ch.source_id"
+                + self._OWNED_CHUNK
+                + " WHERE ch.source_id = ? ORDER BY ch.ordinal LIMIT ?",
+                (owner_id, source_id, limit))
             if rows:
                 return [dict(r) for r in rows]
         if notebook_id:
             rows = self.db.query(
-                """SELECT ch.id, ch.text, ch.locator_json, ch.source_id
-                     FROM source_chunks ch JOIN sources s ON s.id = ch.source_id
-                    WHERE s.notebook_id = ? AND ch.status = 'processed'
-                    ORDER BY ch.ordinal LIMIT ?""", (notebook_id, limit))
+                "SELECT ch.id, ch.text, ch.locator_json, ch.source_id"
+                + self._OWNED_CHUNK
+                + " WHERE s.notebook_id = ? AND ch.status = 'processed'"
+                  " ORDER BY ch.ordinal LIMIT ?",
+                (owner_id, notebook_id, limit))
             return [dict(r) for r in rows]
         return []
 
@@ -211,7 +242,7 @@ class QuestionGenerator:
                     names.append(n["canonical_name"])
         return names[:limit]
 
-    def _demos(self, demo_ids: list[str], owner_id: str = "") -> list[dict]:
+    def _demos(self, demo_ids: list[str], *, owner_id: str) -> list[dict]:
         """
         Style references, scoped to their OWNER.
 
@@ -221,19 +252,22 @@ class QuestionGenerator:
         read it through a channel that puts the text straight into a prompt.
         A demonstration is something a learner wrote; it is theirs.
 
-        `owner_id` is optional only so existing internal callers that already
-        resolved ownership keep working. Every path reachable from HTTP
-        passes it.
+        This was the only one of the three id parameters on this class that
+        was scoped at all, and it still carried an `owner_id=""` default whose
+        branch read every learner's demonstrations. Required and keyword-only
+        now, for the same reason `_passages` is: a caller that forgets must
+        fail, not succeed with everything.
         """
+        if not owner_id:
+            raise ValueError(
+                "_demos requires the owner whose demonstrations may be read; passing an "
+                "empty owner_id would retrieve every learner's demonstrations")
         if not demo_ids:
             return []
         marks = ",".join("?" for _ in demo_ids)
-        if owner_id:
-            return [dict(r) for r in self.db.query(
-                f"SELECT * FROM question_demos WHERE id IN ({marks})"
-                f" AND owner_id = ?", tuple(demo_ids) + (owner_id,))]
         return [dict(r) for r in self.db.query(
-            f"SELECT * FROM question_demos WHERE id IN ({marks})", tuple(demo_ids))]
+            f"SELECT * FROM question_demos WHERE id IN ({marks}) AND owner_id = ?",
+            tuple(demo_ids) + (owner_id,))]
 
     def build_prompt(self, *, count: int, passages: list[dict], target_names: list[str],
                      related_names: list[str], demos: list[dict], family: str,
@@ -283,7 +317,7 @@ class QuestionGenerator:
                  concept_ids: list[str] | None = None, source_id: str | None = None,
                  demo_ids: list[str] | None = None, family: str = "",
                  difficulty: str = "", reasoning_depth: str = "",
-                 constraints: str = "", owner_id: str = "", trace=None) -> list[str]:
+                 constraints: str = "", owner_id: str, trace=None) -> list[str]:
         """
         `trace` is a `student.trace.GenerationTrace`, or None for no capture.
 
@@ -306,7 +340,8 @@ class QuestionGenerator:
                           demo_ids=demo_ids, family=family, difficulty=difficulty,
                           reasoning_depth=reasoning_depth)
 
-        passages = self._passages(source_id, concept_ids, notebook_id=notebook_id)
+        passages = self._passages(owner_id=owner_id, source_id=source_id,
+                                  concept_ids=concept_ids, notebook_id=notebook_id)
         if not passages:
             # Ungrounded generation is exactly the thing the grounding rule
             # forbids; refusing is better than producing plausible invention.
@@ -330,7 +365,7 @@ class QuestionGenerator:
         prompt = self.build_prompt(
             count=count, passages=passages, target_names=targets,
             related_names=self._related(concept_ids),
-            demos=self._demos(demo_ids, owner_id),
+            demos=self._demos(demo_ids, owner_id=owner_id),
             family=family, difficulty=difficulty, reasoning_depth=reasoning_depth,
             constraints=constraints)
         trace.prompt(prompt=prompt, task_type="QUESTION_GENERATION",
