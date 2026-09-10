@@ -228,6 +228,10 @@ class AIEngine:
         """
         from benchmark.orchestration import ExecutionLog, ExecutionRecord
         log_path = os.environ.get("QUINTEK_EXECUTION_LOG", "executions.jsonl")
+        # Declared, not guessed. A harness that is not serving real traffic says
+        # so here; everything else is a production call by default, because the
+        # claim that needs to be explicit is the claim that a record ISN'T real.
+        origin = os.environ.get("QUINTEK_EXECUTION_ORIGIN", "production")
         try:
             ExecutionLog(Path(log_path)).record(ExecutionRecord(
                 execution_id=execution_id, task_type=task_type, candidate_id=candidate_id,
@@ -238,6 +242,7 @@ class AIEngine:
                 output_tokens=response.output_tokens,
                 status="ok" if response.ok else "error", error=response.error,
                 routing_policy=source.upper(), attempt_number=response.attempts,
+                origin=origin,
             ))
         except Exception:
             # Telemetry must never take down the call it was measuring.

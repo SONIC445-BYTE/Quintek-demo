@@ -59,6 +59,15 @@ class ExecutionRecord:
     fallback: bool = False
     fallback_reason: str | None = None
     attempt_number: int = 1
+    # Where this record came from. Only PRODUCTION records are measurements of
+    # anything. The default is PRODUCTION because a record written by the real
+    # serving path is the common case and must not depend on remembering to say
+    # so -- what has to be explicit is the claim that something ISN'T real.
+    origin: str = "production"
+    # Why a record is marked as anything but production. Empty for production
+    # records; set by tools_mark_test_records.py, and carried here so `all()`
+    # can round-trip a marked log rather than failing on an unexpected key.
+    origin_reason: str = ""
 
     def as_dict(self) -> dict:
         return dict(
@@ -69,8 +78,22 @@ class ExecutionRecord:
             input_tokens=self.input_tokens, output_tokens=self.output_tokens,
             status=self.status, error=self.error, routing_policy=self.routing_policy,
             fallback=self.fallback, fallback_reason=self.fallback_reason,
-            attempt_number=self.attempt_number,
+            attempt_number=self.attempt_number, origin=self.origin,
+            origin_reason=self.origin_reason,
         )
+
+
+# A record whose origin is anything but this is not evidence about a model.
+PRODUCTION = "production"
+
+
+class UnknownProviderName(ValueError):
+    """A record named a provider with no builder registered under that name.
+
+    Refused rather than written. A log is only worth reading if a name in it
+    means what it says, and a provider name nobody can construct cannot have
+    served the call the record claims to describe.
+    """
 
 
 class ExecutionLog:
@@ -80,12 +103,29 @@ class ExecutionLog:
     def __init__(self, path: str | Path):
         self.path = Path(path)
 
+    @staticmethod
+    def _check_provider(name: str | None) -> None:
+        if not name:
+            return                      # no claim made; nothing to verify
+        from .providers.registry import available
+
+        known = available()
+        if name not in known:
+            raise UnknownProviderName(
+                f"refusing to record provider {name!r}: no builder is registered under "
+                f"that name, so nothing in this codebase could have served the call. "
+                f"Known names are {', '.join(known)}.")
+
     def record(self, rec: ExecutionRecord) -> None:
+        # Before the write. A record that names a provider that does not exist
+        # is worse than an absent record: the absent one is visibly missing.
+        self._check_provider(rec.provider)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.path, "a") as fh:
             fh.write(json.dumps(rec.as_dict()) + "\n")
 
     def all(self) -> list[ExecutionRecord]:
+        """Every record, whatever its origin. For auditing the log itself."""
         if not self.path.exists():
             return []
         out = []
@@ -94,8 +134,20 @@ class ExecutionLog:
                 out.append(ExecutionRecord(**json.loads(line)))
         return out
 
+    def measurements(self) -> list[ExecutionRecord]:
+        """
+        Only records that describe a real call.
+
+        Anything computing latency, error rate or uptime must use this and not
+        `all()`. The distinction is not academic: the test suite wrote 229
+        records naming a real provider, every one with a latency of exactly
+        12.0 ms, into the same file `EvalAPI._latency_for` takes a median from
+        -- and that median reaches a learner through /ai/eval.
+        """
+        return [r for r in self.all() if r.origin == PRODUCTION]
+
     def for_candidate(self, candidate_id: str) -> list[ExecutionRecord]:
-        return [r for r in self.all() if r.candidate_id == candidate_id]
+        return [r for r in self.measurements() if r.candidate_id == candidate_id]
 
 
 class CallLimiter:

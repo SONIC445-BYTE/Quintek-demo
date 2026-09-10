@@ -33,3 +33,6 @@ sources/
 # Generation-run artifacts: per-run captures, useful locally, not repo content.
 generation_run/
 alpha0_runs/
+
+# Backup written by tools_mark_test_records.py
+executions.jsonl.before-marking
