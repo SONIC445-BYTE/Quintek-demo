@@ -377,6 +377,27 @@ class StudentAPI:
             raise ApiError(404, "no such notebook")
         return row
 
+    def _owned_question(self, uid: str, qid: str):
+        """
+        A question this learner may act on, by the same join every other
+        question route uses: a question belongs to whoever owns the notebook
+        it was generated into.
+
+        `record_attempt` did not have this check. It looked the question up by
+        id alone and then returned the reveal -- key, rationale and the source
+        passage the question was written from -- so any authenticated learner
+        holding another learner's question id was handed the text of that
+        learner's uploaded document. 404 rather than 403, for the reason
+        `_owned_notebook` gives.
+        """
+        row = self.db.query_one(
+            "SELECT q.* FROM questions q"
+            " JOIN notebooks n ON n.id = q.primary_notebook_id AND n.owner_id = ?"
+            " WHERE q.id = ?", (uid, qid))
+        if row is None:
+            raise ApiError(404, "no such question")
+        return row
+
     def get_notebook(self, uid: str, nid: str) -> dict:
         nb = self._owned_notebook(uid, nid)
         sources = self.db.query(
@@ -751,6 +772,10 @@ class StudentAPI:
         except (TypeError, ValueError):
             raise ApiError(400, "user_answer must be an option index")
 
+        # Before the write, not after: an attempt against a question this
+        # learner does not own must leave no row behind.
+        question = self._owned_question(uid, question_id)
+
         try:
             result = self.knowledge.record_attempt(
                 user_id=uid, question_id=question_id, user_answer=answer,
@@ -759,7 +784,6 @@ class StudentAPI:
         except ValueError as exc:
             raise ApiError(400, str(exc))
 
-        question = self.db.query_one("SELECT * FROM questions WHERE id = ?", (question_id,))
         reveal = {
             "your_answer": answer,
             "correct_answer": result["correct_answer"],
