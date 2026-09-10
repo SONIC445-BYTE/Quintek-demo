@@ -19,13 +19,22 @@ from benchmark.providers.registry import (
 
 
 def test_the_known_providers_are_named(monkeypatch):
+    """
+    Exhaustive on purpose: a provider added without being listed here fails,
+    which is what makes `ExecutionLog.record`'s "no builder is registered under
+    that name" check meaningful. `fireworks` and `together` are both present
+    because neither was chosen -- they speak the same OpenAI-compatible
+    protocol through the same adapter, so the credential decides, not the code.
+    """
     assert set(available()) == {"scripted", "nvidia", "openai-compatible", "local",
-                                "cerebras", "openrouter"}
+                                "cerebras", "openrouter", "fireworks", "together"}
 
 
-def test_cerebras_and_openrouter_need_their_own_keys(monkeypatch):
+def test_every_paid_host_needs_its_own_key(monkeypatch):
     for provider, key_env, model in (("cerebras", "CEREBRAS_API_KEY", "llama3.1-8b"),
-                                     ("openrouter", "OPENROUTER_API_KEY", "x/y")):
+                                     ("openrouter", "OPENROUTER_API_KEY", "x/y"),
+                                     ("fireworks", "FIREWORKS_API_KEY", "a/b/c"),
+                                     ("together", "TOGETHER_API_KEY", "org/model")):
         monkeypatch.delenv(key_env, raising=False)
         with pytest.raises(ProviderUnavailable, match=key_env):
             build_provider({"provider": provider, "model_id": model})

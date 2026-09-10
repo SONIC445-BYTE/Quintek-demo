@@ -95,6 +95,7 @@ class NVIDIAProvider(BaseProvider):
         model_family: str | None = None,
         base_url: str = NIM_CHAT_COMPLETIONS_URL,
         timeout_seconds: float | None = None,
+        max_retries: int | None = None,
     ):
         self.model = model_id
         self.model_version = model_version
@@ -109,8 +110,16 @@ class NVIDIAProvider(BaseProvider):
         if resolved is None:
             resolved = float(os.environ.get("NVIDIA_TIMEOUT_SECONDS",
                                             NIM_DEFAULT_TIMEOUT_SECONDS))
-        self.retry_policy = replace(BaseProvider.retry_policy,
-                                    timeout_seconds=resolved)
+        policy = replace(BaseProvider.retry_policy, timeout_seconds=resolved)
+        # Externally settable, because the spend forecast multiplies planned
+        # calls by (1 + max_retries) and an experiment freezes the number. A
+        # policy that can only be changed by editing code is one the frozen
+        # configuration cannot describe.
+        if max_retries is not None:
+            if max_retries < 0:
+                raise ValueError("max_retries cannot be negative")
+            policy = replace(policy, max_retries=max_retries)
+        self.retry_policy = policy
 
     def _api_key(self) -> str:
         key = os.environ.get(self.api_key_env)

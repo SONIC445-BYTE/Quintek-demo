@@ -147,7 +147,8 @@ def _openai_compatible(spec: dict):
         api_key_env=key_env, base_url=base_url,
         system_prompt=spec.get("system_prompt", ""),
         model_family=spec.get("model_family"),
-        timeout_seconds=spec.get("timeout_seconds"))
+        timeout_seconds=spec.get("timeout_seconds"),
+        max_retries=spec.get("max_retries"))
 
 
 @register("cerebras")
@@ -180,7 +181,8 @@ def _cerebras(spec: dict):
         base_url=spec.get("base_url", "https://api.cerebras.ai/v1/chat/completions"),
         system_prompt=spec.get("system_prompt", ""),
         model_family=spec.get("model_family"),
-        timeout_seconds=spec.get("timeout_seconds"))
+        timeout_seconds=spec.get("timeout_seconds"),
+        max_retries=spec.get("max_retries"))
 
 
 @register("openrouter")
@@ -211,7 +213,76 @@ def _openrouter(spec: dict):
         base_url=spec.get("base_url", "https://openrouter.ai/api/v1/chat/completions"),
         system_prompt=spec.get("system_prompt", ""),
         model_family=spec.get("model_family"),
-        timeout_seconds=spec.get("timeout_seconds"))
+        timeout_seconds=spec.get("timeout_seconds"),
+        max_retries=spec.get("max_retries"))
+
+
+
+# ---------------------------------------------------------------------------
+# Paid OpenAI-compatible hosts
+# ---------------------------------------------------------------------------
+#
+# Fireworks and Together both speak `/v1/chat/completions`, so neither needs a
+# new adapter -- the difference between them is three strings: the base URL,
+# the key variable, and the shape of a model id. Both are registered rather
+# than one being chosen, because the interface does not differ in any way that
+# would make picking early worth doing, and a name that exists is easier to
+# check a credential against than one that has to be written first.
+#
+# THE DEFAULT BASE URLS BELOW ARE UNVERIFIED. Nothing in this repository has
+# ever reached either host, and no test here proves a URL is right -- a mocked
+# transport cannot. Confirm each against the provider's own documentation
+# before the first live call, or pass `base_url` explicitly. `preflight`
+# prints the URL it would use for exactly this reason.
+
+@register("fireworks")
+def _fireworks(spec: dict):
+    """
+    Fireworks AI. Model ids are account-scoped paths, e.g.
+    `accounts/fireworks/models/llama-v3p1-70b-instruct` -- not the `meta/...`
+    form NVIDIA uses. Passing one host's id to another produces a 404, which
+    is left to fail loudly rather than being rewritten on a guess.
+    """
+    return _openai_host(spec, key_env="FIREWORKS_API_KEY",
+                        base_url="https://api.fireworks.ai/inference/v1/chat/completions",
+                        example="accounts/fireworks/models/llama-v3p1-70b-instruct")
+
+
+@register("together")
+def _together(spec: dict):
+    """
+    Together AI. Model ids are Hugging Face style, e.g.
+    `meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo`.
+    """
+    return _openai_host(spec, key_env="TOGETHER_API_KEY",
+                        base_url="https://api.together.xyz/v1/chat/completions",
+                        example="meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo")
+
+
+def _openai_host(spec: dict, *, key_env: str, base_url: str, example: str):
+    """Shared body for the OpenAI-compatible paid hosts."""
+    from .nvidia import NVIDIAProvider
+
+    key_env = spec.get("api_key_env", key_env)
+    # Read at BUILD time only to decide whether the provider can be built, and
+    # never stored: `NVIDIAProvider._api_key` reads the variable again at call
+    # time. The value does not live on the instance, so it cannot reach a
+    # manifest, a record or a traceback.
+    if not os.environ.get(key_env):
+        raise ProviderUnavailable(
+            f"{key_env} is not set, so this provider cannot authenticate.")
+    model_id = spec.get("model_id")
+    if not model_id:
+        raise ProviderUnavailable(
+            f"this provider needs an explicit model_id, e.g. {example!r}")
+    return NVIDIAProvider(
+        model_id, model_version=spec.get("model_version", "unknown"),
+        api_key_env=key_env,
+        base_url=spec.get("base_url", base_url),
+        system_prompt=spec.get("system_prompt", ""),
+        model_family=spec.get("model_family"),
+        timeout_seconds=spec.get("timeout_seconds"),
+        max_retries=spec.get("max_retries"))
 
 
 @register("local")
@@ -259,6 +330,8 @@ def spec_from_env(prefix: str = "QUINTEK") -> dict:
         QUINTEK_MODEL_VERSION=2024-12
         QUINTEK_BASE_URL=...            (optional)
         QUINTEK_API_KEY_ENV=...         (optional; names the key variable)
+        QUINTEK_TIMEOUT_SECONDS=...     (optional)
+        QUINTEK_MAX_RETRIES=...         (optional)
 
     Defaults to `scripted`, and says so, rather than defaulting to a real
     provider that would start spending money because a variable was unset.
@@ -273,6 +346,9 @@ def spec_from_env(prefix: str = "QUINTEK") -> dict:
     timeout = os.environ.get(f"{prefix}_TIMEOUT_SECONDS")
     if timeout:
         spec["timeout_seconds"] = float(timeout)
+    retries = os.environ.get(f"{prefix}_MAX_RETRIES")
+    if retries:
+        spec["max_retries"] = int(retries)
     return spec
 
 
