@@ -31,8 +31,17 @@ from validator.devset import CLEAN, DEFECTIVE, EDGE
 from validator.metrics import ABSTAINED, FLAGGED, PASSED
 
 # A verdict a defective item should have received but did not, grouped by the
-# layer that was in a position to notice.
+# layer that was in a position to notice. This is a COVERAGE statement: every
+# configured layer ran and none of them was built to see this defect.
 NOBODY_LOOKED = "no layer ran that could have seen this"
+
+# An item that produced no verdict because a layer RAISED. Distinct from the
+# above and previously conflated with it: `edge_behaviour` assigned
+# NOBODY_LOOKED whenever a verdict was missing, which reported an outage --
+# a layer that broke -- as a gap in what the design checks. They are opposite
+# findings. One says the validator looked and has no check; the other says it
+# never got to look.
+OUTAGE = "outage: the item could not be validated"
 
 
 def _index(verdicts):
@@ -80,8 +89,9 @@ def false_negatives(cases, verdicts) -> dict:
         by_class[case.defect_class].append(
             {"id": case.id, "derived_from": case.derived_from,
              "mutation": case.mutation,
-             "verdict": verdict.verdict if verdict else NOBODY_LOOKED,
-             "layers_run": list(verdict.layers_run) if verdict else [],
+             # `verdict` cannot be None here: the loop above skips those.
+             "verdict": verdict.verdict,
+             "layers_run": list(verdict.layers_run),
              "note": case.item.defect_note})
     ranked = sorted(by_class.items(), key=lambda kv: (-len(kv[1]), kv[0]))
     caught = Counter()
@@ -118,7 +128,7 @@ def abstentions(cases, verdicts) -> dict:
             "by_check": dict(sorted(checks.items(), key=lambda kv: (-kv[1], kv[0])))}
 
 
-def edge_behaviour(cases, verdicts) -> dict:
+def edge_behaviour(cases, verdicts, outages) -> dict:
     """
     How the validator behaved where competent reviewers disagree.
 
@@ -128,17 +138,31 @@ def edge_behaviour(cases, verdicts) -> dict:
     argue over, and that confidence has to come from somewhere.
     """
     by_id = _index(verdicts)
+    lost = {o.get("id"): o for o in outages}
     counts = Counter()
     rows = []
     for case in cases:
         if case.label != EDGE:
             continue
         verdict = by_id.get(case.id)
-        outcome = verdict.verdict if verdict else NOBODY_LOOKED
+        if verdict is not None:
+            outcome = verdict.verdict
+        elif case.id in lost:
+            outcome = OUTAGE
+        else:
+            # No verdict and no outage record. `pipeline.run` either returns a
+            # Verdict or raises, so this should be unreachable; it is reported
+            # as its own thing rather than folded into either real outcome.
+            outcome = "no verdict and no outage recorded"
         counts[outcome] += 1
-        rows.append({"id": case.id, "verdict": outcome,
-                     "checks": [f"{lay}/{chk}" for lay, chk in (verdict.flags if verdict else ())],
-                     "why_edge": case.edge_reason})
+        row = {"id": case.id, "verdict": outcome,
+               "checks": [f"{lay}/{chk}" for lay, chk in (verdict.flags if verdict else ())],
+               "why_edge": case.edge_reason}
+        if outcome == OUTAGE:
+            failure = lost[case.id]
+            row["outage"] = {"layer": failure.get("layer"), "mode": failure.get("mode"),
+                             "model_was_called": failure.get("model_was_called")}
+        rows.append(row)
     decided = counts[FLAGGED] + counts[PASSED]
     total = sum(counts.values())
     return {"total": total, "by_verdict": dict(sorted(counts.items())),
@@ -191,11 +215,17 @@ def matched_pairs(cases, verdicts) -> dict:
             "items": rows}
 
 
-def report(cases, verdicts) -> dict:
+def report(cases, verdicts, outages) -> dict:
+    """
+    `outages` is required, not optional. An analysis that does not know which
+    items were lost cannot tell a coverage gap from a broken layer, and
+    defaulting it to empty would restore exactly the mislabelling this
+    argument exists to remove.
+    """
     return {"false_positives": false_positives(cases, verdicts),
             "false_negatives": false_negatives(cases, verdicts),
             "abstentions": abstentions(cases, verdicts),
-            "edge_behaviour": edge_behaviour(cases, verdicts),
+            "edge_behaviour": edge_behaviour(cases, verdicts, outages),
             "matched_pairs": matched_pairs(cases, verdicts)}
 
 

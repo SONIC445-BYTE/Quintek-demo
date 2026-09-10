@@ -514,7 +514,9 @@ def test_false_positives_are_grouped_by_the_check_that_caused_them(dev):
 
 def test_edge_cases_are_reported_separately_from_both_arms(dev):
     verdicts = _ceiling(dev.cases)
-    edge = analysis.edge_behaviour(dev.cases, verdicts)
+    # An outage and a coverage gap are different findings; this run has
+    # neither, so the list is empty rather than absent.
+    edge = analysis.edge_behaviour(dev.cases, verdicts, [])
     assert edge["total"] == 20
     matrix = metrics.confusion(
         [metrics.CLEAN if c.label == CLEAN else metrics.DEFECTIVE for c in dev.arms],

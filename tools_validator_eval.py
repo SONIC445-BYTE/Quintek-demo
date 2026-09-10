@@ -79,7 +79,8 @@ import sys
 from pathlib import Path
 
 from validator import (ablation, analysis, budget as budget_mod, forecast as forecast_mod,
-                       freeze as freeze_mod, metrics, pipeline, runs, scripted, wallclock)
+                       freeze as freeze_mod, metrics, outage, pipeline, runs, scripted,
+                       wallclock)
 from benchmark import journal as journal_mod
 from validator.devset import CLEAN, DEFECTIVE, load
 from validator.conformance import ConformanceUnavailable
@@ -101,7 +102,13 @@ def evaluate(cases, *, grounding_provider, judge_provider, config,
                                          conformance_provider=conformance_provider,
                                          config=config))
         except (GroundingUnavailable, JudgeUnavailable, ConformanceUnavailable) as exc:
-            outages.append({"id": case.id, "error": str(exc)})
+            # The whole record, not str(exc). D018 kept only the count and the
+            # reasons went to stdout, so afterwards nobody could say whether an
+            # item died in B or in D, or whether a model was ever called for it.
+            record = exc.as_dict()
+            record["id"] = record.get("id") or case.id
+            record["label"] = case.label
+            outages.append(record)
     return verdicts, outages
 
 
@@ -128,8 +135,15 @@ def render(title, cases, verdicts, outages, *, oracle_used, config):
                 "  This run used a ground-truth oracle in place of a model. The numbers below",
                 "  describe the design's ceiling, not any validator's performance.", ""]
     if outages:
+        summary = outage.summarise(outages)
         out += [f"OUTAGES: {len(outages)} item(s) could not be validated",
-                *(f"  {o['id']}: {o['error'][:140]}" for o in outages[:5]), ""]
+                f"  by layer and mode: {summary['by_layer_and_mode']}",
+                f"  reached a model: {summary['model_was_called']}; "
+                f"never called one: {summary['model_was_not_called']}",
+                *(f"  {o['id']}: [{o['layer']}/{o['mode']}] {o['error'][:110]}"
+                  for o in outages[:5]),
+                ("  (full detail, with raw replies, is in the run artifact)"
+                 if len(outages) > 5 else ""), ""]
     out += [f"decided in arms: {matrix.decided} of {matrix.total} "
             f"({matrix.abstained_defective + matrix.abstained_clean} abstained)",
             f"  sensitivity  {_pct(matrix.sensitivity)}  ci {_ci(matrix.sensitivity_ci)}",
@@ -139,7 +153,7 @@ def render(title, cases, verdicts, outages, *, oracle_used, config):
         out += ["gate: withheld (oracle run)", ""]
     else:
         out += [f"gate: {gate.outcome}", *(f"  - {r}" for r in gate.reasons), ""]
-    out += [analysis.render(analysis.report(cases, verdicts))]
+    out += [analysis.render(analysis.report(cases, verdicts, outages))]
     return "\n".join(x for x in out if x is not None)
 
 
@@ -267,7 +281,9 @@ def _record(devset, verdicts, outages, config, providers, *, kind, note="", free
         providers=providers, counts=matrix.as_dict()["counts"],
         sensitivity=matrix.sensitivity, specificity=matrix.specificity,
         gate=("withheld (oracle run)" if kind == runs.KIND_CEILING else gate.outcome),
-        outages=len(outages), analysis=analysis.report(devset.cases, verdicts), note=note,
+        outages=len(outages), outage_detail=list(outages),
+        outage_summary=outage.summarise(outages),
+        analysis=analysis.report(devset.cases, verdicts, outages), note=note,
         freeze=freeze, budget=dict(budget or {}),
         measurement_unit=measurement_unit,
         items_expected=expected, items_decided=decided,
@@ -288,7 +304,7 @@ def _write(args, devset, verdicts, outages, config, *, oracle_used):
         "gate": None if oracle_used else {"outcome": gate.outcome,
                                           "reasons": list(gate.reasons)},
         "outages": outages,
-        "analysis": analysis.report(devset.cases, verdicts),
+        "analysis": analysis.report(devset.cases, verdicts, outages),
         "verdicts": [v.as_dict() for v in verdicts],
     }
     Path(args.out).write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
@@ -525,7 +541,7 @@ def run_experiments(args):
                                      judge_provider=judge_p,
                                      conformance_provider=conform_p, config=config)
         matrix = score(devset.cases, verdicts)
-        edge = analysis.edge_behaviour(devset.cases, verdicts)
+        edge = analysis.edge_behaviour(devset.cases, verdicts, outages)
         used_fake = any(p.is_oracle or not p.is_model for p in provider_records)
         _record(devset, verdicts, outages, config, provider_records,
                 kind=(runs.KIND_CEILING if used_fake else runs.KIND_DEVELOPMENT),
@@ -534,9 +550,10 @@ def run_experiments(args):
                 budget=spend.as_dict(), measurement_unit=unit)
         arms.append(ablation.Arm(
             name=title, layers=layers, matrix=matrix, outages=len(outages),
+            outage_detail=list(outages), outage_summary=outage.summarise(outages),
             items_expected=len(devset.arms), items_decided=matrix.total,
             edge_abstention=edge["abstention_rate"],
-            analysis=analysis.report(devset.cases, verdicts)))
+            analysis=analysis.report(devset.cases, verdicts, outages)))
         print(render(title, devset.cases, verdicts, outages,
                      oracle_used=used_fake, config=config))
         if book is not None:

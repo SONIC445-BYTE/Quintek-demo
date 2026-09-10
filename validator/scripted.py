@@ -63,11 +63,17 @@ class ReplayProvider(BaseProvider):
     def __init__(self, replies: dict[str, dict | str] | None = None, *,
                  errors: set[str] | None = None, garbage: set[str] | None = None,
                  default: dict | None = None, model: str | None = None,
-                 model_family: str | None = None):
+                 model_family: str | None = None, attempts: int = 1,
+                 error_reply: str = ""):
         self.replies = dict(replies or {})
         self.errors = set(errors or ())
         self.garbage = set(garbage or ())
         self.default = default
+        # What a real provider reports after its retry loop. Carried so a test
+        # can assert the attempt count that reached the outage record rather
+        # than assuming the default.
+        self.attempts = attempts
+        self.error_reply = error_reply
         self.seen: list[str] = []
         self.prompts: list[str] = []
         if model:
@@ -80,9 +86,10 @@ class ReplayProvider(BaseProvider):
         self.prompts.append(request.prompt)
         if request.item_id in self.errors:
             return GenerationResponse(
-                item_id=request.item_id, raw_output="", parsed=None, provider=self.name,
-                model=self.model, model_version=self.model_version, latency_ms=0.0,
-                error="scripted backend failure")
+                item_id=request.item_id, raw_output=self.error_reply, parsed=None,
+                provider=self.name, model=self.model, model_version=self.model_version,
+                latency_ms=0.0, error="scripted backend failure",
+                attempts=self.attempts)
         if request.item_id in self.garbage:
             raw = "I had a look and it seems fine to me."
         else:
@@ -95,7 +102,8 @@ class ReplayProvider(BaseProvider):
             raw = reply if isinstance(reply, str) else json.dumps(reply)
         return GenerationResponse(
             item_id=request.item_id, raw_output=raw, parsed=None, provider=self.name,
-            model=self.model, model_version=self.model_version, latency_ms=0.0)
+            model=self.model, model_version=self.model_version, latency_ms=0.0,
+            attempts=self.attempts)
 
 
 class OracleProvider(ReplayProvider):

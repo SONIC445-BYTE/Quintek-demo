@@ -46,6 +46,8 @@ class Arm:
     layers: str
     matrix: object
     outages: int = 0
+    outage_detail: list = field(default_factory=list)
+    outage_summary: dict = field(default_factory=dict)
     items_expected: int = 0
     items_decided: int = 0
     edge_abstention: float | None = None
@@ -69,6 +71,8 @@ class Arm:
                 "false_negative": self.matrix.false_negative,
                 "abstained": self.matrix.abstained_defective + self.matrix.abstained_clean,
                 "outages": self.outages,
+                "outage_summary": self.outage_summary,
+                "outage_detail": self.outage_detail,
                 "items_expected": self.items_expected,
                 "items_decided": self.items_decided,
                 "edge_abstention_rate": self.edge_abstention,

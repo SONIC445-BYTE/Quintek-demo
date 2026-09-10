@@ -43,6 +43,9 @@ from benchmark.providers.base import GenerationRequest
 from validator.grounding import (LETTERS, MAX_REPLY_TOKENS, extract_json, format_options,
                                  quote_is_in)
 from validator.metrics import ABSTAINED, FLAGGED, PASSED
+from validator.outage import (LayerUnavailable, MODE_CONFIGURATION,
+                             MODE_PRECONDITION, MODE_TRANSPORT,
+                             MODE_UNPARSEABLE, MODE_UNUSABLE)
 
 PROMPT_VERSION = "judge/0.1.0"
 
@@ -87,8 +90,13 @@ PASSAGE_BLOCK = """Reference passage supplied with the question:
 """
 
 
-class JudgeUnavailable(RuntimeError):
-    """The judge could not run, or could not be trusted to. Never a PASS."""
+class JudgeUnavailable(LayerUnavailable):
+    """
+    Layer C did not produce a finding, with the reason recorded. See
+    `validator/outage.py`.
+    """
+
+    layer = "judge"
 
 
 class JudgeNotIndependent(JudgeUnavailable):
@@ -135,12 +143,16 @@ def assert_independent(item: dict, provider) -> None:
         raise JudgeNotIndependent(
             f"{item.get('id', 'item')}: {judge_model!r} wrote this item and cannot judge it. "
             "A model checking its own output agrees with itself, and that agreement is not "
-            "evidence.")
+            "evidence.",
+            mode=MODE_CONFIGURATION, item_id=str(item.get("id", "item")),
+            purpose="independence")
     if author_family and judge_family and author_family == judge_family and author_family != "none":
         raise JudgeNotIndependent(
             f"{item.get('id', 'item')}: the judge and the author are both from the "
             f"{author_family!r} family. Sibling checkpoints agree with each other for reasons "
-            "unrelated to whether the item is correct.")
+            "unrelated to whether the item is correct.",
+            mode=MODE_CONFIGURATION, item_id=str(item.get("id", "item")),
+            purpose="independence")
 
 
 def check(item: dict, provider, *, show_passage: bool = True,
@@ -165,9 +177,12 @@ def check(item: dict, provider, *, show_passage: bool = True,
             or not 0 <= key < len(options):
         raise JudgeUnavailable(
             f"{item_id}: the options or the key are malformed; that is Layer A's finding, not "
-            "something to spend a model call on.")
+            "something to spend a model call on.",
+            mode=MODE_PRECONDITION, item_id=item_id, purpose="options")
     if len(options) > len(LETTERS):
-        raise JudgeUnavailable(f"{item_id}: more options than this layer can label")
+        raise JudgeUnavailable(
+            f"{item_id}: more options than this layer can label",
+            mode=MODE_PRECONDITION, item_id=item_id, purpose="options")
 
     block = PASSAGE_BLOCK.format(passage=passage) if (show_passage and passage) else ""
     request = GenerationRequest(
@@ -181,12 +196,17 @@ def check(item: dict, provider, *, show_passage: bool = True,
     if not response.ok:
         raise JudgeUnavailable(
             f"{item_id}: the judge backend failed ({response.error}). Nothing was judged, so "
-            "nothing may be reported as judged.")
+            "nothing may be reported as judged.",
+            mode=MODE_TRANSPORT, item_id=item_id, purpose="judge",
+            attempts=response.attempts, provider_error=response.error,
+            raw_reply=response.raw_output)
     parsed = extract_json(response.raw_output)
     if parsed is None:
         raise JudgeUnavailable(
             f"{item_id}: the judge returned no JSON object. An unparseable judge is an outage, "
-            "not an agreement.")
+            "not an agreement.",
+            mode=MODE_UNPARSEABLE, item_id=item_id, purpose="judge",
+            attempts=response.attempts, raw_reply=response.raw_output)
 
     valid = LETTERS[:len(options)]
     answer = str(parsed.get("answer") or "").strip().upper()[:1]
@@ -207,7 +227,9 @@ def check(item: dict, provider, *, show_passage: bool = True,
         raise JudgeUnavailable(
             f"{item_id}: the judge answered {answer!r}, which is not one of the "
             f"{len(options)} options. A reply that does not answer the question asked is an "
-            "outage, not a disagreement.")
+            "outage, not a disagreement.",
+            mode=MODE_UNUSABLE, item_id=item_id, purpose="judge",
+            attempts=response.attempts, raw_reply=response.raw_output)
 
     if not answerable:
         checks.append(NOT_ANSWERABLE)

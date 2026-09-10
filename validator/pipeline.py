@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 
 from benchmark.corpus import QUESTION_TYPES
 
-from validator import conformance, grounding, judge, structural
+from validator import conformance, grounding, judge, outage, structural
 from validator.judge import CONFIDENCE_FLOOR
 from validator.metrics import ABSTAINED, FLAGGED, PASSED
 
@@ -155,7 +155,9 @@ def run(item: dict, *, grounding_provider=None, judge_provider=None,
         if grounding_provider is None:
             raise grounding.GroundingUnavailable(
                 f"{item_id}: the grounding layer is enabled but no provider was supplied. A "
-                "layer that is configured and does not run is an outage, not a skipped step.")
+                "layer that is configured and does not run is an outage, not a skipped step.",
+                mode=outage.MODE_CONFIGURATION, item_id=item_id,
+                purpose="provider")
         layers.append(LAYER_GROUNDING)
         result = grounding.check(item, grounding_provider,
                                  check_explanation=config.check_explanation)
@@ -172,7 +174,9 @@ def run(item: dict, *, grounding_provider=None, judge_provider=None,
         if judge_provider is None:
             raise judge.JudgeUnavailable(
                 f"{item_id}: the judge layer is enabled but no provider was supplied. A layer "
-                "that is configured and does not run is an outage, not a skipped step.")
+                "that is configured and does not run is an outage, not a skipped step.",
+                mode=outage.MODE_CONFIGURATION, item_id=item_id,
+                purpose="provider")
         layers.append(LAYER_JUDGE)
         result = judge.check(item, judge_provider,
                              show_passage=config.show_passage_to_judge,
@@ -191,7 +195,9 @@ def run(item: dict, *, grounding_provider=None, judge_provider=None,
         if provider is None:
             raise conformance.ConformanceUnavailable(
                 f"{item_id}: the conformance layer is enabled but no provider was supplied. A "
-                "layer that is configured and does not run is an outage, not a skipped step.")
+                "layer that is configured and does not run is an outage, not a skipped step.",
+                mode=outage.MODE_CONFIGURATION, item_id=item_id,
+                purpose="provider")
         layers.append(LAYER_CONFORMANCE)
         result = conformance.check(item, provider)
         results[LAYER_CONFORMANCE] = result

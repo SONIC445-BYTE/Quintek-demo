@@ -64,6 +64,8 @@ from dataclasses import dataclass, field
 from benchmark.providers.base import GenerationRequest
 
 from validator.metrics import ABSTAINED, FLAGGED, PASSED
+from validator.outage import (LayerUnavailable, MODE_PRECONDITION,
+                             MODE_TRANSPORT, MODE_UNPARSEABLE)
 
 PROMPT_VERSION = "grounding/0.1.0"
 
@@ -99,6 +101,8 @@ EXPLANATION_ASSERTS_WITHOUT_REASON = "explanation_asserts_without_reason"
 
 # Failures of the validator itself, not of the item.
 EVIDENCE_NOT_IN_PASSAGE = "evidence_not_in_passage"
+LAYER = "grounding"
+
 REPLY_UNPARSEABLE = "reply_unparseable"
 
 LETTERS = "ABCDEFGH"
@@ -157,14 +161,13 @@ Reply with one JSON object:
   "gives_a_reason": true or false}}"""
 
 
-class GroundingUnavailable(RuntimeError):
+class GroundingUnavailable(LayerUnavailable):
     """
-    The layer could not run. Never a PASS.
+    Layer B did not produce a finding, and the record says which of the five
+    reasons it was. See `validator/outage.py`.
+    """
 
-    A configured backend that fails is an outage. Returning "no problem found"
-    when nothing was checked is how an unchecked item reaches a learner with a
-    validation stamp on it.
-    """
+    layer = LAYER
 
 
 @dataclass(frozen=True)
@@ -241,12 +244,17 @@ def _ask(provider, item_id: str, prompt: str, *, purpose: str) -> tuple[dict, st
     if not response.ok:
         raise GroundingUnavailable(
             f"{item_id}: the grounding backend failed ({response.error}). Nothing was checked, "
-            "so nothing may be reported as checked.")
+            "so nothing may be reported as checked.",
+            mode=MODE_TRANSPORT, item_id=item_id, purpose=purpose,
+            attempts=response.attempts, provider_error=response.error,
+            raw_reply=response.raw_output)
     parsed = extract_json(response.raw_output)
     if parsed is None:
         raise GroundingUnavailable(
             f"{item_id}: the grounding backend returned no JSON object for {purpose}. An "
-            "unparseable validator is an outage, not a clean item.")
+            "unparseable validator is an outage, not a clean item.",
+            mode=MODE_UNPARSEABLE, item_id=item_id, purpose=purpose,
+            attempts=response.attempts, raw_reply=response.raw_output)
     return parsed, response.raw_output
 
 
@@ -263,14 +271,18 @@ def check(item: dict, provider, *, check_explanation: bool = True) -> GroundingR
         raise GroundingUnavailable(
             f"{item_id}: no source passage. This layer checks the key against the evidence "
             "supplied with the item; with no evidence there is nothing to check against, and "
-            "the absence is a structural finding, not a grounding one.")
+            "the absence is a structural finding, not a grounding one.",
+            mode=MODE_PRECONDITION, item_id=item_id, purpose="passage")
     if not options or not isinstance(key, int) or isinstance(key, bool) \
             or not 0 <= key < len(options):
         raise GroundingUnavailable(
             f"{item_id}: the options or the key are malformed. Layer A decides that; this "
-            "layer must not be handed an item it cannot form a question from.")
+            "layer must not be handed an item it cannot form a question from.",
+            mode=MODE_PRECONDITION, item_id=item_id, purpose="options")
     if len(options) > len(LETTERS):
-        raise GroundingUnavailable(f"{item_id}: more options than this layer can label")
+        raise GroundingUnavailable(
+            f"{item_id}: more options than this layer can label",
+            mode=MODE_PRECONDITION, item_id=item_id, purpose="options")
 
     checks: list[str] = []
     detail: list[str] = []

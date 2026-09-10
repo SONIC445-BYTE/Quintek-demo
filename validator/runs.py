@@ -87,6 +87,12 @@ class Run:
     specificity: float | None = None
     gate: str = ""
     outages: int = 0
+    #: One record per lost item: layer, failure mode, raw reply, attempt count.
+    #: D018 stored only the count above, and the reasons -- which went to
+    #: stdout and were never kept -- were the difference between a diagnosable
+    #: failure and an undiagnosable one.
+    outage_detail: list = field(default_factory=list)
+    outage_summary: dict = field(default_factory=dict)
     analysis: dict = field(default_factory=dict)
     note: str = ""
     freeze: str = ""
@@ -136,7 +142,9 @@ class Run:
                 "used_a_test_double": self.used_a_test_double, "is_real": self.is_real,
                 "counts": self.counts, "sensitivity": self.sensitivity,
                 "specificity": self.specificity, "gate": self.gate,
-                "outages": self.outages, "analysis": self.analysis, "note": self.note,
+                "outages": self.outages, "outage_detail": self.outage_detail,
+                "outage_summary": self.outage_summary,
+                "analysis": self.analysis, "note": self.note,
                 "freeze": self.freeze, "budget": self.budget,
                 "measurement_unit": self.measurement_unit,
                 "completeness": self.completeness,
@@ -187,7 +195,10 @@ def load_all(runs_dir: str | Path = RUNS_DIR) -> list[Run]:
             providers=[ProviderRecord(**p) for p in (raw.get("providers") or [])],
             counts=raw.get("counts") or {}, sensitivity=raw.get("sensitivity"),
             specificity=raw.get("specificity"), gate=raw.get("gate", ""),
-            outages=int(raw.get("outages") or 0), analysis=raw.get("analysis") or {},
+            outages=int(raw.get("outages") or 0),
+            outage_detail=list(raw.get("outage_detail") or []),
+            outage_summary=dict(raw.get("outage_summary") or {}),
+            analysis=raw.get("analysis") or {},
             note=raw.get("note", ""), freeze=raw.get("freeze", ""),
             budget=raw.get("budget") or {},
             measurement_unit=raw.get("measurement_unit", ""),

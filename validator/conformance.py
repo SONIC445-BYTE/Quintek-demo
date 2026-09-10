@@ -39,6 +39,8 @@ from dataclasses import dataclass
 
 from benchmark.providers.base import GenerationRequest
 
+from validator.outage import (LayerUnavailable, MODE_PRECONDITION,
+                             MODE_TRANSPORT, MODE_UNPARSEABLE)
 from validator.grounding import (MAX_REPLY_TOKENS, extract_json, format_options,
                                  quote_is_in)
 from validator.metrics import ABSTAINED, FLAGGED, PASSED
@@ -111,8 +113,13 @@ Reply with one JSON object:
   "reasoning": "one or two sentences"}}"""
 
 
-class ConformanceUnavailable(RuntimeError):
-    """The layer could not run. Never a PASS."""
+class ConformanceUnavailable(LayerUnavailable):
+    """
+    Layer D did not produce a finding, with the reason recorded. See
+    `validator/outage.py`.
+    """
+
+    layer = "conformance"
 
 
 @dataclass(frozen=True)
@@ -154,10 +161,12 @@ def check(item: dict, provider, *,
         raise ConformanceUnavailable(
             f"{item_id}: no declared concept or difficulty. This layer compares the item "
             "against what was asked for; with nothing asked for there is nothing to compare "
-            "against, and passing it silently would report an unchecked item as conforming.")
+            "against, and passing it silently would report an unchecked item as conforming.",
+            mode=MODE_PRECONDITION, item_id=item_id, purpose="request")
     if not options or not stem:
         raise ConformanceUnavailable(
-            f"{item_id}: the item has no stem or no options; that is Layer A's finding.")
+            f"{item_id}: the item has no stem or no options; that is Layer A's finding.",
+            mode=MODE_PRECONDITION, item_id=item_id, purpose="options")
 
     request = GenerationRequest(
         item_id=f"{item_id}:conformance", system=SYSTEM, temperature=0.0,
@@ -170,12 +179,17 @@ def check(item: dict, provider, *,
     if not response.ok:
         raise ConformanceUnavailable(
             f"{item_id}: the conformance backend failed ({response.error}). Nothing was "
-            "checked, so nothing may be reported as checked.")
+            "checked, so nothing may be reported as checked.",
+            mode=MODE_TRANSPORT, item_id=item_id, purpose="conformance",
+            attempts=response.attempts, provider_error=response.error,
+            raw_reply=response.raw_output)
     parsed = extract_json(response.raw_output)
     if parsed is None:
         raise ConformanceUnavailable(
             f"{item_id}: the conformance backend returned no JSON object. An unparseable "
-            "check is an outage, not a conforming item.")
+            "check is an outage, not a conforming item.",
+            mode=MODE_UNPARSEABLE, item_id=item_id, purpose="conformance",
+            attempts=response.attempts, raw_reply=response.raw_output)
 
     checks: list[str] = []
     detail: list[str] = []
