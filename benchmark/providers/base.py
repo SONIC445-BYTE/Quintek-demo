@@ -84,6 +84,32 @@ class GenerationRequest:
     metadata: dict = field(default_factory=dict)
 
 
+class RateLimited(RuntimeError):
+    """
+    The host refused because we asked too fast, and said so with a 429.
+
+    A DISTINCT EXCEPTION, not a transport failure. The two need different
+    handling and they mean different things about the run:
+
+      * a transport failure is the network or the host being unwell, and the
+        honest reaction is to retry a couple of times and then give up;
+      * a 429 is the host working perfectly and telling us our own pace is
+        wrong. Retrying it immediately -- which is what a zero backoff does --
+        spends an attempt to be refused again, and on a per-minute quota that
+        is a run converting its allowance into 429s.
+
+    `retry_after` is the host's own number when it sent one. Honoured rather
+    than guessed at: a server that says 13 seconds knows something the client
+    does not.
+    """
+
+    def __init__(self, message: str, *, retry_after: float | None = None,
+                 status: int = 429):
+        super().__init__(message)
+        self.retry_after = retry_after
+        self.status = status
+
+
 @dataclass(frozen=True)
 class RetryPolicy:
     """
@@ -108,6 +134,15 @@ class RetryPolicy:
     max_retries: int = 2
     timeout_seconds: float = 30.0
     backoff_base_seconds: float = 0.0
+    #: Separate from the backoff above, which stays 0.0 so the paid hosts are
+    #: unaffected. A 429 is not a transport blip and must not be retried at
+    #: once; this is the base for its exponential backoff when the host did
+    #: not send a Retry-After of its own.
+    rate_limit_backoff_seconds: float = 2.0
+    #: Never wait longer than this for one retry, however large Retry-After is.
+    #: A host asking for an hour has effectively ended the run, and the honest
+    #: outcome is an outage rather than a process that looks hung.
+    max_rate_limit_wait_seconds: float = 60.0
 
 
 @dataclass
@@ -185,8 +220,9 @@ class BaseProvider:
                 err = f"{type(exc).__name__}: {exc}"
                 if attempt > self.retry_policy.max_retries:
                     break
-                if self.retry_policy.backoff_base_seconds:
-                    time.sleep(self.retry_policy.backoff_base_seconds * attempt)
+                wait = self._wait_before_retry(exc, attempt)
+                if wait:
+                    time.sleep(wait)
         return GenerationResponse(
             item_id=request.item_id, raw_output=raw, parsed=parsed,
             provider=self.name, model=self.model, model_version=self.model_version,
@@ -195,6 +231,30 @@ class BaseProvider:
             request_metadata={"temperature": request.temperature,
                               "max_tokens": request.max_tokens},
         )
+
+    def _wait_before_retry(self, exc: Exception, attempt: int) -> float:
+        """
+        How long to wait before the next attempt, in seconds.
+
+        Two regimes, because the two failures mean different things. A
+        transport error gets the ordinary backoff, which is 0.0 by default and
+        leaves every existing host behaving exactly as before. A 429 gets the
+        host's own `Retry-After` if it sent one, and an exponential backoff if
+        it did not -- retrying a rate limit immediately spends an attempt to be
+        refused again.
+
+        The wait is capped. A host asking for an hour has ended the run in
+        practice, and a process that sleeps through it looks hung rather than
+        failed; better to exhaust the retries and record the outage.
+        """
+        policy = self.retry_policy
+        if isinstance(exc, RateLimited):
+            if exc.retry_after is not None:
+                wait = float(exc.retry_after)
+            else:
+                wait = policy.rate_limit_backoff_seconds * (2 ** (attempt - 1))
+            return max(0.0, min(wait, policy.max_rate_limit_wait_seconds))
+        return policy.backoff_base_seconds * attempt
 
     def _call(self, request: GenerationRequest, timeout_seconds: float):
         """

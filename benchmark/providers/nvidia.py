@@ -27,7 +27,7 @@ from dataclasses import replace
 import urllib.error
 import urllib.request
 
-from .base import BaseProvider, GenerationRequest, content_of
+from .base import BaseProvider, GenerationRequest, content_of, RateLimited
 
 NIM_CHAT_COMPLETIONS_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
@@ -79,6 +79,29 @@ def _infer_family(model_id: str) -> str:
 #: or globally with
 #: NVIDIA_TIMEOUT_SECONDS for a dedicated deployment where 30s is realistic.
 NIM_DEFAULT_TIMEOUT_SECONDS = 180.0
+
+
+
+def _retry_after(headers) -> float | None:
+    """
+    The host's own wait, in seconds, or None.
+
+    `Retry-After` is either a count of seconds or an HTTP date. Only the
+    numeric form is honoured: a date needs the server's clock to agree with
+    ours, and a skewed clock would produce either a busy-wait or a sleep of
+    hours. Unparseable means None, which falls back to exponential backoff --
+    the conservative direction.
+    """
+    if headers is None:
+        return None
+    raw = headers.get("Retry-After") or headers.get("retry-after")
+    if raw is None:
+        return None
+    try:
+        seconds = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds >= 0 else None
 
 
 class NVIDIAProvider(BaseProvider):
@@ -159,8 +182,17 @@ class NVIDIAProvider(BaseProvider):
                 raw_bytes = resp.read()
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            # 429/5xx are exactly what the retry loop in BaseProvider.generate
-            # exists for; raising lets that loop do its job.
+            if exc.code == 429:
+                # Not a transport failure: the host is well and is telling us
+                # our pace is wrong. Raised as its own type so the retry loop
+                # waits instead of asking again at once, and so the outage
+                # record can say "rate limited" rather than "the backend
+                # failed" -- which would send a reader looking at the host.
+                raise RateLimited(
+                    f"HTTP 429 rate limited: {detail[:300]}",
+                    retry_after=_retry_after(exc.headers)) from exc
+            # 5xx and the rest are what the retry loop exists for; raising
+            # lets that loop do its job.
             raise RuntimeError(f"NVIDIA NIM HTTP {exc.code}: {detail[:500]}") from exc
         except urllib.error.URLError as exc:
             raise TimeoutError(f"NVIDIA NIM request failed: {exc.reason}") from exc

@@ -47,6 +47,7 @@ DEFAULT_KEY_ENV = {
     "cerebras": "CEREBRAS_API_KEY",
     "fireworks": "FIREWORKS_API_KEY",
     "together": "TOGETHER_API_KEY",
+    "groq": "GROQ_API_KEY",
     "openai-compatible": "OPENAI_API_KEY",
 }
 
@@ -78,6 +79,13 @@ def preflight(spec: dict) -> dict:
     })
     retries = report["max_retries"]
     report["outbound_attempts_per_call"] = (None if retries is None else retries + 1)
+    # What is binding on this host. Groq meters REQUESTS PER MINUTE, so a run
+    # against it is planned in wall clock first; the paid hosts bill per token
+    # and the ceiling that matters there is spend.
+    report["binding_constraint"] = {
+        "groq": "requests per minute (free tier ~30 RPM, unverified) and a separate "
+                "daily ceiling. Plan wall clock first, budget second.",
+    }.get(provider, "token spend" if report["is_real_model"] else "")
     report["unverified"] = [
         "the endpoint is a default; nothing here has ever reached it",
         "whether the model id exists on that host",
@@ -102,8 +110,10 @@ def _render(r: dict) -> str:
         f"timeout         {r['timeout_seconds']}s",
         f"retries         {r['max_retries']} "
         f"(up to {r['outbound_attempts_per_call']} outbound attempts per call)",
-        "",
     ]
+    if r.get("binding_constraint"):
+        out.append(f"binding limit   {r['binding_constraint']}")
+    out.append("")
     if r["buildable"]:
         out.append("BUILDABLE: this configuration constructs.")
     else:

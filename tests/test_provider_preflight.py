@@ -110,6 +110,7 @@ def test_the_command_reads_the_environment_by_default(monkeypatch, capsys):
 @pytest.mark.parametrize("provider,key_env", [
     ("fireworks", "FIREWORKS_API_KEY"),
     ("together", "TOGETHER_API_KEY"),
+    ("groq", "GROQ_API_KEY"),
 ])
 def test_both_candidate_hosts_are_registered_and_behave_identically(
         provider, key_env, monkeypatch):
@@ -215,3 +216,54 @@ def test_the_credential_is_not_read_until_call_time(monkeypatch):
     response = provider.generate(GenerationRequest(item_id="q", prompt="x"))
     assert response.ok is False
     assert "FIREWORKS_API_KEY" in response.error
+
+
+# ---------------------------------------------------------------------------
+# Groq
+# ---------------------------------------------------------------------------
+
+def test_groq_needs_an_explicit_model_id(monkeypatch):
+    """
+    Groq's catalogue changes and its ids are plain names, so guessing one would
+    produce a 404 that looks like a broken key. None is defaulted.
+    """
+    monkeypatch.setenv("GROQ_API_KEY", KEY)
+    report = preflight({"provider": "groq"})
+    assert report["buildable"] is False
+    assert "model_id" in report["reason"]
+
+
+def test_groq_preflight_prints_what_must_be_checked_by_hand(monkeypatch, capsys):
+    """
+    The endpoint and the model id are the two things nothing here can verify,
+    so both are printed for checking against Groq's docs before a call.
+    """
+    monkeypatch.setenv("GROQ_API_KEY", KEY)
+    assert main(["--provider", "groq", "--model-id", "a-model-id"]) == 0
+    out = capsys.readouterr().out
+    assert "https://api.groq.com/openai/v1/chat/completions" in out
+    assert "a-model-id" in out
+    assert "GROQ_API_KEY" in out and KEY not in out
+    assert "no request was made" in out
+
+
+def test_groq_reports_rate_as_the_binding_limit(monkeypatch):
+    """
+    Different from the paid hosts, and it changes how a run is planned: Groq
+    meters requests per minute, so wall clock binds before spend does.
+    """
+    monkeypatch.setenv("GROQ_API_KEY", KEY)
+    groq = preflight({"provider": "groq", "model_id": "m"})
+    assert "per minute" in groq["binding_constraint"]
+    assert "daily" in groq["binding_constraint"]
+
+    monkeypatch.setenv("FIREWORKS_API_KEY", KEY)
+    paid = preflight({"provider": "fireworks", "model_id": "a/b/c"})
+    assert paid["binding_constraint"] == "token spend"
+
+
+def test_groq_preflight_makes_no_request(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", KEY)
+    from unittest.mock import patch
+    with patch("urllib.request.urlopen", side_effect=AssertionError("preflight called out")):
+        assert preflight({"provider": "groq", "model_id": "m"})["buildable"] is True

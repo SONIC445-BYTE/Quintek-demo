@@ -26,6 +26,11 @@ distinction that matters most:
                    This is a corpus or Layer-A finding wearing an outage's
                    clothes, and counting it against a model is a mistake.
     transport      the call failed: network, HTTP status, timeout, auth.
+    rate_limited   the host refused because we asked too fast. NOT a transport
+                   failure: the host is working, our pacing is wrong. Counting
+                   it as transport would make a self-inflicted problem look
+                   like an unreliable provider, and the two have opposite
+                   fixes.
     unparseable    a reply arrived and contained no JSON object.
     unusable       a reply arrived and parsed, but its content was not an
                    answer to the question asked.
@@ -46,15 +51,22 @@ MAX_STORED_REPLY = 64 * 1024
 MODE_CONFIGURATION = "configuration"
 MODE_PRECONDITION = "precondition"
 MODE_TRANSPORT = "transport"
+MODE_RATE_LIMITED = "rate_limited"
 MODE_UNPARSEABLE = "unparseable"
 MODE_UNUSABLE = "unusable_reply"
 
 MODES = (MODE_CONFIGURATION, MODE_PRECONDITION, MODE_TRANSPORT,
-         MODE_UNPARSEABLE, MODE_UNUSABLE)
+         MODE_RATE_LIMITED, MODE_UNPARSEABLE, MODE_UNUSABLE)
 
 #: Modes where a model was actually asked something. The complement is the set
 #: that must NOT be read as evidence about a candidate's reliability.
-MODEL_WAS_CALLED = (MODE_TRANSPORT, MODE_UNPARSEABLE, MODE_UNUSABLE)
+MODEL_WAS_CALLED = (MODE_TRANSPORT, MODE_RATE_LIMITED, MODE_UNPARSEABLE,
+                    MODE_UNUSABLE)
+
+#: Modes that say the RUN was paced wrong rather than that anything is broken.
+#: Kept separate so a rerun report can say "this many items were lost to our
+#: own rate" without that being read as the host being unreliable.
+SELF_INFLICTED = (MODE_RATE_LIMITED,)
 
 
 class LayerUnavailable(RuntimeError):
@@ -138,3 +150,16 @@ def summarise(records: list[dict]) -> dict:
         "model_was_called": called,
         "model_was_not_called": len(records) - called,
     }
+
+
+def was_rate_limited(response) -> bool:
+    """
+    Did this response fail because the host refused our pace?
+
+    Read off the error string rather than the exception type, because by the
+    time a layer sees it the provider's retry loop has already flattened the
+    exception into `response.error`. `RateLimited` is the type raised inside
+    `_call`; this is how it survives the flattening.
+    """
+    error = getattr(response, "error", None) or ""
+    return "RateLimited" in error or "429" in error

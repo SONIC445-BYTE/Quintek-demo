@@ -27,14 +27,16 @@ def test_the_known_providers_are_named(monkeypatch):
     protocol through the same adapter, so the credential decides, not the code.
     """
     assert set(available()) == {"scripted", "nvidia", "openai-compatible", "local",
-                                "cerebras", "openrouter", "fireworks", "together"}
+                                "cerebras", "openrouter", "fireworks", "together",
+                                "groq"}
 
 
 def test_every_paid_host_needs_its_own_key(monkeypatch):
     for provider, key_env, model in (("cerebras", "CEREBRAS_API_KEY", "llama3.1-8b"),
                                      ("openrouter", "OPENROUTER_API_KEY", "x/y"),
                                      ("fireworks", "FIREWORKS_API_KEY", "a/b/c"),
-                                     ("together", "TOGETHER_API_KEY", "org/model")):
+                                     ("together", "TOGETHER_API_KEY", "org/model"),
+                                     ("groq", "GROQ_API_KEY", "some-model-id")):
         monkeypatch.delenv(key_env, raising=False)
         with pytest.raises(ProviderUnavailable, match=key_env):
             build_provider({"provider": provider, "model_id": model})

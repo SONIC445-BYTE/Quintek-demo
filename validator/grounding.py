@@ -64,8 +64,10 @@ from dataclasses import dataclass, field
 from benchmark.providers.base import GenerationRequest
 
 from validator.metrics import ABSTAINED, FLAGGED, PASSED
-from validator.outage import (LayerUnavailable, MODE_PRECONDITION,
-                             MODE_TRANSPORT, MODE_UNPARSEABLE)
+from validator.outage import (was_rate_limited as _was_rate_limited,
+                             LayerUnavailable, MODE_PRECONDITION,
+                             MODE_RATE_LIMITED, MODE_TRANSPORT,
+                             MODE_UNPARSEABLE)
 
 PROMPT_VERSION = "grounding/0.1.0"
 
@@ -245,7 +247,10 @@ def _ask(provider, item_id: str, prompt: str, *, purpose: str) -> tuple[dict, st
         raise GroundingUnavailable(
             f"{item_id}: the grounding backend failed ({response.error}). Nothing was checked, "
             "so nothing may be reported as checked.",
-            mode=MODE_TRANSPORT, item_id=item_id, purpose=purpose,
+            # A 429 is our pace, not the host's health. Classified apart so a
+            # rerun can say how many items we lost to our own rate.
+            mode=(MODE_RATE_LIMITED if _was_rate_limited(response)
+                  else MODE_TRANSPORT), item_id=item_id, purpose=purpose,
             attempts=response.attempts, provider_error=response.error,
             raw_reply=response.raw_output)
     parsed = extract_json(response.raw_output)

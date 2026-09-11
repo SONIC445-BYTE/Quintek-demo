@@ -78,6 +78,7 @@ import json
 import sys
 from pathlib import Path
 
+from benchmark.providers import pacing
 from validator import (ablation, analysis, budget as budget_mod, forecast as forecast_mod,
                        freeze as freeze_mod, metrics, outage, pipeline, runs, scripted,
                        wallclock)
@@ -448,6 +449,26 @@ def run_experiments(args):
 
     spend = budget_mod.Budget(max_calls=args.max_calls,
                               max_judge_calls=args.max_judge_calls)
+    # Pacing BEFORE metering, so the limiter wraps `_call` underneath the
+    # budget counter and every outbound attempt -- retries included -- waits
+    # its turn. On a per-minute quota this is what keeps the run from spending
+    # its allowance on 429s; see benchmark/providers/pacing.py.
+    limiter = None
+    if args.requests_per_minute:
+        limiter = pacing.RateLimiter(args.requests_per_minute,
+                                     safety_factor=args.rate_safety_factor)
+        for prov in (ground, judge_provider):
+            pacing.paced(prov, limiter)
+        # Logical calls, times the retry multiplier: the limiter paces OUTBOUND
+        # attempts, so the forecast has to be in the same unit or the wall-clock
+        # estimate is short by the retry factor.
+        planned = (plan["planned"]["total"]
+                   * plan["retry"]["attempts_per_logical_call"])
+        print(f"pacing: {limiter.effective_rpm:.1f} requests/min effective "
+              f"({args.requests_per_minute} documented x {args.rate_safety_factor}), "
+              f"{limiter.min_interval_seconds:.2f}s apart"
+              + (f"; ~{limiter.forecast_minutes(planned):.0f} min for {planned} attempts"
+                 if planned else ""))
     clock = (wallclock.WallClock(max_minutes=args.max_wall_minutes)
              if args.max_wall_minutes is not None else None)
     boundaries = set()
@@ -720,6 +741,16 @@ def main(argv=None):
     _seats(experiments)
     _budget_args(experiments)
     experiments.add_argument("--max-retries", type=int, default=2)
+    experiments.add_argument(
+        "--requests-per-minute", type=float, default=None,
+        help="pace outbound attempts to this documented limit. Required for a host "
+             "that meters requests rather than tokens -- without it the run spends "
+             "its allowance being refused. Omit for a host with no rate quota.")
+    experiments.add_argument(
+        "--rate-safety-factor", type=float, default=pacing.DEFAULT_SAFETY_FACTOR,
+        help="fraction of the documented limit to actually use (default "
+             f"{pacing.DEFAULT_SAFETY_FACTOR}). A quota is enforced over a window the "
+             "client cannot see, so asking for exactly the limit exceeds it.")
     experiments.add_argument("--max-wall-minutes", type=float, default=None,
                              help="stop starting new calls once this many minutes have "
                                   "elapsed since the invocation started; a call already "

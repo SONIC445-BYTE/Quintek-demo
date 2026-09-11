@@ -259,6 +259,37 @@ def _together(spec: dict):
                         example="meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo")
 
 
+@register("groq")
+def _groq(spec: dict):
+    """
+    Groq. OpenAI-compatible, and different from Fireworks and Together in the
+    one way that matters for planning a run.
+
+    THE BINDING CONSTRAINT IS RATE, NOT PRICE. The paid hosts bill per token
+    and will serve as fast as you ask. Groq's free tier meters requests per
+    minute -- roughly 30 at the time of writing, which nothing here can verify
+    -- and a run that sprints at it spends its attempts on 429s instead of
+    answers. So a Groq run is planned in WALL CLOCK first and budget second,
+    which is the reverse of every other host in this registry. See
+    `benchmark/providers/pacing.py`.
+
+    Daily request and token ceilings are a SEPARATE limit from the per-minute
+    one. Hitting one mid-run is an INCOMPLETE, never a score -- a run that
+    stopped because it ran out of allowance measured a fraction of the corpus,
+    and the fraction is not a result.
+
+    Model ids are plain names rather than account-scoped paths, and the exact
+    strings change as Groq's catalogue does, so none is defaulted here: the id
+    must be given explicitly and `preflight` prints it back for checking
+    against Groq's own model list before the first call.
+    """
+    return _openai_host(spec, key_env="GROQ_API_KEY",
+                        base_url="https://api.groq.com/openai/v1/chat/completions",
+                        example="a plain model id from Groq's catalogue, e.g. the "
+                                "llama / gpt-oss / qwen families -- check the exact "
+                                "string against Groq's docs, none is assumed here")
+
+
 def _openai_host(spec: dict, *, key_env: str, base_url: str, example: str):
     """Shared body for the OpenAI-compatible paid hosts."""
     from .nvidia import NVIDIAProvider
