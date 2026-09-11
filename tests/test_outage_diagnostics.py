@@ -421,3 +421,70 @@ def test_false_positives_record_every_item_id_not_a_sample():
                         if all(c.startswith("conformance/") for c in ch)}
     assert conformance_only == {"c1", "c2", "c3"}
     assert set(per_item) - conformance_only == {"c4", "c5"}
+
+
+# ---------------------------------------------------------------------------
+# Checks that run and report but decide nothing
+# ---------------------------------------------------------------------------
+
+def test_a_non_gating_check_reports_without_flagging():
+    """
+    `below_declared_difficulty` compares an item's declared difficulty against
+    the level the candidate reports. It applies that rule faithfully -- the
+    adjudication found zero implementation issues. What has no evidence is the
+    other side: every corpus item is `gold_standard: false`, `reviewed_by`
+    empty, so a disagreement is not evidence about either.
+
+    It still runs and still reports. It just stops deciding.
+    """
+    from validator import gating
+
+    provider = ReplayProvider({
+        **_replies(),
+        "it-1:conformance": {"concept_tested": "Pre-renal AKI",
+                             "matches_requested_concept": True,
+                             "cognitive_level": "recall",          # below pg_entry
+                             "answerable_from_wording_alone": False},
+    })
+    verdict = pipeline.run(ITEM, grounding_provider=provider, judge_provider=provider,
+                           conformance_provider=provider, config=pipeline.Config())
+
+    assert ("conformance", "below_declared_difficulty") in verdict.non_gating
+    assert ("conformance", "below_declared_difficulty") not in verdict.flags
+    assert verdict.verdict != "FLAGGED", "a non-gating finding must not decide the verdict"
+
+    recorded = verdict.as_dict()["non_gating"]
+    assert recorded and recorded[0]["why"], "the record must carry WHY it does not gate"
+    assert "gold_standard" in recorded[0]["why"]
+    assert gating.is_gating("key_not_supported_by_passage") is True
+
+
+def test_a_gating_check_still_decides():
+    """The exclusion is one check, not a general softening."""
+    from validator import gating
+
+    provider = ReplayProvider({
+        **_replies(),
+        "it-1:key": {"supported": ["B"],
+                     "evidence": {"B": "the fractional excretion of sodium is below one percent"},
+                     "passage_addresses_question": True},
+    })
+    verdict = pipeline.run(ITEM, grounding_provider=provider, judge_provider=provider,
+                           conformance_provider=provider, config=pipeline.Config())
+    assert verdict.verdict == "FLAGGED"
+    assert verdict.flags, "a check with gold behind it still gates"
+    assert gating.is_gating("below_declared_difficulty") is False
+
+
+def test_the_cost_of_the_exclusion_is_recorded_not_hidden():
+    """
+    Excluding a check removes a capability. The blind spot it creates is
+    declared, with the reason, so nobody reads the resulting specificity as
+    free.
+    """
+    from validator import scripted
+
+    assert "trivial" in scripted.UNCOVERED_BY_DESIGN
+    why = scripted.UNCOVERED_REASONS["trivial"]
+    assert "below_declared_difficulty" in why
+    assert "gold" in why, "the reason must say what would recover it"

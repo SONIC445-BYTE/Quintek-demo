@@ -448,12 +448,49 @@ def _ceiling(cases):
             for c in cases]
 
 
-def test_a_flawless_run_of_this_design_catches_every_planted_defect(dev):
+def test_a_flawless_run_catches_every_defect_except_the_declared_blind_spots(dev):
+    """
+    The ceiling, and the exact price of the checks that do not gate.
+
+    This used to assert `missed == []`. It cannot any more: excluding
+    `below_declared_difficulty` from the gate (validator/gating.py) removed the
+    only check that sees a `trivial` mutation, and the four planted ones are
+    now missed even by a flawless run.
+
+    So the assertion is derived from `UNCOVERED_BY_DESIGN` rather than
+    hard-coded. A defect class that stops being caught has to be ADDED to that
+    list before this passes, and a class wrongly listed there fails as soon as
+    something catches it -- the list and the measurement cannot drift apart.
+    """
     verdicts = _ceiling(dev.cases)
     by_id = {v.item_id: v for v in verdicts}
-    missed = [c.id for c in dev.by_label(DEFECTIVE)
+    missed = [c for c in dev.by_label(DEFECTIVE)
               if by_id[c.id].verdict != metrics.FLAGGED]
-    assert missed == []
+
+    missed_classes = {c.defect_class for c in missed}
+    declared = set(scripted.UNCOVERED_BY_DESIGN)
+    assert missed_classes == declared, (
+        f"the ceiling misses {sorted(missed_classes)} but "
+        f"UNCOVERED_BY_DESIGN declares {sorted(declared)}. Either a blind spot "
+        "appeared without being recorded, or a recorded one is now covered.")
+
+    # Every class is either wholly caught or wholly missed -- a partial result
+    # would mean the ceiling depends on something other than the design.
+    for defect_class in declared:
+        of_class = [c.id for c in dev.by_label(DEFECTIVE)
+                    if c.defect_class == defect_class]
+        assert sorted(c.id for c in missed if c.defect_class == defect_class) \
+            == sorted(of_class), f"{defect_class} is only partly missed"
+
+
+def test_every_declared_blind_spot_says_why(dev):
+    """A list of class names is not a record of a decision."""
+    for defect_class in scripted.UNCOVERED_BY_DESIGN:
+        reason = scripted.UNCOVERED_REASONS.get(defect_class, "")
+        assert len(reason) > 80, (
+            f"{defect_class} is declared uncovered with no reason recorded. The "
+            "next reader needs to know whether it was never buildable or was "
+            "given up, and what would recover it.")
 
 
 def test_a_flawless_run_of_this_design_flags_no_clean_item(dev):
@@ -492,7 +529,11 @@ def test_matched_pairs_separates_discrimination_from_flagging_everything(dev):
     verdicts = _ceiling(dev.cases)
     pairs = analysis.matched_pairs(dev.cases, verdicts)
     assert pairs["pairs"] == 40
-    assert pairs["by_outcome"] == {"discriminated": 40}
+    # 36 discriminated, and both_passed on exactly the four `trivial` pairs --
+    # the class no gating check can see. See UNCOVERED_BY_DESIGN.
+    blind = sum(1 for c in dev.by_label(DEFECTIVE)
+                if c.defect_class in scripted.UNCOVERED_BY_DESIGN)
+    assert pairs["by_outcome"] == {"discriminated": 40 - blind, "both_passed": blind}
 
     flag_all = [pipeline.Verdict(c.id, metrics.FLAGGED) for c in dev.cases]
     pairs = analysis.matched_pairs(dev.cases, flag_all)
@@ -771,6 +812,21 @@ def test_a_passing_development_run_alone_does_not_establish_readiness():
     assert any("qualified reviewer" in r for r in verdict["blocking"])
 
 
+
+def _expected_ceiling_sensitivity() -> float:
+    """
+    What a flawless run of this design can reach, given what it cannot see.
+
+    Computed from the corpus and `UNCOVERED_BY_DESIGN` rather than written
+    down: a hard-coded ceiling is a number that stops being checked the moment
+    the design changes.
+    """
+    from validator.devset import load
+
+    cases = load(root="corpus/validator_dev").by_label(DEFECTIVE)
+    blind = sum(1 for c in cases if c.defect_class in scripted.UNCOVERED_BY_DESIGN)
+    return (len(cases) - blind) / len(cases)
+
 def test_the_status_report_separates_the_ceiling_from_the_measurement():
     """
     The invariant is the SEPARATION, not the absence of a run.
@@ -781,12 +837,18 @@ def test_the_status_report_separates_the_ceiling_from_the_measurement():
     2026-09-02. Pinning "no run exists" would mean this test could only pass
     while the project had done nothing.
 
-    What must hold either way: a ceiling is never a measurement, and a
-    100% ceiling never promotes the validator to ESTABLISHED on its own.
+    What must hold either way: a ceiling is never a measurement, and however
+    high it is, it never promotes the validator to ESTABLISHED on its own.
+
+    The ceiling itself is derived, not asserted at 1.0 -- it fell to 0.9 when
+    `below_declared_difficulty` stopped gating and took the `trivial` class
+    with it. A test pinning the round number would have had to be edited to
+    say something it had stopped meaning.
     """
     report = track_d.build()
     assert report["design_ceiling"]["is_a_measurement"] is False
-    assert report["design_ceiling"]["sensitivity"] == 1.0
+    assert report["design_ceiling"]["sensitivity"] == pytest.approx(
+        _expected_ceiling_sensitivity())
     assert report["dev_metrics"]["status"] in (runs.NOT_RUN, "RUN")
     # The ceiling is perfect and production readiness is still not established.
     assert report["validator_production_status"]["status"] == track_d.NOT_ESTABLISHED
@@ -801,7 +863,13 @@ def test_a_ceiling_run_never_counts_as_the_measurement():
     report = track_d.build()
     ceiling, measured = report["design_ceiling"], report["dev_metrics"]
     assert ceiling["is_a_measurement"] is False
-    assert ceiling["sensitivity"] == 1.0 and ceiling["specificity"] == 1.0
+    # The ceiling is no longer 1.0 sensitivity, and that is the point of
+    # recording blind spots rather than asserting a round number: excluding
+    # `below_declared_difficulty` from the gate cost the four `trivial`
+    # defects, so a flawless run of THIS design catches 36 of 40. Derived, so
+    # the figure moves with the list instead of being restated.
+    assert ceiling["sensitivity"] == pytest.approx(_expected_ceiling_sensitivity())
+    assert ceiling["specificity"] == 1.0
 
     if measured["status"] != runs.NOT_RUN:
         # Three ceiling runs sit in reports/validator_runs/ alongside the real

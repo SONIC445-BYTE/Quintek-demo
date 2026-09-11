@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 
+from validator import gating
 from validator.devset import CLEAN, DEFECTIVE, EDGE
 from validator.metrics import ABSTAINED, FLAGGED, PASSED
 
@@ -238,6 +239,40 @@ def matched_pairs(cases, verdicts) -> dict:
             "items": rows}
 
 
+def non_gating_findings(cases, verdicts) -> dict:
+    """
+    What ran, reported, and decided nothing.
+
+    Separate from `false_positives` on purpose. These items were NOT counted
+    against the validator, because the corpus has no gold that would make the
+    finding right or wrong -- but the check did run and did report, and a
+    record that dropped that would be hiding a measurement rather than
+    declining to use it.
+    """
+    by_id = _index(verdicts)
+    by_check: dict[str, list[dict]] = defaultdict(list)
+    for case in cases:
+        verdict = by_id.get(case.id)
+        if verdict is None:
+            continue
+        for layer, check in getattr(verdict, "non_gating", ()):
+            by_check[f"{layer}/{check}"].append(
+                {"id": case.id, "label": case.label, "verdict": verdict.verdict})
+    return {
+        "count": sum(len(v) for v in by_check.values()),
+        "by_check": [
+            {"check": check, "items": len(items),
+             "item_ids": [i["id"] for i in items],
+             "by_label": dict(Counter(i["label"] for i in items)),
+             "why": gating.reason(check.split("/", 1)[-1])}
+            for check, items in sorted(by_check.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+        ],
+        "note": ("these findings were reported and excluded from both rates. Excluding "
+                 "them does not make a candidate qualified -- it removes a number that "
+                 "was never evidence."),
+    }
+
+
 def report(cases, verdicts, outages) -> dict:
     """
     `outages` is required, not optional. An analysis that does not know which
@@ -249,7 +284,8 @@ def report(cases, verdicts, outages) -> dict:
             "false_negatives": false_negatives(cases, verdicts),
             "abstentions": abstentions(cases, verdicts),
             "edge_behaviour": edge_behaviour(cases, verdicts, outages),
-            "matched_pairs": matched_pairs(cases, verdicts)}
+            "matched_pairs": matched_pairs(cases, verdicts),
+            "non_gating": non_gating_findings(cases, verdicts)}
 
 
 def render(data: dict) -> str:

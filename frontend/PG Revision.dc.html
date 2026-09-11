@@ -2092,8 +2092,17 @@ class Component extends DCLogic {
    * One place rather than a ternary at each use: the three cases have to stay
    * consistent across the ring, the headline and the list, and scattering the
    * decision is how a screen ends up half live and half fixture. */
+  /* Colour vocabulary shared by every screen that renders a gap. One place,
+   * because RED and 'Red' and '#BC4C43' drifting apart across four screens is
+   * how a learner sees an orange dot on a red gap. */
   learnerView = () => {
     const s = this.state;
+    const colourOf = (c) => ({ RED: '#BC4C43', ORANGE: '#B5812B', GREEN: '#1E7A57' }
+                              [String(c || '').toUpperCase()] || '#B5812B');
+    const titleCase = (c) => {
+      const up = String(c || '').toUpperCase();
+      return up ? up.charAt(0) + up.slice(1).toLowerCase() : '';
+    };
     const ready = s.learnerState === 'ready';
     if (!ready) {
       const blank = s.learnerState === 'error';
@@ -2109,6 +2118,16 @@ class Component extends DCLogic {
           rank: String(i + 1).padStart(2, '0'), name: g[0], color: g[2],
           meta: g[3] + ' · ' + g[6].length + (g[6].length === 1 ? ' question · ' : ' questions · ') + g[5],
           open: this.openConcept(g[3], g[3] === 'BNP / NT-proBNP' ? 'cardiology' : 'biochemistry', 'today') })),
+        weakGaps: blank ? [] : GAPS
+          .filter((g) => s.weakFilter === 'All'
+                      || g[1].toLowerCase() === s.weakFilter.toLowerCase())
+          .map((g) => ({
+            name: g[0], colour: g[1], color: g[2], concept: g[3], source: g[4], age: g[5],
+            openSource: this.openSourceRef(g[4], (CONCEPT_DATA[g[3]] || {}).passage || g[0], 'weak'),
+            openConcept: this.openConcept(g[3], g[3] === 'BNP / NT-proBNP' ? 'cardiology' : 'biochemistry', 'weak'),
+            questions: g[6].map(([id, where, result, fg]) => ({
+              id, where, result: result.charAt(0) + result.slice(1).toLowerCase(), fg })) })),
+        searchable: blank ? [] : SEARCHABLE.map(([name, kind, meta]) => ({ name, kind, meta })),
       };
     }
 
@@ -2134,11 +2153,40 @@ class Component extends DCLogic {
       topGaps: unresolved.slice(0, 4).map((g, i) => ({
         rank: String(i + 1).padStart(2, '0'),
         name: g.label,
-        color: (g.colour || '').toUpperCase() === 'RED' ? '#BC4C43' : '#B5812B',
+        color: colourOf(g.colour),
         meta: (g.concept_name || g.label) + ' · '
               + (g.evidence_count || 0)
               + ((g.evidence_count === 1) ? ' question' : ' questions'),
         open: this.openConcept(g.concept_name || g.label, 'biochemistry', 'today') })),
+
+      /* The weak list is the same gaps under the screen's own filter. Filtered
+       * here rather than server-side so switching tabs does not cost a request
+       * and cannot leave the screen briefly showing the previous filter's
+       * results as if they were this one's. */
+      weakGaps: gaps
+        .filter((g) => s.weakFilter === 'All'
+                    || (g.colour || '').toLowerCase() === s.weakFilter.toLowerCase())
+        .map((g) => ({
+          name: g.label,
+          colour: titleCase(g.colour),
+          color: colourOf(g.colour),
+          concept: g.concept_name || g.label,
+          source: g.source_title || '',
+          age: g.last_seen_at ? String(g.last_seen_at).slice(0, 10) : '',
+          openSource: this.openSourceRef(g.source_title || '', g.label, 'weak'),
+          openConcept: this.openConcept(g.concept_name || g.label, 'biochemistry', 'weak'),
+          /* Evidence is a second request per gap, so the list shows the count
+           * it already has and the detail screen fetches the rest. A count
+           * with no questions behind it would be a claim nothing backs. */
+          questions: [] })),
+
+      /* Searchable = this learner's own concepts and gaps. Nothing here is a
+       * fixture, so a search that finds nothing found nothing. */
+      searchable: (s.liveConcepts || [])
+        .map((c) => ({ name: c.canonical_name || c.concept_id, kind: 'Concept',
+                       meta: c.subject || '', subject: c.subject || 'biochemistry' }))
+        .concat(gaps.map((g) => ({ name: g.label, kind: 'Gap',
+                                   meta: g.concept_name || '', subject: 'biochemistry' }))),
     };
   };
 
@@ -3729,17 +3777,25 @@ class Component extends DCLogic {
         bg: s.weakFilter === label ? 'rgba(30,122,87,.08)' : '#fff',
         bd: s.weakFilter === label ? '#1E7A57' : '#E6E4DE',
         fg: s.weakFilter === label ? '#1E7A57' : '#6f7679' })),
-      weakGaps: GAPS.filter((g) => s.weakFilter === 'All' || g[1].toLowerCase() === s.weakFilter.toLowerCase()).map((g) => ({
-        name: g[0], colour: g[1], color: g[2], concept: g[3], source: g[4], age: g[5],
-        openSource: this.openSourceRef(g[4], (CONCEPT_DATA[g[3]] || {}).passage || g[0], 'weak'),
-        openConcept: this.openConcept(g[3], g[3] === 'BNP / NT-proBNP' ? 'cardiology' : 'biochemistry', 'weak'),
-        questions: g[6].map(([id, where, result, fg]) => ({ id, where, result: result.charAt(0) + result.slice(1).toLowerCase(), fg })) })),
-      weakEmpty: GAPS.filter((g) => s.weakFilter === 'All' || g[1].toLowerCase() === s.weakFilter.toLowerCase()).length === 0,
+      weakGaps: live.weakGaps,
+      /* Empty because the engine found nothing, versus empty because it could
+       * not be asked. `weakFailed` renders the second; `weakEmpty` the first. */
+      weakEmpty: live.weakGaps.length === 0 && s.learnerState !== 'error',
+      weakFailed: s.learnerState === 'error',
 
       query: s.query, setQuery: (e) => this.setState({ query: e.target.value }),
       hasQuery: s.query.length > 0,
-      results: SEARCHABLE.filter((x) => x[0].toLowerCase().indexOf(s.query.toLowerCase()) >= 0 || x[2].toLowerCase().indexOf(s.query.toLowerCase()) >= 0)
-        .map(([name, kind, meta]) => ({ name, kind, meta, open: kind === 'Concept' ? this.openConcept(name, 'biochemistry', 'more') : this.go('weak') })),
+      /* Searches what the learner actually has. With no backend it searches
+       * the design file's fixtures, which is correct for a design file and
+       * says so through `learnerLive`. */
+      results: live.searchable
+        .filter((x) => x.name.toLowerCase().indexOf(s.query.toLowerCase()) >= 0
+                    || x.meta.toLowerCase().indexOf(s.query.toLowerCase()) >= 0)
+        .map((x) => ({ name: x.name, kind: x.kind, meta: x.meta,
+          open: x.kind === 'Concept'
+            ? this.openConcept(x.name, x.subject || 'biochemistry', 'more')
+            : this.go('weak') })),
+      searchFailed: s.learnerState === 'error',
       resultCount: SEARCHABLE.filter((x) => x[0].toLowerCase().indexOf(s.query.toLowerCase()) >= 0 || x[2].toLowerCase().indexOf(s.query.toLowerCase()) >= 0).length + (SEARCHABLE.filter((x) => x[0].toLowerCase().indexOf(s.query.toLowerCase()) >= 0 || x[2].toLowerCase().indexOf(s.query.toLowerCase()) >= 0).length === 1 ? ' result' : ' results'),
       moreLinks: [
         { label: 'Notebooks', note: 'Sources, concepts, extraction', go: this.go('home') },

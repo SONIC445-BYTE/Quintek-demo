@@ -38,8 +38,25 @@ from validator.grounding import LETTERS
 
 # Defect classes this validator design has no check for. Kept here rather than
 # inferred, so that adding a check means deleting a line from a list that a
-# test reads -- and the ceiling moves visibly.
-UNCOVERED_BY_DESIGN = ()
+# test reads -- and the ceiling moves visibly. It moves in BOTH directions:
+# the entry below was added when a check that could see `trivial` stopped
+# gating, which is a capability loss and is recorded as one.
+UNCOVERED_BY_DESIGN = ("trivial",)
+
+#: Why each class above is uncovered, so the list is never just a list.
+UNCOVERED_REASONS = {
+    "trivial": (
+        "`conformance/below_declared_difficulty` is the only check that sees a "
+        "`trivial` mutation -- an item still declared pg_entry after being rewritten "
+        "to ask for recall of a fact stated verbatim in its own passage. That check "
+        "no longer gates (validator/gating.py): the corpus difficulty labels it "
+        "compares against are unreviewed model output, so on CLEAN items a "
+        "disagreement is not evidence. The cost is that the four planted `trivial` "
+        "defects are no longer caught, and this design is back where v0.1 was on "
+        "this one class. Layer D still catches the other three v0.1 could not see. "
+        "Recovering it needs gold difficulty labels, not a different check."
+    ),
+}
 
 # What v0.1 could not see. Kept as history: the ceiling run that produced this
 # list is why Layer D exists, and a later design regressing onto it should be

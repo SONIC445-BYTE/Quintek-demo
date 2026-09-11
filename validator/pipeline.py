@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 
 from benchmark.corpus import QUESTION_TYPES
 
-from validator import conformance, grounding, judge, outage, structural
+from validator import conformance, gating, grounding, judge, outage, structural
 from validator.judge import CONFIDENCE_FLOOR
 from validator.metrics import ABSTAINED, FLAGGED, PASSED
 
@@ -72,7 +72,12 @@ class Verdict:
     verdict: str
     version: str = VALIDATOR_VERSION
     layers_run: tuple[str, ...] = ()
-    flags: tuple[tuple[str, str], ...] = ()      # (layer, check)
+    flags: tuple[tuple[str, str], ...] = ()      # (layer, check) -- gating only
+    # Findings that ran and are reported but decide nothing, because the corpus
+    # has no gold to make them right or wrong. See validator/gating.py. Kept
+    # separate from `flags` rather than filtered at read time, so a reader of
+    # the record cannot mistake one for the other.
+    non_gating: tuple[tuple[str, str], ...] = ()
     abstentions: tuple[tuple[str, str], ...] = ()
     detail: tuple[str, ...] = ()
     calls: int = 0
@@ -90,6 +95,8 @@ class Verdict:
         return {"item_id": self.item_id, "verdict": self.verdict, "version": self.version,
                 "layers_run": list(self.layers_run),
                 "flags": [{"layer": lay, "check": chk} for lay, chk in self.flags],
+                "non_gating": [{"layer": lay, "check": chk, "why": gating.reason(chk)}
+                               for lay, chk in self.non_gating],
                 "abstentions": [{"layer": lay, "check": chk} for lay, chk in self.abstentions],
                 "detail": list(self.detail), "calls": self.calls,
                 "results": {k: v.as_dict() for k, v in self.results.items()}}
@@ -146,8 +153,14 @@ def run(item: dict, *, grounding_provider=None, judge_provider=None,
         if not result.ok:
             # Stop here. Every later layer would be reasoning about a question
             # that cannot be asked.
-            return Verdict(item_id, FLAGGED, VALIDATOR_VERSION, tuple(layers), tuple(flags),
-                           tuple(abstentions), tuple(detail), calls, results)
+            # Keyword arguments throughout: `non_gating` was added to Verdict
+            # between `flags` and `abstentions`, and this positional call
+            # silently shifted every argument after it -- abstentions became
+            # non_gating, detail became abstentions, calls became detail.
+            return Verdict(item_id=item_id, verdict=FLAGGED, version=VALIDATOR_VERSION,
+                           layers_run=tuple(layers), flags=tuple(flags),
+                           abstentions=tuple(abstentions), detail=tuple(detail),
+                           calls=calls, results=results)
         for finding in result.findings:
             detail.append(f"[structural, not fatal] {finding.detail}")
 
@@ -209,12 +222,19 @@ def run(item: dict, *, grounding_provider=None, judge_provider=None,
                 target.append((LAYER_CONFORMANCE, check))
         detail.extend(f"[conformance] {d}" for d in result.detail)
 
-    if flags:
+    # A finding with no gold behind it is reported and decides nothing. An item
+    # flagged SOLELY by a non-gating check is not a false positive, because
+    # there is nothing that would make it one -- see validator/gating.py.
+    gating_flags, non_gating_flags = gating.split(flags)
+
+    if gating_flags:
         verdict = FLAGGED
     elif abstentions:
         verdict = ABSTAINED
     else:
         verdict = PASSED
 
-    return Verdict(item_id, verdict, VALIDATOR_VERSION, tuple(layers), tuple(flags),
-                   tuple(abstentions), tuple(detail), calls, results)
+    return Verdict(item_id=item_id, verdict=verdict, version=VALIDATOR_VERSION,
+                   layers_run=tuple(layers), flags=tuple(gating_flags),
+                   non_gating=tuple(non_gating_flags), abstentions=tuple(abstentions),
+                   detail=tuple(detail), calls=calls, results=results)
