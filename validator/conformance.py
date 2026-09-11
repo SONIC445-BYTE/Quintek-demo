@@ -39,9 +39,8 @@ from dataclasses import dataclass
 
 from benchmark.providers.base import GenerationRequest
 
-from validator.outage import (was_rate_limited as _was_rate_limited,
+from validator.outage import (classify_failure as _classify_failure,
                              LayerUnavailable, MODE_PRECONDITION,
-                             MODE_RATE_LIMITED, MODE_TRANSPORT,
                              MODE_UNPARSEABLE)
 from validator.grounding import (MAX_REPLY_TOKENS, extract_json, format_options,
                                  quote_is_in)
@@ -184,8 +183,7 @@ def check(item: dict, provider, *,
             "checked, so nothing may be reported as checked.",
             # A 429 is our pace, not the host's health. Classified apart so a
             # rerun can say how many items we lost to our own rate.
-            mode=(MODE_RATE_LIMITED if _was_rate_limited(response)
-                  else MODE_TRANSPORT), item_id=item_id, purpose="conformance",
+            mode=_classify_failure(response), item_id=item_id, purpose="conformance",
             attempts=response.attempts, provider_error=response.error,
             raw_reply=response.raw_output)
     parsed = extract_json(response.raw_output)

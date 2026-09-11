@@ -43,10 +43,10 @@ from benchmark.providers.base import GenerationRequest
 from validator.grounding import (LETTERS, MAX_REPLY_TOKENS, extract_json, format_options,
                                  quote_is_in)
 from validator.metrics import ABSTAINED, FLAGGED, PASSED
-from validator.outage import (was_rate_limited as _was_rate_limited,
+from validator.outage import (classify_failure as _classify_failure,
                              LayerUnavailable, MODE_CONFIGURATION,
-                             MODE_PRECONDITION, MODE_RATE_LIMITED,
-                             MODE_TRANSPORT, MODE_UNPARSEABLE, MODE_UNUSABLE)
+                             MODE_PRECONDITION, MODE_UNPARSEABLE,
+                             MODE_UNUSABLE)
 
 PROMPT_VERSION = "judge/0.1.0"
 
@@ -200,8 +200,7 @@ def check(item: dict, provider, *, show_passage: bool = True,
             "nothing may be reported as judged.",
             # A 429 is our pace, not the host's health. Classified apart so a
             # rerun can say how many items we lost to our own rate.
-            mode=(MODE_RATE_LIMITED if _was_rate_limited(response)
-                  else MODE_TRANSPORT), item_id=item_id, purpose="judge",
+            mode=_classify_failure(response), item_id=item_id, purpose="judge",
             attempts=response.attempts, provider_error=response.error,
             raw_reply=response.raw_output)
     parsed = extract_json(response.raw_output)

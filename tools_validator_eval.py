@@ -268,7 +268,7 @@ def run_real(args):
 
 
 def _record(devset, verdicts, outages, config, providers, *, kind, note="", freeze="",
-            runs_dir=None, budget=None, measurement_unit=""):
+            runs_dir=None, budget=None, measurement_unit="", pacing_stats=None):
     """Write the run to the record. A ceiling and a measurement are different kinds."""
     from validator.holdout import corpus_hash
     matrix = score(devset.cases, verdicts)
@@ -286,6 +286,7 @@ def _record(devset, verdicts, outages, config, providers, *, kind, note="", free
         outage_summary=outage.summarise(outages),
         analysis=analysis.report(devset.cases, verdicts, outages), note=note,
         freeze=freeze, budget=dict(budget or {}),
+        pacing=dict(pacing_stats or {}),
         measurement_unit=measurement_unit,
         items_expected=expected, items_decided=decided,
         completeness=(ablation.COMPLETE if not outages and decided >= expected
@@ -568,7 +569,12 @@ def run_experiments(args):
                 kind=(runs.KIND_CEILING if used_fake else runs.KIND_DEVELOPMENT),
                 note=f"{title}; {args.note}".strip("; "),
                 freeze=in_force.digest(), runs_dir=args.runs_dir or runs.RUNS_DIR,
-                budget=spend.as_dict(), measurement_unit=unit)
+                budget=spend.as_dict(), measurement_unit=unit,
+                # `waits` and `waited_seconds` are cumulative across the set, so
+                # each arm's record carries the totals as they stood when that
+                # arm finished. Differencing consecutive arms gives the per-arm
+                # cost; a single snapshot at the end would give neither.
+                pacing_stats=(limiter.as_dict() if limiter is not None else {}))
         arms.append(ablation.Arm(
             name=title, layers=layers, matrix=matrix, outages=len(outages),
             outage_detail=list(outages), outage_summary=outage.summarise(outages),
@@ -644,6 +650,116 @@ def _budget_args(sub_parser):
     sub_parser.add_argument("--confirm-spend", action="store_true",
                             help="required before a run using real models makes any "
                                  "request")
+
+
+def run_outages(args):
+    """
+    Read the outage detail of a recorded run back.
+
+    WHY THIS IS A COMMAND AND NOT A NOTE IN THE README
+    ---------------------------------------------------
+    Phase A persisted per-item outage records precisely so a run could be
+    diagnosed from its artifact. Nothing then read them back, so diagnosis
+    still meant hand-poking JSON -- and when the first Groq run came back
+    INCOMPLETE with 24 `grounding/transport` outages, that is what happened.
+    Evidence that is written but unreadable is most of the way to evidence
+    that was never written.
+
+    The summary is printed FIRST and leads with the self-inflicted split,
+    because that is the number that decides what the reader does next. Twenty
+    four items lost to our own ceiling and twenty four lost by the host look
+    identical in a total, and they have nothing in common.
+    """
+    runs_dir = args.runs_dir or runs.RUNS_DIR
+    if args.run:
+        target = Path(args.run)
+        if not target.exists():
+            print(f"no such run artifact: {target}", file=sys.stderr)
+            return 2
+        candidates = [r for r in runs.load_all(target.parent) if r.path == str(target)]
+        if not candidates:
+            print(f"{target} is not a readable run artifact", file=sys.stderr)
+            return 2
+        run = candidates[0]
+    else:
+        everything = runs.load_all(runs_dir)
+        if not everything:
+            print(f"no run artifacts in {runs_dir}", file=sys.stderr)
+            return 2
+        # `at` is an ISO-8601 UTC stamp, so lexical order is chronological.
+        run = max(everything, key=lambda r: r.at)
+
+    records = list(run.outage_detail)
+    if args.layer:
+        records = [r for r in records if r.get("layer") == args.layer]
+    if args.outage_mode:
+        records = [r for r in records if r.get("mode") == args.outage_mode]
+
+    if args.json:
+        print(json.dumps({"run": run.path, "at": run.at, "config": run.config,
+                          "completeness": run.completeness,
+                          "pacing": run.pacing,
+                          "summary": outage.summarise(records),
+                          "outages": records}, indent=2))
+        return 0
+
+    print(f"run          {run.path}")
+    print(f"at           {run.at}   config {run.config}   {run.completeness}")
+    print(f"items        {run.items_decided} decided of {run.items_expected} expected")
+    if run.pacing:
+        pace = run.pacing
+        print(f"pacing       {pace.get('effective_rpm')} effective rpm "
+              f"({pace.get('requests_per_minute')} documented x "
+              f"{pace.get('safety_factor')}), {pace.get('min_interval_seconds')}s apart")
+        print(f"             {pace.get('waits')} waits totalling "
+              f"{pace.get('waited_seconds')}s spent pacing")
+    else:
+        print("pacing       NO LIMITER CONFIGURED for this run")
+    print()
+
+    if not records:
+        if args.layer or args.outage_mode:
+            print("no outages match that filter")
+            return 0
+        # An empty detail list does NOT mean a clean run. Artifacts written
+        # before Phase A carry `outages` as a bare integer and nothing else --
+        # which is the exact hole that made D018 undiagnosable. Saying "every
+        # item reached a verdict" here would restate the count as a finding.
+        missing = max(0, run.items_expected - run.items_decided)
+        if run.outages or missing:
+            print(f"this artifact records {run.outages} outage(s) and "
+                  f"{missing} undecided item(s) but carries NO per-item detail.")
+            print("It predates the per-item outage record, so what stopped those items "
+                  "is not recoverable from it.")
+            return 1
+        print("no outages recorded -- every item reached a verdict")
+        return 0
+
+    summary = outage.summarise(records)
+    print(f"OUTAGES  {summary['total']}")
+    print(f"  the run's own doing        {summary['self_inflicted']}"
+          f"   (of which {summary['stopped_by_run_ceiling']} never asked: "
+          "a ceiling stopped the run)")
+    print(f"  attributable to the host   {summary['attributable_to_host']}")
+    print(f"  reached a model            {summary['model_was_called']}")
+    print()
+    for key, count in summary["by_layer_and_mode"].items():
+        print(f"  {key:<36}{count:>5}")
+    print()
+
+    width = max(len(str(r.get("id", ""))) for r in records)
+    for record in records:
+        print(f"  {str(record.get('id','')):<{width}}  {record.get('layer','')}/"
+              f"{record.get('mode','')}  purpose={record.get('purpose') or '-'}  "
+              f"attempts={record.get('attempts')}")
+        if record.get("provider_error"):
+            print(f"  {'':<{width}}  {record['provider_error'][:160]}")
+        if args.show_replies and record.get("raw_reply"):
+            body = record["raw_reply"]
+            print(f"  {'':<{width}}  reply ({record.get('raw_reply_chars')} chars"
+                  f"{', TRUNCATED' if record.get('raw_reply_truncated') else ''}): "
+                  f"{body[:400]}")
+    return 0
 
 
 def run_forecast(args):
@@ -732,6 +848,20 @@ def main(argv=None):
     _seats(real)
     real.add_argument("--note", default="")
 
+    outages_cmd = sub.add_parser(
+        "outages", help="read the per-item outage detail of a recorded run back")
+    outages_cmd.add_argument("--run", default="",
+                             help="artifact to read; default is the newest in --runs-dir")
+    outages_cmd.add_argument("--layer", default="",
+                             help="only this layer, e.g. grounding")
+    # dest is NOT "mode": `add_subparsers(dest="mode")` already owns that name,
+    # and an option sharing it overwrites the subcommand with "" before dispatch.
+    outages_cmd.add_argument("--mode", dest="outage_mode", default="",
+                             help=f"only this mode, one of {', '.join(outage.MODES)}")
+    outages_cmd.add_argument("--show-replies", action="store_true",
+                             help="print the stored raw reply for each outage")
+    outages_cmd.add_argument("--json", action="store_true")
+
     forecast_cmd = sub.add_parser("forecast")
     forecast_cmd.add_argument("--max-calls", type=int, default=None)
     forecast_cmd.add_argument("--max-judge-calls", type=int, default=None)
@@ -777,7 +907,7 @@ def main(argv=None):
     if _reject_bad_endpoint(args):
         return 2
     return {"ceiling": run_ceiling, "layers": run_layers, "run": run_real,
-            "experiments": run_experiments,
+            "experiments": run_experiments, "outages": run_outages,
             "forecast": run_forecast}[args.mode](args)
 
 

@@ -97,6 +97,13 @@ class Run:
     note: str = ""
     freeze: str = ""
     budget: dict = field(default_factory=dict)
+    #: What the client-side limiter actually did: the configured rate, and the
+    #: waits it performed. Without this, the only way to tell pacing time from
+    #: 429-backoff time in a 30-minute run is to infer it from the wall clock
+    #: and the outage counts -- which is guessing. `RateLimiter` counted both
+    #: all along and the numbers were discarded when the run ended.
+    #: Empty means no limiter was configured, which is itself worth recording.
+    pacing: dict = field(default_factory=dict)
     measurement_unit: str = ""
     completeness: str = ""
     items_expected: int = 0
@@ -146,6 +153,7 @@ class Run:
                 "outage_summary": self.outage_summary,
                 "analysis": self.analysis, "note": self.note,
                 "freeze": self.freeze, "budget": self.budget,
+                "pacing": self.pacing,
                 "measurement_unit": self.measurement_unit,
                 "completeness": self.completeness,
                 "items_expected": self.items_expected,
@@ -201,6 +209,7 @@ def load_all(runs_dir: str | Path = RUNS_DIR) -> list[Run]:
             analysis=raw.get("analysis") or {},
             note=raw.get("note", ""), freeze=raw.get("freeze", ""),
             budget=raw.get("budget") or {},
+            pacing=raw.get("pacing") or {},
             measurement_unit=raw.get("measurement_unit", ""),
             completeness=raw.get("completeness", ""),
             items_expected=int(raw.get("items_expected") or 0),
