@@ -148,7 +148,9 @@ def _openai_compatible(spec: dict):
         system_prompt=spec.get("system_prompt", ""),
         model_family=spec.get("model_family"),
         timeout_seconds=spec.get("timeout_seconds"),
-        max_retries=spec.get("max_retries"))
+        max_retries=spec.get("max_retries"),
+        # The registry name, so the record says which host served the call.
+        name="openai-compatible")
 
 
 @register("cerebras")
@@ -182,7 +184,9 @@ def _cerebras(spec: dict):
         system_prompt=spec.get("system_prompt", ""),
         model_family=spec.get("model_family"),
         timeout_seconds=spec.get("timeout_seconds"),
-        max_retries=spec.get("max_retries"))
+        max_retries=spec.get("max_retries"),
+        # The registry name, so the record says which host served the call.
+        name="cerebras")
 
 
 @register("openrouter")
@@ -214,7 +218,9 @@ def _openrouter(spec: dict):
         system_prompt=spec.get("system_prompt", ""),
         model_family=spec.get("model_family"),
         timeout_seconds=spec.get("timeout_seconds"),
-        max_retries=spec.get("max_retries"))
+        max_retries=spec.get("max_retries"),
+        # The registry name, so the record says which host served the call.
+        name="openrouter")
 
 
 
@@ -243,7 +249,7 @@ def _fireworks(spec: dict):
     form NVIDIA uses. Passing one host's id to another produces a 404, which
     is left to fail loudly rather than being rewritten on a guess.
     """
-    return _openai_host(spec, key_env="FIREWORKS_API_KEY",
+    return _openai_host(spec, name="fireworks", key_env="FIREWORKS_API_KEY",
                         base_url="https://api.fireworks.ai/inference/v1/chat/completions",
                         example="accounts/fireworks/models/llama-v3p1-70b-instruct")
 
@@ -254,7 +260,7 @@ def _together(spec: dict):
     Together AI. Model ids are Hugging Face style, e.g.
     `meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo`.
     """
-    return _openai_host(spec, key_env="TOGETHER_API_KEY",
+    return _openai_host(spec, name="together", key_env="TOGETHER_API_KEY",
                         base_url="https://api.together.xyz/v1/chat/completions",
                         example="meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo")
 
@@ -283,15 +289,16 @@ def _groq(spec: dict):
     must be given explicitly and `preflight` prints it back for checking
     against Groq's own model list before the first call.
     """
-    return _openai_host(spec, key_env="GROQ_API_KEY",
+    return _openai_host(spec, name="groq", key_env="GROQ_API_KEY",
                         base_url="https://api.groq.com/openai/v1/chat/completions",
                         example="a plain model id from Groq's catalogue, e.g. the "
                                 "llama / gpt-oss / qwen families -- check the exact "
                                 "string against Groq's docs, none is assumed here")
 
 
-def _openai_host(spec: dict, *, key_env: str, base_url: str, example: str):
-    """Shared body for the OpenAI-compatible paid hosts."""
+def _openai_host(spec: dict, *, name: str, key_env: str, base_url: str, example: str):
+    """Shared body for the OpenAI-compatible hosts. `name` is keyword-only and
+    has no default: see the comment on the constructor call below."""
     from .nvidia import NVIDIAProvider
 
     key_env = spec.get("api_key_env", key_env)
@@ -313,7 +320,12 @@ def _openai_host(spec: dict, *, key_env: str, base_url: str, example: str):
         system_prompt=spec.get("system_prompt", ""),
         model_family=spec.get("model_family"),
         timeout_seconds=spec.get("timeout_seconds"),
-        max_retries=spec.get("max_retries"))
+        max_retries=spec.get("max_retries"),
+        # The registry name, so the record says which host served the call.
+        # Required, not defaulted: this function builds the adapter for three
+        # different hosts, and a forgotten name would file all of them under
+        # whichever one the default happened to be.
+        name=name)
 
 
 @register("local")

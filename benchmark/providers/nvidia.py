@@ -80,6 +80,9 @@ def _infer_family(model_id: str) -> str:
 #: NVIDIA_TIMEOUT_SECONDS for a dedicated deployment where 30s is realistic.
 NIM_DEFAULT_TIMEOUT_SECONDS = 180.0
 
+#: Sent on every request. Not cosmetic: see the header block in `_call`.
+USER_AGENT = "Quintek-Validator/0.2 (+https://github.com/SONIC445-BYTE/Quintek-demo)"
+
 
 
 def _retry_after(headers) -> float | None:
@@ -119,7 +122,20 @@ class NVIDIAProvider(BaseProvider):
         base_url: str = NIM_CHAT_COMPLETIONS_URL,
         timeout_seconds: float | None = None,
         max_retries: int | None = None,
+        name: str | None = None,
     ):
+        # WHICH HOST THIS ACTUALLY IS.
+        #
+        # This class is the OpenAI-compatible chat client every host in the
+        # registry is built on -- Groq, Fireworks, Together, Cerebras and
+        # OpenRouter all construct it with a different base_url. `name` was a
+        # class attribute reading "nvidia" for all of them, so a Groq call was
+        # recorded as an NVIDIA call in the execution log, in the freeze
+        # manifest and in every run artifact, and its errors said "NVIDIA NIM"
+        # while talking to api.groq.com. A record that misattributes the host
+        # is worse than no record: it sends the next reader to the wrong
+        # vendor's status page.
+        self.name = name or type(self).name
         self.model = model_id
         self.model_version = model_version
         self.model_family = model_family or _infer_family(model_id)
@@ -143,6 +159,15 @@ class NVIDIAProvider(BaseProvider):
                 raise ValueError("max_retries cannot be negative")
             policy = replace(policy, max_retries=max_retries)
         self.retry_policy = policy
+
+    def _host_label(self) -> str:
+        """`provider @ host` for an error message, so the record names the host
+        that actually refused rather than the class that made the call."""
+        try:
+            host = self.base_url.split("/")[2]
+        except IndexError:
+            host = self.base_url
+        return f"{self.name} ({host})"
 
     def _api_key(self) -> str:
         key = os.environ.get(self.api_key_env)
@@ -175,6 +200,12 @@ class NVIDIAProvider(BaseProvider):
                 "Authorization": f"Bearer {self._api_key()}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
+                # urllib sends "Python-urllib/3.x" by default, and hosts behind
+                # a bot-protection edge routinely refuse it with a 403 whose
+                # body is the EDGE's error document rather than the API's. That
+                # reads as an auth or permission failure and is neither. An
+                # honest identifying agent is the fix.
+                "User-Agent": USER_AGENT,
             },
         )
         try:
@@ -189,13 +220,15 @@ class NVIDIAProvider(BaseProvider):
                 # record can say "rate limited" rather than "the backend
                 # failed" -- which would send a reader looking at the host.
                 raise RateLimited(
-                    f"HTTP 429 rate limited: {detail[:300]}",
+                    f"{self._host_label()} HTTP 429 rate limited: {detail[:300]}",
                     retry_after=_retry_after(exc.headers)) from exc
             # 5xx and the rest are what the retry loop exists for; raising
             # lets that loop do its job.
-            raise RuntimeError(f"NVIDIA NIM HTTP {exc.code}: {detail[:500]}") from exc
+            raise RuntimeError(
+                f"{self._host_label()} HTTP {exc.code}: {detail[:500]}") from exc
         except urllib.error.URLError as exc:
-            raise TimeoutError(f"NVIDIA NIM request failed: {exc.reason}") from exc
+            raise TimeoutError(
+                f"{self._host_label()} request failed: {exc.reason}") from exc
 
         envelope = raw_bytes.decode("utf-8")
         payload = json.loads(envelope)

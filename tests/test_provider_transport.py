@@ -236,3 +236,82 @@ def _ok_response(content: str):
                      "finish_reason": "stop"}],
         "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
     }).encode("utf-8"))
+
+
+# ---------------------------------------------------------------------------
+# The record must name the host that actually served the call
+# ---------------------------------------------------------------------------
+
+def test_every_host_records_its_own_name_not_the_adapters(monkeypatch):
+    """
+    One class serves every OpenAI-compatible host, and `name` was a CLASS
+    attribute reading "nvidia". So a Groq call was recorded as an NVIDIA call
+    in the execution log, in the freeze manifest and in every run artifact, and
+    its errors said "NVIDIA NIM" while talking to api.groq.com.
+
+    Found by reading a real 403 from Groq that claimed to be from NIM. A record
+    that misattributes the host is worse than no record: it sends the next
+    reader to the wrong vendor's status page.
+    """
+    from benchmark.providers.registry import available, build_provider
+
+    for name in available():
+        if name in ("scripted", "local"):
+            continue
+        monkeypatch.setenv(f"{name.upper().replace('-', '_')}_API_KEY", "placeholder")
+        monkeypatch.setenv("OPENAI_API_KEY", "placeholder")
+        spec = {"provider": name, "model_id": "m"}
+        if name == "openai-compatible":
+            spec["base_url"] = "https://example.test/v1/chat/completions"
+        provider = build_provider(spec)
+        assert provider.name == name, (
+            f"{name} builds a provider that calls itself {provider.name!r}")
+
+
+def test_an_error_names_the_host_that_refused(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "placeholder")
+    from benchmark.providers.registry import build_provider
+
+    provider = build_provider({"provider": "groq", "model_id": "m"})
+    provider.retry_policy = RetryPolicy(max_retries=0, timeout_seconds=5.0)
+    with patch("urllib.request.urlopen", side_effect=_http_error(403, b"denied")):
+        response = provider.generate(REQUEST)
+
+    assert "groq" in response.error and "api.groq.com" in response.error
+    assert "NVIDIA" not in response.error, "the adapter must not claim to be NIM"
+
+
+def test_a_response_is_attributed_to_the_right_provider(monkeypatch):
+    """`response.provider` is what reaches the execution log."""
+    monkeypatch.setenv("GROQ_API_KEY", "placeholder")
+    from benchmark.providers.registry import build_provider
+
+    provider = build_provider({"provider": "groq", "model_id": "m"})
+    with patch("urllib.request.urlopen", return_value=_ok_response('{"a": 1}')):
+        response = provider.generate(REQUEST)
+    assert response.provider == "groq"
+
+
+def test_a_user_agent_is_sent(monkeypatch):
+    """
+    urllib defaults to "Python-urllib/3.x", which hosts behind a
+    bot-protection edge routinely refuse with a 403 whose body is the EDGE's
+    error document rather than the API's -- indistinguishable from an auth
+    failure unless you read the body.
+    """
+    monkeypatch.setenv("GROQ_API_KEY", "placeholder")
+    from benchmark.providers.nvidia import USER_AGENT
+    from benchmark.providers.registry import build_provider
+
+    seen = {}
+
+    def _capture(req, timeout=None):
+        seen["ua"] = req.get_header("User-agent")
+        return _ok_response('{"a": 1}')
+
+    provider = build_provider({"provider": "groq", "model_id": "m"})
+    with patch("urllib.request.urlopen", side_effect=_capture):
+        provider.generate(REQUEST)
+
+    assert seen["ua"] == USER_AGENT
+    assert "urllib" not in (seen["ua"] or "").lower()
