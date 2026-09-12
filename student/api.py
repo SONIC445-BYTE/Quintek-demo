@@ -19,7 +19,7 @@ from typing import Any
 from .db import Database, new_id, now_iso
 from pathlib import Path
 
-from . import operations, safety
+from . import accounts, operations, safety
 from .uploads import BINARY_KINDS, UploadError
 from .uploads import store as store_upload
 
@@ -172,6 +172,15 @@ class StudentAPI:
         row = self.db.user_for_token(token)
         if row is None:
             raise ApiError(401, "authentication required")
+        # A suspension that only changes a column is not a suspension. It has
+        # to be checked HERE, on every authenticated request, because a token
+        # issued before the suspension is otherwise still good until it
+        # expires. `suspend()` revokes live sessions too; this closes the gap
+        # for anything issued in between.
+        if (row["status"] or accounts.ACTIVE) == accounts.SUSPENDED:
+            raise ApiError(
+                403, "this account is suspended: "
+                     + (row["status_reason"] or "no reason was recorded"))
         return row
 
     def _require_admin(self, token: str | None):
@@ -238,6 +247,43 @@ class StudentAPI:
             self._require_admin(token)
             return 200, operations.spend_summary(
                 self.db, hours=float(params.get("hours") or 24))
+
+        # --- an account being turned off, and erased on request ---
+        if seg == ["account", "export"] and method == "GET":
+            return 200, accounts.export(self.db, self._user(token)["id"])
+
+        if seg == ["account"] and method == "DELETE":
+            # A learner erasing THEMSELVES. No admin needed: it is their data.
+            # The uploads go first, while the storage keys are still readable.
+            uid = self._user(token)["id"]
+            if self.engine is not None:
+                keys = [r["storage_key"] for r in self.db.query(
+                    "SELECT s.storage_key FROM sources s"
+                    "  JOIN notebooks n ON n.id = s.notebook_id"
+                    " WHERE n.owner_id = ? AND s.storage_key != ''", (uid,))]
+                accounts.erase_uploads(self.engine.storage_dir, keys)
+            try:
+                return 200, accounts.erase(self.db, uid, confirm=uid)
+            except accounts.AccountError as exc:
+                raise ApiError(400, str(exc))
+
+        if len(seg) == 3 and seg[0] == "admin" and seg[1] == "users":
+            self._require_admin(token)
+            raise ApiError(404, "no such route")
+
+        if len(seg) == 4 and seg[:2] == ["admin", "users"] and method == "POST":
+            admin = self._require_admin(token)
+            target, action = seg[2], seg[3]
+            try:
+                if action == "suspend":
+                    return 200, accounts.suspend(
+                        self.db, target, by=admin["email"],
+                        reason=body.get("reason") or "")
+                if action == "reinstate":
+                    return 200, accounts.reinstate(self.db, target, by=admin["email"])
+            except accounts.AccountError as exc:
+                raise ApiError(400, str(exc))
+            raise ApiError(404, "no such route")
 
         if seg == ["scope"] and method == "GET":
             return 200, {"scope_statement": safety.SCOPE_STATEMENT,

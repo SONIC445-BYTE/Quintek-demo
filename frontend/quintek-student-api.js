@@ -194,6 +194,65 @@ export async function conceptDetail(conceptId) {
   return call('GET', '/concepts/' + encodeURIComponent(conceptId));
 }
 
+/* --- the two screens that need a per-item fetch on entry ---
+ *
+ * Concept detail and notebook view were left rendering from constants, and
+ * correctly so: the bulk loaders (`concepts()`, `notebooks()`) return list
+ * rows, and a detail screen that padded those out with placeholders would be
+ * showing a learner numbers nobody measured. What they need is a fetch when
+ * the screen opens, which is what these are.
+ *
+ * Each returns the server's payload unchanged. The four states -- loading,
+ * error, empty, ready -- are the caller's to render, and `screenState` below
+ * is what decides which, so no screen invents a fifth. */
+
+export async function notebook(notebookId) {
+  return call('GET', '/notebooks/' + encodeURIComponent(notebookId));
+}
+
+export async function notebookQuestions(notebookId) {
+  return (await call('GET', '/notebooks/' + encodeURIComponent(notebookId) +
+                     '/questions')).questions || [];
+}
+
+/* Saying a question is wrong, and what this app claims to be. Both from
+ * Phase 2; without the client calls they were server features nobody could
+ * reach. */
+
+export async function reportQuestion(questionId, kind, note) {
+  return call('POST', '/questions/' + encodeURIComponent(questionId) + '/reports',
+              { kind, note: note || '' });
+}
+
+export async function myReports() {
+  return (await call('GET', '/reports')).reports || [];
+}
+
+export async function scope() {
+  return call('GET', '/scope');
+}
+
+/* Which of the four states a screen is in.
+ *
+ * ONE function, because the interesting failure is a screen that invents a
+ * fifth state -- most often "error rendered as empty", which tells a learner
+ * their notebook is empty when the truth is that nobody could reach the
+ * server. `error` wins over everything: if the fetch failed, what came back
+ * is not data and its emptiness means nothing.
+ *
+ * `isEmpty` is passed in rather than guessed, because emptiness differs by
+ * screen: a notebook with no sources is empty, a concept with no questions
+ * yet is not necessarily. */
+export function screenState({ loading, error, data, isEmpty }) {
+  if (error) return 'error';
+  if (loading) return 'loading';
+  if (data === null || data === undefined) return 'loading';
+  const empty = typeof isEmpty === 'function' ? isEmpty(data)
+              : Array.isArray(data) ? data.length === 0
+              : false;
+  return empty ? 'empty' : 'ready';
+}
+
 export async function graph(notebookId) {
   const suffix = notebookId ? '?notebook=' + encodeURIComponent(notebookId) : '';
   return call('GET', '/graph' + suffix);
@@ -339,6 +398,15 @@ export async function addSource(notebookId, kind, opts) {
  * exists so a screen can show what stage it is at instead of a spinner that
  * says nothing.
  */
+/* Deliberately NOT in the model-free block above. Reading progress needs no
+ * model, but it belongs to the ingestion surface, and the guard in
+ * tests/test_frontend_model_free.py is blunt on purpose: it forbids `/sources`
+ * there outright rather than reasoning about which source calls are safe.
+ * Weakening that rule to fit this call would trade a guard for a convenience. */
+export async function sourceProgress(sourceId) {
+  return call('GET', '/sources/' + encodeURIComponent(sourceId) + '/progress');
+}
+
 export async function waitForSource(sourceId, opts) {
   const options = opts || {};
   const attempts = options.attempts || 120;

@@ -12,12 +12,16 @@ different port during development. Narrow it before this is exposed anywhere.
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
+import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from . import throttle
 from .api import StudentAPI
 from .db import Database
 from .uploads import MAX_BYTES as MAX_UPLOAD_BYTES
@@ -161,6 +165,9 @@ def build_api(db_path: str | Path | None = None, *, with_ai: bool = True,
 
 
 def make_handler(api: StudentAPI, billing=None, analytics=None):
+    limiter = throttle.RateLimiter()
+    requests_served = itertools.count(1)
+
     class Handler(BaseHTTPRequestHandler):
         server_version = "Quintek/0.4"
 
@@ -175,7 +182,8 @@ def make_handler(api: StudentAPI, billing=None, analytics=None):
             self.send_header("Content-Length", str(len(payload)))
             self.send_header("Access-Control-Allow-Origin", CORS_ORIGIN)
             self.send_header("Access-Control-Allow-Headers", "content-type, authorization")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+            self.send_header("Access-Control-Allow-Methods",
+                             "GET, POST, PUT, DELETE, OPTIONS")
             self.end_headers()
             self.wfile.write(payload)
 
@@ -194,10 +202,38 @@ def make_handler(api: StudentAPI, billing=None, analytics=None):
             On SQLite `release()` is a no-op: reopening a file per request is
             pure cost, and the handle is cheap to keep.
             """
+            started = time.monotonic()
+            status = 500
             try:
-                self._serve(method)
+                verdict = limiter.check(token=self._token(),
+                                        address=self.client_address[0],
+                                        path=urlparse(self.path).path)
+                if not verdict["allowed"]:
+                    status = 429
+                    self.send_response(429)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Retry-After", str(int(verdict["retry_after"]) + 1))
+                    self.send_header("Access-Control-Allow-Origin", CORS_ORIGIN)
+                    body = json.dumps({
+                        "error": "too many requests",
+                        "limit": verdict["limit"],
+                        "retry_after_seconds": verdict["retry_after"],
+                    }).encode("utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                status = self._serve(method) or 200
             finally:
                 api.db.release()
+                # Opportunistic, so the window table cannot grow with every
+                # distinct caller forever -- the leak that turns a rate limiter
+                # into the outage it was meant to prevent.
+                if next(requests_served) % 500 == 0:
+                    limiter.forget()
+                _access_log(method, self.path, status,
+                            (time.monotonic() - started) * 1000.0,
+                            self.client_address[0])
                 if billing is not None:
                     billing.release()
 
@@ -261,13 +297,44 @@ def make_handler(api: StudentAPI, billing=None, analytics=None):
         def do_PUT(self):      # noqa: N802
             self._dispatch("PUT")
 
+        def do_DELETE(self):   # noqa: N802
+            # Added with `DELETE /account`. Without it that route is
+            # unreachable over HTTP and `BaseHTTPRequestHandler` answers 501 --
+            # so a learner asking for erasure would be told the server does not
+            # implement it, which is both wrong and the worst possible answer
+            # to that particular request.
+            self._dispatch("DELETE")
+
         def do_OPTIONS(self):  # noqa: N802
             self._send(204, {})
 
         def log_message(self, fmt, *args):
+            # Silenced deliberately: `_access_log` below writes one structured
+            # line per request instead. BaseHTTPRequestHandler's default format
+            # is unparseable and, worse, logs the full request line -- which
+            # would put any credential that ever appears in a query string into
+            # the log permanently.
             pass
 
     return Handler
+
+
+
+#: One structured line per request, on stderr.
+#:
+#: `BaseHTTPRequestHandler`'s default is silenced in favour of this for a
+#: specific reason: the default logs the whole request line, so a credential
+#: that ever appears in a query string is in the log permanently. This logs the
+#: PATH only, never the query, never a header, never a body.
+def _access_log(method: str, path: str, status: int, ms: float, address: str) -> None:
+    try:
+        clean = urlparse(path).path
+        print(f'{time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())} '
+              f'{method} {clean} {status} {ms:.0f}ms {address}',
+              file=sys.stderr, flush=True)
+    except Exception:
+        # A logger that can break the request it is logging is not a logger.
+        pass
 
 
 def serve(*, host: str = "127.0.0.1", port: int = 8500,

@@ -184,6 +184,13 @@ class Database:
             ("source_chunks", "confidence", "REAL NOT NULL DEFAULT 1.0"),
             ("source_chunks", "extraction_method", "TEXT NOT NULL DEFAULT ''"),
             ("source_chunks", "needs_review", "INTEGER NOT NULL DEFAULT 0"),
+            # Account lifecycle. Existing rows default to 'active', which is a
+            # description of them rather than an assumption: every account that
+            # existed before suspension was possible was, in fact, active.
+            ("users", "status", "TEXT NOT NULL DEFAULT 'active'"),
+            ("users", "status_reason", "TEXT NOT NULL DEFAULT ''"),
+            ("users", "status_changed_by", "TEXT NOT NULL DEFAULT ''"),
+            ("users", "status_changed_at", "TEXT NOT NULL DEFAULT ''"),
         ]
         for table, column, ddl in migrations:
             existing = schema_support.columns_of(conn, table)

@@ -33,10 +33,12 @@ const SERVED = new Set([
   'GET /me', 'GET /progress', 'GET /gaps', 'GET /concepts', 'GET /graph',
   'GET /revision/dashboard', 'GET /revision/next', 'POST /revision/sessions',
   'POST /attempts', 'GET /settings/notifications', 'PUT /settings/notifications',
+  'GET /reports', 'GET /scope',
 ]);
 const SERVED_PREFIXES = [
   'GET /gaps/', 'POST /gaps/', 'GET /concepts/', 'GET /questions/',
-  'POST /revision/sessions/',
+  'POST /revision/sessions/', 'GET /notebooks/', 'GET /sources/',
+  'POST /questions/',
 ];
 
 const load = async (setup) => {
@@ -186,6 +188,94 @@ const ok = (payload) => ({
   try { await api.progress(); } catch (e) { threw = e.name === 'BackendError'; }
   check('an unconfigured backend refuses rather than inventing data', threw);
 }
+
+
+// ---------------------------------------------------------------------------
+// the two screens that needed a per-item fetch on entry
+//
+// Concept detail and notebook view rendered from constants. They were left
+// that way deliberately -- the bulk loaders return list rows, and padding
+// those out with placeholders would show a learner numbers nobody measured --
+// so the fix is a fetch on screen entry, not a richer list payload.
+// ---------------------------------------------------------------------------
+
+{
+  let seen;
+  const api = await load(() => {
+    seen = backend((method, path) => {
+      if (path.endsWith('/questions')) return ok({ questions: [{ id: 'q1' }] });
+      if (path.startsWith('/notebooks/')) {
+        return ok({ id: 'nb1', title: 'Renal', sources: [], concepts: [] });
+      }
+      if (path.startsWith('/sources/')) return ok({ status: 'extracted', chunks: 4 });
+      if (path.startsWith('/concepts/')) return ok({ id: 'c1', canonical_name: 'AKI' });
+      if (path === '/scope') return ok({ scope_statement: 'a revision aid', report_kinds: [] });
+      if (path === '/reports') return ok({ reports: [] });
+      return ok({});
+    });
+  });
+
+  await api.notebook('nb1');
+  await api.notebookQuestions('nb1');
+  await api.sourceProgress('src1');
+  await api.conceptDetail('c1');
+  await api.reportQuestion('q1', 'factually_wrong', 'the key is wrong');
+  await api.myReports();
+  await api.scope();
+
+  const served = (call) => SERVED.has(call) ||
+    SERVED_PREFIXES.some((p) => call.startsWith(p));
+  check('every screen-entry call hits a route the server serves',
+        seen.every(served));
+  check('notebook view fetches the notebook itself',
+        seen.some((c) => c === 'GET /notebooks/nb1'));
+  check('notebook view fetches its questions separately',
+        seen.some((c) => c === 'GET /notebooks/nb1/questions'));
+  check('concept detail fetches the concept itself',
+        seen.some((c) => c === 'GET /concepts/c1'));
+  check('a question can be reported from the client',
+        seen.some((c) => c === 'POST /questions/q1/reports'));
+  check('the scope statement is fetched rather than hard-coded',
+        seen.some((c) => c === 'GET /scope'));
+}
+
+// ---------------------------------------------------------------------------
+// four states, and never a fifth
+//
+// The failure worth testing for is "error rendered as empty", which tells a
+// learner their notebook is empty when the truth is nobody could reach the
+// server. There is no partial render: a screen is loading, failed, empty or
+// ready.
+// ---------------------------------------------------------------------------
+
+{
+  const api = await load(() => { backend(() => ok({})); });
+  const s = api.screenState;
+
+  check('an error is an error even when the data is empty',
+        s({ error: new BackendErrorish(), data: [] }) === 'error');
+  check('an error is an error even when data arrived',
+        s({ error: new BackendErrorish(), data: [1, 2] }) === 'error');
+  check('no data yet is loading, not empty',
+        s({ data: null }) === 'loading');
+  check('undefined is loading, not empty',
+        s({ data: undefined }) === 'loading');
+  check('an empty list is empty', s({ data: [] }) === 'empty');
+  check('a populated list is ready', s({ data: [1] }) === 'ready');
+  check('emptiness is the screen\'s own definition',
+        s({ data: { sources: [] }, isEmpty: (d) => d.sources.length === 0 }) === 'empty');
+  check('a notebook with sources is ready',
+        s({ data: { sources: [1] }, isEmpty: (d) => d.sources.length === 0 }) === 'ready');
+
+  const states = new Set(['loading', 'error', 'empty', 'ready']);
+  const sampled = [
+    s({ loading: true }), s({ error: 1 }), s({ data: [] }), s({ data: [1] }),
+    s({ data: {} }), s({ loading: true, data: [1] }),
+  ];
+  check('there is no fifth state', sampled.every((x) => states.has(x)));
+}
+
+function BackendErrorish() { this.name = 'BackendError'; }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

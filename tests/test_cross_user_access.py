@@ -177,6 +177,9 @@ CONTENT_FIELDS = frozenset({
     # reporting a question: the learner's own words about what is wrong with
     # it. `kind` is above already; `note` is free text and names nothing.
     "note",
+    # an administrator's stated reason for suspending an account. Their own
+    # words, recorded so the suspended person can be told why.
+    "reason",
 })
 
 
@@ -243,6 +246,12 @@ COVERAGE: dict[str, dict] = {
     # missing, and the report would then name a question its author cannot see.
     "/questions/<id>/reports":            dict(kind="question", method="POST", expect=REFUSED,
                                                body={"kind": "factually_wrong"}),
+    # Admin-only. A learner gets 404 from `_require_admin`, which is the same
+    # refusal shape every owned resource here uses -- a 403 would confirm the
+    # route exists and that the caller is merely the wrong person.
+    "/admin/users/<id>":                  dict(kind="notebook", method="GET", expect=REFUSED),
+    "/admin/users/<id>/<id>":             dict(kind="notebook", method="POST", expect=REFUSED,
+                                               body={"reason": "test"}),
     "/gaps/<id>":                         dict(kind="gap", method="GET", expect=SCOPED,
                                                why="joins knowledge_gaps on user_id, so a"
                                                    " stranger's id yields empty evidence"),
