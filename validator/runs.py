@@ -104,6 +104,12 @@ class Run:
     #: all along and the numbers were discarded when the run ended.
     #: Empty means no limiter was configured, which is itself worth recording.
     pacing: dict = field(default_factory=dict)
+    #: Which arms reused which replies. Arms share observations (see
+    #: `benchmark/journal.key_for`), so ABD and ABCD are NOT independent
+    #: replications, and a reader who assumed otherwise would compute a
+    #: between-arm variance that does not exist. Empty means no journal was in
+    #: use, so every call in this run was asked fresh.
+    shared_observations: dict = field(default_factory=dict)
     measurement_unit: str = ""
     completeness: str = ""
     items_expected: int = 0
@@ -154,6 +160,7 @@ class Run:
                 "analysis": self.analysis, "note": self.note,
                 "freeze": self.freeze, "budget": self.budget,
                 "pacing": self.pacing,
+                "shared_observations": self.shared_observations,
                 "measurement_unit": self.measurement_unit,
                 "completeness": self.completeness,
                 "items_expected": self.items_expected,
@@ -210,6 +217,7 @@ def load_all(runs_dir: str | Path = RUNS_DIR) -> list[Run]:
             note=raw.get("note", ""), freeze=raw.get("freeze", ""),
             budget=raw.get("budget") or {},
             pacing=raw.get("pacing") or {},
+            shared_observations=raw.get("shared_observations") or {},
             measurement_unit=raw.get("measurement_unit", ""),
             completeness=raw.get("completeness", ""),
             items_expected=int(raw.get("items_expected") or 0),

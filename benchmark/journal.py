@@ -101,7 +101,29 @@ def reached_provider(response) -> bool:
     return classify(error=error) != ProviderStatus.UNREACHED
 
 
-def key_for(*, arm: str, role: str, model: str, request) -> str:
+#: What sharing observations across arms COSTS, named so it is a decision on
+#: the record rather than a property nobody wrote down.
+#:
+#: Same discipline as `validator/scripted.UNCOVERED_BY_DESIGN`: a capability
+#: this design does not have is listed explicitly, with the reason, so that
+#: regaining it means deleting a line a test reads rather than rediscovering
+#: the gap from a confusing result.
+FORFEITED_BY_DESIGN = {
+    "independent_redraw_per_arm": (
+        "Two arms asking the same question now get the SAME reply, not a second "
+        "draw from the model. So a run set can no longer estimate between-draw "
+        "variance as a side effect of running several arms -- and it never should "
+        "have, because that estimate was silently mixed into the ablation's "
+        "difference. Measuring that variance deliberately needs its own "
+        "mechanism: a separate journal path per replicate, or a replication "
+        "index added to `key_for`'s payload. VARIANCE_PROTOCOL is where that "
+        "belongs, not here. Until then, a single run set says nothing about "
+        "run-to-run variance, and no report may imply that it does."
+    ),
+}
+
+
+def key_for(*, role: str, model: str, request) -> str:
     """
     Identity of one request, exactly.
 
@@ -109,9 +131,34 @@ def key_for(*, arm: str, role: str, model: str, request) -> str:
     drifted by a character misses and is paid for. The failure mode this
     forecloses is the expensive one: silently serving a cached answer to a
     question nobody asked.
+
+    THE ARM IS NOT AN INPUT AND IS DELIBERATELY ABSENT
+    ---------------------------------------------------
+    It used to be, and that was a measurement defect rather than an expense.
+    The arm is never sent to a model -- it is bookkeeping about which
+    experiment asked -- so keying on it made ABD and ABCD pay twice for calls
+    that were byte-identical in item, system prompt, prompt, max_tokens and
+    temperature: 380 of the 765 calls in a full set, measured.
+
+    The cost was not the money. The ablation reports the judge's contribution
+    as ABCD minus ABD, and an arm decides roughly 30-40 items, so ONE item
+    flipping is a three per cent swing. Providers are not bit-deterministic
+    even at temperature zero -- batching, reduction order, expert routing --
+    so redrawing grounding and conformance for the second arm put sampling
+    noise of the same size as the judge's effect inside the difference the
+    experiment exists to measure. Sharing the observation removes it by
+    construction: the arms then differ only in which LAYERS ran, which is the
+    claim being made.
+
+    `role` stays. `model` already distinguishes the seats and
+    `judge.assert_independent` forbids identical ones, so it is redundant --
+    kept as the belt to that brace, at no cost.
+
+    What this forfeits is recorded in `FORFEITED_BY_DESIGN` below. It is not
+    free and it is not hidden.
     """
     payload = {
-        "arm": arm, "role": role, "model": model,
+        "role": role, "model": model,
         "item_id": request.item_id,
         "system": request.system,
         "prompt": request.prompt,
@@ -135,6 +182,47 @@ class Journal:
     recorded: int = 0
     unreached: int = 0
     skipped_unreached: int = 0
+    #: key -> the arm that first ASKED it. Populated as the set runs, so a
+    #: replay can say whose observation it is reusing.
+    asked_by: dict = field(default_factory=dict)
+    #: arm -> {"asked": n, "replayed": n, "replayed_from": {arm: n}}
+    per_arm: dict = field(default_factory=dict)
+
+    def _arm_row(self, arm: str) -> dict:
+        return self.per_arm.setdefault(
+            arm or "unknown", {"asked": 0, "replayed": 0, "replayed_from": {}})
+
+    def note_asked(self, key: str, arm: str) -> None:
+        self._arm_row(arm)["asked"] += 1
+        self.asked_by.setdefault(key, arm or "unknown")
+
+    def note_replayed(self, key: str, arm: str) -> None:
+        row = self._arm_row(arm)
+        row["replayed"] += 1
+        source = self.asked_by.get(key, "an earlier invocation")
+        row["replayed_from"][source] = row["replayed_from"].get(source, 0) + 1
+
+    def shared_observations(self) -> dict:
+        """
+        Which arms reused whose replies.
+
+        REQUIRED IN THE RUN RECORD, not optional colour. Arms now share
+        observations (see `key_for`), so ABD and ABCD are no longer independent
+        replications -- and a reader who assumed they were would compute a
+        between-arm variance that does not exist. Trading a known confound for
+        an undisclosed one is not an improvement, so the sharing is stated
+        wherever the arms are reported.
+        """
+        return {
+            "arms_share_observations": True,
+            "why": ("identical question, identical freeze: keying on the arm made the "
+                    "ablation's difference carry sampling noise it should not have"),
+            "forfeited": dict(FORFEITED_BY_DESIGN),
+            "distinct_questions": len(self.asked_by),
+            "total_replayed": self.replayed,
+            "total_asked": self.recorded,
+            "by_arm": {arm: dict(row) for arm, row in sorted(self.per_arm.items())},
+        }
 
     @classmethod
     def open(cls, path, freeze: str) -> "Journal":
@@ -253,16 +341,18 @@ class JournalledProvider:
         return getattr(self._inner, name)
 
     def generate(self, request) -> GenerationResponse:
-        key = key_for(arm=self._arm, role=self._role,
+        key = key_for(role=self._role,
                       model=getattr(self._inner, "model", ""), request=request)
         hit = self._journal.get(key)
         if hit is not None:
             self._journal.replayed += 1
+            self._journal.note_replayed(key, self._arm)
             # Replayed verbatim, error and all. A recorded outage is an
             # observation about this run; asking again until it answers is how
             # a failure rate quietly becomes zero.
             return GenerationResponse(**hit)
         response = self._inner.generate(request)
+        self._journal.note_asked(key, self._arm)
         self._journal.record(key, response, spent=self._spent(), elapsed_seconds=self._elapsed())
         return response
 

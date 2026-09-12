@@ -1,0 +1,858 @@
+{
+  "corpus": "corpus/validator_dev",
+  "worked_example": "vd-clean-016",
+  "worked_rank": 9,
+  "clean_items": 40,
+  "items_flagged": 28,
+  "claims_flagged": 39,
+  "by_kind": {
+    "arithmetic": 3,
+    "attribution": 26,
+    "options": 10
+  },
+  "labels_are_unreviewed": true,
+  "items": [
+    {
+      "id": "vd-clean-025",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Surgery",
+      "passage": "Early appendiceal inflammation distends the organ and produces visceral pain, which is referred to the midgut dermatome around the umbilicus and is poorly localised and colicky. As inflammation extends to the parietal peritoneum overlying the appendix, somatic afferents are stimulated and the pain shifts to the right iliac fossa, where it becomes sharp and well localised. Right hypochondrial pain radiating to the right scapular tip suggests biliary disease, and epigastric pain boring through to the back suggests pancreatitis.",
+      "explanation": "The passage explains the migration by the change from visceral midgut referral to somatic parietal irritation, giving peri-umbilical pain first and right iliac fossa pain later. Options 3 and 4 describe biliary and pancreatic patterns named separately in the passage.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage explains the migration by the change from visceral midgut referral to somatic parietal irritation, giving peri-umbilical pain first and right iliac fossa pain later.",
+          "passage_says": "As inflammation extends to the parietal peritoneum overlying the appendix, somatic afferents are stimulated and the pain shifts to the right iliac fossa, where it becomes sharp and well localised.",
+          "overlap": 0.188,
+          "words_not_in_passage": [
+            "change",
+            "first",
+            "giving",
+            "irritation",
+            "later",
+            "migration",
+            "peri",
+            "referral",
+            "umbilical"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        },
+        {
+          "kind": "options",
+          "claim": "Options 3 and 4 describe biliary and pancreatic patterns named separately in the passage.",
+          "passage_says": "",
+          "why": "the explanation makes a claim about numbered options; the passage never refers to options by number, so a checker comparing the two has nothing to match against"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 1
+    },
+    {
+      "id": "vd-clean-007",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Biochemistry",
+      "passage": "Hepatic glucose-6-phosphatase catalyses the final step common to glycogenolysis and gluconeogenesis, removing the phosphate so that free glucose can leave the hepatocyte. When the enzyme is absent, glucose-6-phosphate accumulates and cannot be exported, so fasting blood glucose falls despite abundant stored glycogen. The accumulated substrate is diverted to lactate, and glycogen distends the liver.",
+      "explanation": "The passage states that glucose-6-phosphatase performs the final, shared step of both glycogenolysis and gluconeogenesis, so its absence traps glucose inside the hepatocyte as the phosphate ester. Options 2 to 4 name enzymes and pathways that are not the deficient step.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage states that glucose-6-phosphatase performs the final, shared step of both glycogenolysis and gluconeogenesis, so its absence traps glucose inside the hepatocyte as the phosphate ester.",
+          "passage_says": "Hepatic glucose-6-phosphatase catalyses the final step common to glycogenolysis and gluconeogenesis, removing the phosphate so that free glucose can leave the hepatocyte.",
+          "overlap": 0.333,
+          "words_not_in_passage": [
+            "absence",
+            "both",
+            "ester",
+            "inside",
+            "performs",
+            "shared",
+            "traps"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        },
+        {
+          "kind": "options",
+          "claim": "Options 2 to 4 name enzymes and pathways that are not the deficient step.",
+          "passage_says": "",
+          "why": "the explanation makes a claim about numbered options; the passage never refers to options by number, so a checker comparing the two has nothing to match against"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 2
+    },
+    {
+      "id": "vd-clean-019",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Microbiology",
+      "passage": "In enteric fever the organism is present in the bloodstream from the end of the incubation period, and bacteraemia is maximal during the first week of illness, when blood culture is positive in the large majority of untreated cases. Stool and urine cultures become positive later, typically from the second and third weeks. The Widal test measures antibody, which takes time to appear, so a single early titre is of little diagnostic value.",
+      "explanation": "The passage states that bacteraemia is at its peak in the first week and that blood culture yield is highest then, while stool and urine yields rise later and the Widal test needs a rise in titre over time.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage states that bacteraemia is at its peak in the first week and that blood culture yield is highest then, while stool and urine yields rise later and the Widal test needs a rise in titre over time.",
+          "passage_says": "Stool and urine cultures become positive later, typically from the second and third weeks.",
+          "overlap": 0.192,
+          "words_not_in_passage": [
+            "highest",
+            "needs",
+            "over",
+            "peak",
+            "rise",
+            "while",
+            "yield"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 3
+    },
+    {
+      "id": "vd-clean-027",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Surgery",
+      "passage": "The Parkland formula estimates the crystalloid requirement in the first 24 hours after a major burn as 4 millilitres of Ringer lactate per kilogram of body weight per per cent of total body surface area burned. Half of the calculated volume is given in the first 8 hours measured from the time of injury, not from the time of admission, and the remaining half over the following 16 hours. The formula is a starting estimate and is titrated against urine output.",
+      "explanation": "The passage gives 4 millilitres per kilogram per per cent burn: 4 times 70 times 30 equals 8400 millilitres, with half in the first 8 hours from the time of injury.",
+      "claims": [
+        {
+          "kind": "arithmetic",
+          "claim": "The passage gives 4 millilitres per kilogram per per cent burn: 4 times 70 times 30 equals 8400 millilitres, with half in the first 8 hours from the time of injury.",
+          "passage_says": "The Parkland formula estimates the crystalloid requirement in the first 24 hours after a major burn as 4 millilitres of Ringer lactate per kilogram of body weight per per cent of total body surface area burned.",
+          "numbers_not_in_passage": [
+            "30",
+            "70",
+            "8400"
+          ],
+          "why": "the explanation asserts a figure the passage does not contain, usually by applying a rule the passage states. Often correct and good practice: flagged because the grounding check has no category for a claim the passage ENTAILS but does not carry, so it may be reported as a contradiction"
+        },
+        {
+          "kind": "attribution",
+          "claim": "The passage gives 4 millilitres per kilogram per per cent burn: 4 times 70 times 30 equals 8400 millilitres, with half in the first 8 hours from the time of injury.",
+          "passage_says": "The Parkland formula estimates the crystalloid requirement in the first 24 hours after a major burn as 4 millilitres of Ringer lactate per kilogram of body weight per per cent of total body surface area burned.",
+          "overlap": 0.259,
+          "words_not_in_passage": [
+            "equals"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 4
+    },
+    {
+      "id": "vd-clean-032",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Obstetrics and Gynaecology",
+      "passage": "Naegele's rule estimates the expected date of delivery from the first day of the last menstrual period by adding seven days and then subtracting three months, adding a year where the subtraction crosses into the previous year. The rule assumes a regular 28-day cycle with ovulation on day 14, and gives a gestation of 280 days from the first day of the last period.",
+      "explanation": "The passage gives the rule as add seven days and subtract three months. 10 March plus seven days is 17 March; subtracting three months gives 17 December of the same year.",
+      "claims": [
+        {
+          "kind": "arithmetic",
+          "claim": "10 March plus seven days is 17 March;",
+          "passage_says": "Naegele's rule estimates the expected date of delivery from the first day of the last menstrual period by adding seven days and then subtracting three months, adding a year where the subtraction crosses into the previous year.",
+          "numbers_not_in_passage": [
+            "10",
+            "17"
+          ],
+          "why": "the explanation asserts a figure the passage does not contain, usually by applying a rule the passage states. Often correct and good practice: flagged because the grounding check has no category for a claim the passage ENTAILS but does not carry, so it may be reported as a contradiction"
+        },
+        {
+          "kind": "arithmetic",
+          "claim": "subtracting three months gives 17 December of the same year.",
+          "passage_says": "Naegele's rule estimates the expected date of delivery from the first day of the last menstrual period by adding seven days and then subtracting three months, adding a year where the subtraction crosses into the previous year.",
+          "numbers_not_in_passage": [
+            "17"
+          ],
+          "why": "the explanation asserts a figure the passage does not contain, usually by applying a rule the passage states. Often correct and good practice: flagged because the grounding check has no category for a claim the passage ENTAILS but does not carry, so it may be reported as a contradiction"
+        },
+        {
+          "kind": "attribution",
+          "claim": "The passage gives the rule as add seven days and subtract three months.",
+          "passage_says": "Naegele's rule estimates the expected date of delivery from the first day of the last menstrual period by adding seven days and then subtracting three months, adding a year where the subtraction crosses into the previous year.",
+          "overlap": 0.24,
+          "words_not_in_passage": [
+            "add"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 5
+    },
+    {
+      "id": "vd-clean-035",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Paediatrics",
+      "passage": "Kawasaki disease is an acute vasculitis of unknown cause, most often affecting children under five, characterised by fever lasting at least five days with conjunctival injection, mucosal changes, rash, extremity changes and cervical lymphadenopathy. Its serious consequence is coronary arteritis with aneurysm formation, which occurs in around a quarter of untreated children. Intravenous immunoglobulin given within the first ten days of illness reduces that risk substantially. It is unrelated to rheumatic fever, which follows group A streptococcal pharyngitis.",
+      "explanation": "The passage gives aneurysm prevention as the purpose of treatment and states that the aetiology is unknown, which excludes eradication of an organism. Rheumatic carditis is a separate disease named in the passage for contrast.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage gives aneurysm prevention as the purpose of treatment and states that the aetiology is unknown, which excludes eradication of an organism.",
+          "passage_says": "Its serious consequence is coronary arteritis with aneurysm formation, which occurs in around a quarter of untreated children.",
+          "overlap": 0.045,
+          "words_not_in_passage": [
+            "aetiology",
+            "eradication",
+            "excludes",
+            "organism",
+            "prevention",
+            "purpose",
+            "treatment"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 6
+    },
+    {
+      "id": "vd-clean-015",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Pharmacology",
+      "passage": "Warfarin inhibits vitamin K epoxide reductase, preventing regeneration of reduced vitamin K and so preventing gamma-carboxylation of the glutamate residues of factors II, VII, IX and X. Administering vitamin K restores the supply of the reduced cofactor and allows carboxylation to resume, but new functional factors must still be synthesised, so correction takes hours. Immediate replacement of preformed factors requires prothrombin complex concentrate or fresh frozen plasma.",
+      "explanation": "The passage states that warfarin acts by blocking the vitamin K cycle and that supplying vitamin K restores carboxylation, and separately notes that only prothrombin complex concentrate or plasma supplies preformed factors.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage states that warfarin acts by blocking the vitamin K cycle and that supplying vitamin K restores carboxylation, and separately notes that only prothrombin complex concentrate or plasma supplies preformed factors.",
+          "passage_says": "Immediate replacement of preformed factors requires prothrombin complex concentrate or fresh frozen plasma.",
+          "overlap": 0.25,
+          "words_not_in_passage": [
+            "acts",
+            "blocking",
+            "cycle",
+            "only",
+            "separately",
+            "supplying"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 7
+    },
+    {
+      "id": "vd-clean-040",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "PSM",
+      "passage": "Randomisation allocates participants to trial arms by chance, so that on average both measured and unmeasured prognostic factors are distributed comparably between the groups. This is its distinctive contribution, because no analytical adjustment can control for a confounder that was never measured. Concealment of the allocation from the investigator is achieved by blinding, equality of group sizes by block randomisation, and representativeness of the study population by the eligibility criteria, none of which is the purpose of randomisation itself.",
+      "explanation": "The passage states that randomisation addresses confounding, including confounders that have not been measured, and separately identifies blinding, block sizes and eligibility criteria as the devices responsible for options 2, 3 and 4.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage states that randomisation addresses confounding, including confounders that have not been measured, and separately identifies blinding, block sizes and eligibility criteria as the devices responsible for options 2, 3 and 4.",
+          "passage_says": "Concealment of the allocation from the investigator is achieved by blinding, equality of group sizes by block randomisation, and representativeness of the study population by the eligibility criteria, none of which is the purpose of randomisation itself.",
+          "overlap": 0.2,
+          "words_not_in_passage": [
+            "addresses",
+            "confounding",
+            "devices",
+            "including",
+            "responsible",
+            "separately"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        },
+        {
+          "kind": "options",
+          "claim": "The passage states that randomisation addresses confounding, including confounders that have not been measured, and separately identifies blinding, block sizes and eligibility criteria as the devices responsible for options 2, 3 and 4.",
+          "passage_says": "",
+          "why": "the explanation makes a claim about numbered options; the passage never refers to options by number, so a checker comparing the two has nothing to match against"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 8
+    },
+    {
+      "id": "vd-clean-016",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Pharmacology",
+      "passage": "The apparent volume of distribution is the amount of drug in the body divided by its plasma concentration. It is not an anatomical volume. A drug taken up extensively into tissues leaves little in the plasma, so the calculated volume can exceed total body water by many times. A drug that remains in plasma, for example because it is highly bound to albumin, has a small apparent volume of distribution.",
+      "explanation": "The passage defines the apparent volume of distribution as the ratio of dose to plasma concentration and states that extensive tissue uptake lowers the plasma concentration and so inflates the calculated volume. High plasma protein binding keeps drug in plasma and does the opposite.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage defines the apparent volume of distribution as the ratio of dose to plasma concentration and states that extensive tissue uptake lowers the plasma concentration and so inflates the calculated volume.",
+          "passage_says": "The apparent volume of distribution is the amount of drug in the body divided by its plasma concentration.",
+          "overlap": 0.25,
+          "words_not_in_passage": [
+            "dose",
+            "inflates",
+            "lowers",
+            "ratio",
+            "uptake"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 9
+    },
+    {
+      "id": "vd-clean-033",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Paediatrics",
+      "passage": "Physiological jaundice of the newborn reflects the combination of a high red cell mass with a short red cell lifespan and immature hepatic conjugation. In a term infant it appears after the first 24 hours, usually on the second or third day, peaks around the third to fifth day, is predominantly unconjugated, and resolves by the end of the first week. Jaundice appearing within the first 24 hours of life is never physiological and requires investigation for haemolysis or sepsis.",
+      "explanation": "The passage states that physiological jaundice never appears in the first 24 hours and that jaundice at that time is pathological until proved otherwise. Options 2 to 4 are given in the passage as features of the physiological pattern.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage states that physiological jaundice never appears in the first 24 hours and that jaundice at that time is pathological until proved otherwise.",
+          "passage_says": "Jaundice appearing within the first 24 hours of life is never physiological and requires investigation for haemolysis or sepsis.",
+          "overlap": 0.316,
+          "words_not_in_passage": [
+            "otherwise",
+            "pathological",
+            "proved",
+            "time",
+            "until"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        },
+        {
+          "kind": "options",
+          "claim": "Options 2 to 4 are given in the passage as features of the physiological pattern.",
+          "passage_says": "",
+          "why": "the explanation makes a claim about numbered options; the passage never refers to options by number, so a checker comparing the two has nothing to match against"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 10
+    },
+    {
+      "id": "vd-clean-034",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Paediatrics",
+      "passage": "In secretory diarrhoea such as cholera, enterotoxin drives chloride and water secretion from the crypt cells, but the sodium-glucose cotransporter of the villous enterocyte remains functional. When sodium and glucose are presented together in the lumen in roughly equimolar amounts they are absorbed together, and water follows osmotically, so net absorption can exceed ongoing secretion. The currently recommended solution is hypo-osmolar relative to plasma, which reduces stool output compared with the older isotonic formulation.",
+      "explanation": "The passage identifies the sodium-glucose cotransporter as intact even when the secretory pathway is activated, so co-administered sodium and glucose are absorbed together and water follows. The passage also states that modern ORS is hypo-osmolar, contradicting option 3.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage identifies the sodium-glucose cotransporter as intact even when the secretory pathway is activated, so co-administered sodium and glucose are absorbed together and water follows.",
+          "passage_says": "When sodium and glucose are presented together in the lumen in roughly equimolar amounts they are absorbed together, and water follows osmotically, so net absorption can exceed ongoing secretion.",
+          "overlap": 0.241,
+          "words_not_in_passage": [
+            "activated",
+            "administered",
+            "even",
+            "intact",
+            "pathway"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        },
+        {
+          "kind": "options",
+          "claim": "The passage also states that modern ORS is hypo-osmolar, contradicting option 3.",
+          "passage_says": "",
+          "why": "the explanation makes a claim about numbered options; the passage never refers to options by number, so a checker comparing the two has nothing to match against"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 11
+    },
+    {
+      "id": "vd-clean-038",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "PSM",
+      "passage": "Sensitivity and specificity describe how the test performs among those with and without the disease respectively, and are properties of the test that do not change with the prevalence of disease in the population tested. Predictive values do change. As prevalence falls, the number of true positives falls while the number of false positives generated from the larger disease-free group does not, so a smaller proportion of all positive results are true and the positive predictive value declines.",
+      "explanation": "The passage states that sensitivity and specificity are properties of the test itself and do not vary with prevalence, whereas predictive values do, and that a lower prevalence means a larger proportion of positives are false.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage states that sensitivity and specificity are properties of the test itself and do not vary with prevalence, whereas predictive values do, and that a lower prevalence means a larger proportion of positives are false.",
+          "passage_says": "As prevalence falls, the number of true positives falls while the number of false positives generated from the larger disease-free group does not, so a smaller proportion of all positive results are true and the positive predictive value declines.",
+          "overlap": 0.226,
+          "words_not_in_passage": [
+            "itself",
+            "lower",
+            "means",
+            "vary",
+            "whereas"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 12
+    },
+    {
+      "id": "vd-clean-008",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Biochemistry",
+      "passage": "A competitive inhibitor binds the active site and competes with substrate for it. Because sufficiently high substrate concentration displaces the inhibitor, the maximal velocity of the reaction is still attainable and Vmax is unchanged. More substrate is, however, needed to reach half of that maximum, so the apparent Km rises.",
+      "explanation": "The passage states that a competitive inhibitor can be displaced by excess substrate, so maximal velocity is still reachable, while more substrate is needed to reach half-maximal velocity. That is an unchanged Vmax with a raised apparent Km.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage states that a competitive inhibitor can be displaced by excess substrate, so maximal velocity is still reachable, while more substrate is needed to reach half-maximal velocity.",
+          "passage_says": "Because sufficiently high substrate concentration displaces the inhibitor, the maximal velocity of the reaction is still attainable and Vmax is unchanged.",
+          "overlap": 0.24,
+          "words_not_in_passage": [
+            "can",
+            "excess",
+            "reachable",
+            "while"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 13
+    },
+    {
+      "id": "vd-clean-018",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Microbiology",
+      "passage": "Chlamydia trachomatis is a bacterium with a cell wall and both DNA and RNA, but it is an obligate intracellular organism: its developmental cycle, from infectious elementary body to replicating reticulate body, takes place only within a host cell vacuole. It therefore cannot be grown on cell-free bacteriological media and requires cell culture or nucleic acid amplification for laboratory diagnosis.",
+      "explanation": "The passage states that the organism is a bacterium which completes its developmental cycle only inside a host cell, and therefore requires cell culture rather than cell-free medium.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage states that the organism is a bacterium which completes its developmental cycle only inside a host cell, and therefore requires cell culture rather than cell-free medium.",
+          "passage_says": "Chlamydia trachomatis is a bacterium with a cell wall and both DNA and RNA, but it is an obligate intracellular organism: its developmental cycle, from infectious elementary body to replicating reticulate body, takes place only within a host cell vacuole.",
+          "overlap": 0.206,
+          "words_not_in_passage": [
+            "completes",
+            "inside",
+            "medium",
+            "rather"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 14
+    },
+    {
+      "id": "vd-clean-021",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Medicine",
+      "passage": "Nephrotic syndrome is defined by proteinuria exceeding 3.5 grams per 24 hours in an adult, together with hypoalbuminaemia, oedema and hyperlipidaemia. Renal function may be normal at presentation. An active urinary sediment with red cells and red cell casts points instead to a nephritic process, in which proteinuria is usually milder.",
+      "explanation": "The passage gives heavy proteinuria above 3.5 grams daily as the defining feature. Red cell casts are named in the passage as a nephritic finding, and neither the creatinine nor the blood pressure is part of the definition.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage gives heavy proteinuria above 3.5 grams daily as the defining feature.",
+          "passage_says": "Nephrotic syndrome is defined by proteinuria exceeding 3.5 grams per 24 hours in an adult, together with hypoalbuminaemia, oedema and hyperlipidaemia.",
+          "overlap": 0.158,
+          "words_not_in_passage": [
+            "above",
+            "daily",
+            "feature",
+            "heavy"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 15
+    },
+    {
+      "id": "vd-clean-009",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Pathology",
+      "passage": "Caseous necrosis describes a friable, cheese-like area in which tissue architecture is completely obliterated, leaving amorphous granular debris enclosed by a rim of epithelioid macrophages and lymphocytes. It is characteristic of the granuloma of tuberculosis. Liquefactive necrosis follows infarction in the brain and suppurative infection, fibrinoid necrosis occurs in vessel walls in immune injury, and fat necrosis follows lipase release in pancreatitis.",
+      "explanation": "The passage identifies the cheese-like, structureless centre of the tuberculous granuloma as caseous necrosis. The other patterns are named in the passage as occurring in different settings.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage identifies the cheese-like, structureless centre of the tuberculous granuloma as caseous necrosis.",
+          "passage_says": "Caseous necrosis describes a friable, cheese-like area in which tissue architecture is completely obliterated, leaving amorphous granular debris enclosed by a rim of epithelioid macrophages and lymphocytes.",
+          "overlap": 0.154,
+          "words_not_in_passage": [
+            "centre",
+            "structureless",
+            "tuberculous"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 16
+    },
+    {
+      "id": "vd-clean-012",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Pathology",
+      "passage": "Metaplasia is a reversible change in which one differentiated cell type is replaced by another differentiated cell type better able to withstand a chronic stress. In chronic gastro-oesophageal reflux the stratified squamous epithelium of the lower oesophagus is replaced by intestinal-type columnar epithelium, known as Barrett oesophagus. Metaplasia is not itself malignant, although the altered epithelium carries an increased risk of subsequent dysplasia.",
+      "explanation": "The passage defines metaplasia as the replacement of one differentiated cell type by another and gives this exact oesophageal example. Dysplasia denotes disordered growth with atypia, which the passage distinguishes from metaplasia.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage defines metaplasia as the replacement of one differentiated cell type by another and gives this exact oesophageal example.",
+          "passage_says": "Metaplasia is a reversible change in which one differentiated cell type is replaced by another differentiated cell type better able to withstand a chronic stress.",
+          "overlap": 0.286,
+          "words_not_in_passage": [
+            "exact",
+            "example",
+            "replacement"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 17
+    },
+    {
+      "id": "vd-clean-013",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Pharmacology",
+      "passage": "Under first-order elimination the rate of elimination is directly proportional to the plasma concentration, so a constant fraction of the drug present is removed per unit time and the half-life is independent of concentration. Under zero-order elimination the eliminating system is saturated, a constant amount is removed per unit time, and the apparent half-life lengthens as concentration rises.",
+      "explanation": "The passage defines first-order elimination as rate proportional to concentration, which is the same as a constant fraction per unit time, and contrasts it with the constant amount of zero-order kinetics.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage defines first-order elimination as rate proportional to concentration, which is the same as a constant fraction per unit time, and contrasts it with the constant amount of zero-order kinetics.",
+          "passage_says": "Under first-order elimination the rate of elimination is directly proportional to the plasma concentration, so a constant fraction of the drug present is removed per unit time and the half-life is independent of concentration.",
+          "overlap": 0.407,
+          "words_not_in_passage": [
+            "contrasts",
+            "kinetics",
+            "same"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 18
+    },
+    {
+      "id": "vd-clean-026",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Surgery",
+      "passage": "When the small bowel lumen is mechanically occluded, swallowed air and the several litres of gastrointestinal secretion produced each day accumulate in the segment proximal to the obstruction, which distends progressively. Bowel distal to the obstruction empties and collapses, which is the basis of the radiological contrast between dilated proximal and collapsed distal loops. Peristalsis is initially increased proximally, producing colic, and fails only later. Perforation is a late complication of an ischaemic, over-distended segment.",
+      "explanation": "The passage states that bowel proximal to the block distends with swallowed air and unabsorbed secretion while the distal bowel collapses. Perforation is described as a late complication, not the cause of the distension.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage states that bowel proximal to the block distends with swallowed air and unabsorbed secretion while the distal bowel collapses.",
+          "passage_says": "When the small bowel lumen is mechanically occluded, swallowed air and the several litres of gastrointestinal secretion produced each day accumulate in the segment proximal to the obstruction, which distends progressively.",
+          "overlap": 0.214,
+          "words_not_in_passage": [
+            "block",
+            "unabsorbed",
+            "while"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 19
+    },
+    {
+      "id": "vd-clean-003",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Physiology",
+      "passage": "Carotid sinus baroreceptors discharge at a rate proportional to arterial wall stretch. Their afferent traffic inhibits the sympathetic vasomotor centre and excites vagal outflow. When arterial pressure falls, firing decreases, that inhibition is withdrawn, and sympathetic outflow rises, producing tachycardia and vasoconstriction within a few heartbeats.",
+      "explanation": "The passage states that baroreceptor firing is proportional to stretch and that reduced firing releases the vasomotor centre from inhibition. Lower pressure therefore means less firing, more sympathetic outflow, tachycardia and vasoconstriction.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage states that baroreceptor firing is proportional to stretch and that reduced firing releases the vasomotor centre from inhibition.",
+          "passage_says": "Carotid sinus baroreceptors discharge at a rate proportional to arterial wall stretch.",
+          "overlap": 0.176,
+          "words_not_in_passage": [
+            "reduced",
+            "releases"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 20
+    },
+    {
+      "id": "vd-clean-005",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Biochemistry",
+      "passage": "Glycolysis has three irreversible, regulated steps, catalysed by hexokinase, phosphofructokinase-1 and pyruvate kinase. Of these, phosphofructokinase-1 catalyses the committed step and is the rate-limiting enzyme of the pathway. It is inhibited by ATP and citrate and activated by AMP and fructose-2,6-bisphosphate.",
+      "explanation": "The passage names phosphofructokinase-1 as the committed, rate-limiting step. Hexokinase and pyruvate kinase are also regulated but the passage identifies PFK-1 as rate-limiting.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "Hexokinase and pyruvate kinase are also regulated but the passage identifies PFK-1 as rate-limiting.",
+          "passage_says": "Glycolysis has three irreversible, regulated steps, catalysed by hexokinase, phosphofructokinase-1 and pyruvate kinase.",
+          "overlap": 0.25,
+          "words_not_in_passage": [
+            "also",
+            "pfk"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 21
+    },
+    {
+      "id": "vd-clean-011",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Pathology",
+      "passage": "Light's criteria classify pleural fluid as an exudate if any one of the following is met: fluid-to-serum protein ratio greater than 0.5, fluid-to-serum lactate dehydrogenase ratio greater than 0.6, or fluid LDH greater than two-thirds of the upper limit of the normal serum range. Fluid meeting none of the three is a transudate. Meeting a single criterion is sufficient for the exudate label.",
+      "explanation": "The passage gives the thresholds as a protein ratio above 0.5 or an LDH ratio above 0.6, and states that meeting any one is sufficient. Both ratios here exceed their thresholds, so the fluid is an exudate.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage gives the thresholds as a protein ratio above 0.5 or an LDH ratio above 0.6, and states that meeting any one is sufficient.",
+          "passage_says": "Light's criteria classify pleural fluid as an exudate if any one of the following is met: fluid-to-serum protein ratio greater than 0.5, fluid-to-serum lactate dehydrogenase ratio greater than 0.6, or fluid LDH greater than two-thirds of the upper limit of the normal serum range.",
+          "overlap": 0.167,
+          "words_not_in_passage": [
+            "above",
+            "thresholds"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 22
+    },
+    {
+      "id": "vd-clean-001",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Physiology",
+      "passage": "Cardiac output is the volume of blood ejected by one ventricle each minute. It is the product of stroke volume, the volume ejected per beat, and heart rate, the number of beats per minute. Stroke volume is itself the difference between end-diastolic and end-systolic volume.",
+      "explanation": "The passage defines cardiac output as the volume ejected per beat (stroke volume) multiplied by the number of beats per minute. Option 4 defines stroke volume itself, not cardiac output.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage defines cardiac output as the volume ejected per beat (stroke volume) multiplied by the number of beats per minute.",
+          "passage_says": "It is the product of stroke volume, the volume ejected per beat, and heart rate, the number of beats per minute.",
+          "overlap": 0.467,
+          "words_not_in_passage": [
+            "multiplied"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        },
+        {
+          "kind": "options",
+          "claim": "Option 4 defines stroke volume itself, not cardiac output.",
+          "passage_says": "",
+          "why": "the explanation makes a claim about numbered options; the passage never refers to options by number, so a checker comparing the two has nothing to match against"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 23
+    },
+    {
+      "id": "vd-clean-024",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Medicine",
+      "passage": "The diagnosis of chronic obstructive pulmonary disease requires demonstration of persistent airflow limitation, defined spirometrically as a ratio of forced expiratory volume in one second to forced vital capacity below 0.70 measured after a bronchodilator. Measuring before bronchodilator cannot distinguish fixed from reversible obstruction. Marked reversibility of FEV1 favours asthma. A reduced total lung capacity with a preserved ratio indicates a restrictive rather than an obstructive defect.",
+      "explanation": "The passage specifies that the ratio must be measured after bronchodilator and must be below 0.70. Option 3 describes significant reversibility, which the passage associates with asthma, and option 4 describes a restrictive pattern.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage specifies that the ratio must be measured after bronchodilator and must be below 0.70.",
+          "passage_says": "The diagnosis of chronic obstructive pulmonary disease requires demonstration of persistent airflow limitation, defined spirometrically as a ratio of forced expiratory volume in one second to forced vital capacity below 0.70 measured after a bronchodilator.",
+          "overlap": 0.185,
+          "words_not_in_passage": [
+            "must"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        },
+        {
+          "kind": "options",
+          "claim": "Option 3 describes significant reversibility, which the passage associates with asthma, and option 4 describes a restrictive pattern.",
+          "passage_says": "",
+          "why": "the explanation makes a claim about numbered options; the passage never refers to options by number, so a checker comparing the two has nothing to match against"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 24
+    },
+    {
+      "id": "vd-clean-031",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Obstetrics and Gynaecology",
+      "passage": "Primary postpartum haemorrhage is bleeding of 500 millilitres or more from the genital tract within 24 hours of delivery. Its causes are conventionally grouped as tone, trauma, tissue and thrombin. Failure of the uterus to contract, that is uterine atony, accounts for the large majority of cases. Genital tract trauma, retained placental tissue and coagulation disorders account for the remainder.",
+      "explanation": "The passage states that atony accounts for the large majority of primary postpartum haemorrhage, with trauma, retained tissue and coagulopathy accounting for the remainder.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage states that atony accounts for the large majority of primary postpartum haemorrhage, with trauma, retained tissue and coagulopathy accounting for the remainder.",
+          "passage_says": "Genital tract trauma, retained placental tissue and coagulation disorders account for the remainder.",
+          "overlap": 0.263,
+          "words_not_in_passage": [
+            "coagulopathy"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 25
+    },
+    {
+      "id": "vd-clean-037",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "PSM",
+      "passage": "Incidence is the number of new cases of a condition arising in a defined population at risk over a specified period, and measures the rate at which people acquire the disease. Prevalence is the number of existing cases, new and old, present in a defined population at a point in time, and measures the burden being carried. A chronic disease of long duration can have a low incidence and a high prevalence; a brief self-limiting illness can show the opposite.",
+      "explanation": "The passage defines incidence as new cases per population at risk over a period and prevalence as existing cases at a point in time. It also states that a long-lasting disease can have high prevalence with low incidence, contradicting option 4.",
+      "claims": [
+        {
+          "kind": "attribution",
+          "claim": "The passage defines incidence as new cases per population at risk over a period and prevalence as existing cases at a point in time.",
+          "passage_says": "Prevalence is the number of existing cases, new and old, present in a defined population at a point in time, and measures the burden being carried.",
+          "overlap": 0.4,
+          "words_not_in_passage": [
+            "per"
+          ],
+          "why": "the explanation attributes a definition or statement to the passage; compare the two sentences and decide whether the attribution is accurate"
+        },
+        {
+          "kind": "options",
+          "claim": "It also states that a long-lasting disease can have high prevalence with low incidence, contradicting option 4.",
+          "passage_says": "",
+          "why": "the explanation makes a claim about numbered options; the passage never refers to options by number, so a checker comparing the two has nothing to match against"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 26
+    },
+    {
+      "id": "vd-clean-010",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Pathology",
+      "passage": "In apoptosis the cell shrinks, chromatin condenses, and the cell fragments into membrane-bound apoptotic bodies that are phagocytosed intact. Because cell contents are never spilled into the interstitium, there is no inflammatory reaction. The process is energy-dependent and typically affects scattered single cells. Necrosis, by contrast, involves early membrane failure, leakage of contents, an inflammatory infiltrate, and usually affects contiguous groups of cells.",
+      "explanation": "The passage contrasts the two on membrane integrity and inflammation, and separately notes that apoptosis is ATP-dependent and affects single cells. Options 2 to 4 each state the necrotic pattern or the opposite of the passage.",
+      "claims": [
+        {
+          "kind": "options",
+          "claim": "Options 2 to 4 each state the necrotic pattern or the opposite of the passage.",
+          "passage_says": "",
+          "why": "the explanation makes a claim about numbered options; the passage never refers to options by number, so a checker comparing the two has nothing to match against"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 27
+    },
+    {
+      "id": "vd-clean-014",
+      "label": "CLEAN",
+      "label_status": "unreviewed",
+      "reviewers": [],
+      "subject": "Pharmacology",
+      "passage": "Aspirin acetylates a serine residue in the active site of cyclo-oxygenase, inactivating the enzyme irreversibly. The plasma half-life of aspirin itself is only a few minutes. Because the platelet is anucleate and cannot synthesise replacement enzyme, thromboxane A2 production does not recover in that platelet, and platelet function returns only as new platelets enter the circulation over the following days.",
+      "explanation": "The passage attributes the long effect to irreversible acetylation combined with the anucleate platelet's inability to make new enzyme, and explicitly notes that the plasma half-life is short. Option 4 describes the mechanism of the thienopyridines.",
+      "claims": [
+        {
+          "kind": "options",
+          "claim": "Option 4 describes the mechanism of the thienopyridines.",
+          "passage_says": "",
+          "why": "the explanation makes a claim about numbered options; the passage never refers to options by number, so a checker comparing the two has nothing to match against"
+        }
+      ],
+      "ruling": "",
+      "ruled_by": "",
+      "note": "",
+      "reading_order": 28
+    }
+  ]
+}

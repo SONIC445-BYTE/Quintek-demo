@@ -14,6 +14,7 @@ So most of what follows tests the refusals, not the caching.
 
 from __future__ import annotations
 
+import inspect
 import json
 
 import pytest
@@ -121,21 +122,67 @@ def test_a_recorded_outage_replays_as_that_outage_and_is_never_re_asked(tmp_path
 # It does not blur the arms together
 # ---------------------------------------------------------------------------
 
-def test_each_arm_pays_for_its_own_calls(tmp_path):
+def test_the_arms_share_one_observation(tmp_path):
     """
-    A byte-identical request in another arm is a miss. Sharing would strip
-    between-arm sampling variation out of ABCD - ABD, which is a quieter
-    experiment than the frozen one.
+    Reversed deliberately. This test used to assert the opposite, on the
+    grounds that sharing "would strip between-arm sampling variation out of
+    ABCD - ABD, which is a quieter experiment than the frozen one".
+
+    That argument was backwards. The variation it preserved was NOISE sitting
+    inside the quantity the ablation reports as the judge's contribution, not
+    signal: an arm decides 30-40 items, so one item flipping is a three per
+    cent swing, and providers are not bit-deterministic at temperature zero.
+    Redrawing grounding and conformance for the second arm made the difference
+    carry a sampling error the same size as the effect. Sharing removes it by
+    construction -- the arms then differ only in which LAYERS ran.
+
+    What is genuinely lost is in `FORFEITED_BY_DESIGN`, and it is not this.
     """
     path = tmp_path / "j.jsonl"
     inner = CountingProvider()
     wrap(inner, Journal.open(path, FREEZE), arm="ABD").generate(req())
     wrap(inner, Journal.open(path, FREEZE), arm="ABCD").generate(req())
-    assert inner.calls == 2
+    assert inner.calls == 1, (
+        "ABCD asked a question ABD had already asked, byte for byte, under the same "
+        "freeze. That is one observation, and asking twice puts the redraw back "
+        "inside the ablation's difference.")
 
-    # ...and each arm still replays its own.
-    wrap(inner, Journal.open(path, FREEZE), arm="ABD").generate(req())
-    assert inner.calls == 2
+
+def test_the_sharing_is_recorded_per_arm(tmp_path):
+    """
+    Sharing that is not disclosed trades a known confound for a hidden one: a
+    reader who thinks ABD and ABCD are independent replications will compute a
+    between-arm variance that does not exist.
+    """
+    path = tmp_path / "j.jsonl"
+    book = Journal.open(path, FREEZE)
+    inner = CountingProvider()
+    wrap(inner, book, arm="ABD").generate(req(item_id="a"))
+    wrap(inner, book, arm="ABD").generate(req(item_id="b"))
+    wrap(inner, book, arm="ABCD").generate(req(item_id="a"))
+
+    shared = book.shared_observations()
+    assert shared["arms_share_observations"] is True
+    assert shared["distinct_questions"] == 2
+    assert shared["by_arm"]["ABD"] == {"asked": 2, "replayed": 0, "replayed_from": {}}
+    assert shared["by_arm"]["ABCD"]["replayed"] == 1
+    assert shared["by_arm"]["ABCD"]["replayed_from"] == {"ABD": 1}
+    assert "independent_redraw_per_arm" in shared["forfeited"]
+
+
+def test_the_forfeited_capability_is_named_not_implied():
+    """
+    Same discipline as `UNCOVERED_BY_DESIGN`: regaining the capability means
+    deleting a line a test reads, rather than rediscovering the gap from a
+    confusing result.
+    """
+    from benchmark.journal import FORFEITED_BY_DESIGN
+    assert "independent_redraw_per_arm" in FORFEITED_BY_DESIGN
+    reason = FORFEITED_BY_DESIGN["independent_redraw_per_arm"]
+    assert "variance" in reason.lower(), "the entry must say what was given up"
+    assert len(reason) > 200, (
+        "a one-line entry is a label, not a record. Say what is lost, why, and what "
+        "regaining it would take.")
 
 
 def test_a_different_role_on_the_same_model_is_a_different_question(tmp_path):
@@ -159,9 +206,8 @@ def test_a_drifted_prompt_misses_and_is_paid_for(tmp_path):
 
 
 def test_the_key_covers_every_field_that_could_change_the_reply():
-    base = dict(arm="ABD", role="grounding", model="m", request=req())
+    base = dict(role="grounding", model="m", request=req())
     baseline = key_for(**base)
-    assert key_for(**{**base, "arm": "ABCD"}) != baseline
     assert key_for(**{**base, "role": "judge"}) != baseline
     assert key_for(**{**base, "model": "other"}) != baseline
     assert key_for(**{**base, "request": req(item_id="item-2")}) != baseline
@@ -172,6 +218,25 @@ def test_the_key_covers_every_field_that_could_change_the_reply():
     other2 = req()
     other2.system = "different system prompt"
     assert key_for(**{**base, "request": other2}) != baseline
+
+
+def test_the_arm_is_not_part_of_the_key():
+    """
+    The inverse of the test above, and the more important one.
+
+    The arm is never sent to a model, so two arms asking a byte-identical
+    question are asking ONE question. Keying on the arm made ABD and ABCD pay
+    twice -- 380 of 765 calls in a full set -- and, worse, redrew grounding and
+    conformance for the second arm, putting sampling noise inside the very
+    difference the ablation reports as the judge's contribution.
+    """
+    request = req()
+    assert key_for(role="grounding", model="m", request=request) == \
+        key_for(role="grounding", model="m", request=request)
+    assert "arm" not in inspect.signature(key_for).parameters, (
+        "an arm parameter is back in key_for; two arms asking the same question "
+        "would pay twice and the ablation's difference would carry the redraw noise "
+        "again. See FORFEITED_BY_DESIGN before changing this.")
 
 
 # ---------------------------------------------------------------------------
@@ -380,9 +445,11 @@ def test_an_ambiguous_failure_is_still_recorded(tmp_path):
             "RuntimeError: connection reset by peer")):
         book = Journal.open(path, FREEZE)
         sick = CountingProvider(error=error)
-        # A distinct arm per case: sharing one would make the second case
-        # replay the first, which is correct behaviour and a useless test.
-        wrap(sick, book, arm=f"arm-{n}").generate(req())
+        # A distinct ITEM per case. This used to vary the arm instead, which
+        # worked only while the arm was part of the key; it is not, so two
+        # cases would now be one question and the second would replay the
+        # first -- correct behaviour and a useless test.
+        wrap(sick, book).generate(req(item_id=f"item-{n}"))
         assert book.unreached == 0, f"{error!r} was treated as never sent"
         assert book.recorded == 1, f"{error!r} was not recorded"
 

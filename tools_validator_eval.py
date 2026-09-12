@@ -268,7 +268,8 @@ def run_real(args):
 
 
 def _record(devset, verdicts, outages, config, providers, *, kind, note="", freeze="",
-            runs_dir=None, budget=None, measurement_unit="", pacing_stats=None):
+            runs_dir=None, budget=None, measurement_unit="", pacing_stats=None,
+            shared_observations=None):
     """Write the run to the record. A ceiling and a measurement are different kinds."""
     from validator.holdout import corpus_hash
     matrix = score(devset.cases, verdicts)
@@ -287,6 +288,7 @@ def _record(devset, verdicts, outages, config, providers, *, kind, note="", free
         analysis=analysis.report(devset.cases, verdicts, outages), note=note,
         freeze=freeze, budget=dict(budget or {}),
         pacing=dict(pacing_stats or {}),
+        shared_observations=dict(shared_observations or {}),
         measurement_unit=measurement_unit,
         items_expected=expected, items_decided=decided,
         completeness=(ablation.COMPLETE if not outages and decided >= expected
@@ -574,7 +576,12 @@ def run_experiments(args):
                 # each arm's record carries the totals as they stood when that
                 # arm finished. Differencing consecutive arms gives the per-arm
                 # cost; a single snapshot at the end would give neither.
-                pacing_stats=(limiter.as_dict() if limiter is not None else {}))
+                pacing_stats=(limiter.as_dict() if limiter is not None else {}),
+                # Non-optional whenever a journal is in use: the arms share
+                # replies, so an artifact that does not say so invites a reader
+                # to treat ABD and ABCD as independent replications.
+                shared_observations=(book.shared_observations()
+                                     if book is not None else {}))
         arms.append(ablation.Arm(
             name=title, layers=layers, matrix=matrix, outages=len(outages),
             outage_detail=list(outages), outage_summary=outage.summarise(outages),
@@ -715,6 +722,20 @@ def run_outages(args):
               f"{pace.get('waited_seconds')}s spent pacing")
     else:
         print("pacing       NO LIMITER CONFIGURED for this run")
+    shared = run.shared_observations
+    if shared.get("arms_share_observations"):
+        print(f"sharing      arms SHARE observations: {shared.get('distinct_questions')} "
+              f"distinct question(s), {shared.get('total_replayed')} replayed, "
+              f"{shared.get('total_asked')} asked")
+        for arm, row in (shared.get("by_arm") or {}).items():
+            reused = ", ".join(f"{n} from {src}" for src, n in
+                               (row.get("replayed_from") or {}).items())
+            print(f"             {arm}: asked {row.get('asked')}, "
+                  f"replayed {row.get('replayed')}" + (f" ({reused})" if reused else ""))
+        print("             these arms are NOT independent replications; this set says "
+              "nothing about run-to-run variance")
+    elif shared:
+        print("sharing      recorded, but this run did not share observations")
     print()
 
     if not records:
