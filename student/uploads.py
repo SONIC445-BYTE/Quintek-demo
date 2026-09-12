@@ -99,6 +99,21 @@ def checksum(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def _restrict(path: Path, mode: int) -> None:
+    """
+    Best effort, and best effort is the honest contract.
+
+    chmod is meaningless on some filesystems and some platforms, and a learner
+    whose upload fails because the mode could not be set has lost something
+    real to protect against a threat that may not exist on their host. The
+    permission is tightened where it can be and skipped where it cannot.
+    """
+    try:
+        path.chmod(mode)
+    except (OSError, NotImplementedError):
+        pass
+
+
 def store(storage_dir: str | Path, source_id: str, filename: str,
           content_base64: str) -> tuple[str, int, str]:
     """
@@ -111,6 +126,13 @@ def store(storage_dir: str | Path, source_id: str, filename: str,
     raw = decode(content_base64)
     directory = Path(storage_dir)
     directory.mkdir(parents=True, exist_ok=True)
+    # Owner-only, because these are other people's documents. No route serves
+    # them -- `IngestionEngine._extract` is the only reader -- so the exposure
+    # is anything else running as another user on the same host, which is
+    # exactly what a default 0o755 grants. Applied on every store rather than
+    # only at creation: `exist_ok=True` says nothing about the mode of a
+    # directory that already existed.
+    _restrict(directory, 0o700)
 
     key = f"{source_id}{_suffix_for(filename)}"
     target = directory / key
@@ -119,4 +141,5 @@ def store(storage_dir: str | Path, source_id: str, filename: str,
     if target.parent.resolve() != directory.resolve():
         raise UploadError("refusing to write outside the storage directory")
     target.write_bytes(raw)
+    _restrict(target, 0o600)
     return key, len(raw), checksum(raw)

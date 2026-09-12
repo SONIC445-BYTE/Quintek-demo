@@ -257,3 +257,69 @@ class TestContainmentAloneIsNotEnough:
             "the containment check caught the cross-tenant read. That is not what it "
             "does -- A's key is inside storage_dir. If this now passes, work out what "
             "actually changed before trusting it.")
+
+
+class TestStorageIsOwnerOnly:
+    """
+    Uploaded documents are other people's material. No route serves them --
+    `_extract` is the only reader -- so the exposure is anything else running
+    as another user on the same host, which a default 0o755 grants.
+    """
+
+    def test_the_directory_and_the_file_are_owner_only(self, world, tmp_path):
+        import stat
+        from student.uploads import store
+
+        storage = tmp_path / "fresh"
+        key, _size, _digest = store(storage, "src_abc", "n.pdf",
+                                    base64.b64encode(one_page_pdf("x")).decode())
+        assert stat.S_IMODE(storage.stat().st_mode) == 0o700
+        assert stat.S_IMODE((storage / key).stat().st_mode) == 0o600
+
+    def test_an_existing_loose_directory_is_tightened(self, tmp_path):
+        """
+        `mkdir(exist_ok=True)` says nothing about the mode of a directory that
+        already existed, so the mode is applied on every store rather than only
+        at creation.
+        """
+        import stat
+        from student.uploads import store
+
+        storage = tmp_path / "loose"
+        storage.mkdir(mode=0o755)
+        store(storage, "src_abc", "n.pdf",
+              base64.b64encode(one_page_pdf("x")).decode())
+        assert stat.S_IMODE(storage.stat().st_mode) == 0o700
+
+    def test_a_filesystem_that_refuses_chmod_does_not_fail_the_upload(
+            self, tmp_path, monkeypatch):
+        """
+        Losing a learner's upload to a chmod that the filesystem does not
+        support would be trading something real for a threat that may not exist
+        on that host.
+        """
+        from pathlib import Path
+        from student.uploads import store
+
+        def refuse(self, mode):
+            raise OSError("chmod not supported here")
+
+        monkeypatch.setattr(Path, "chmod", refuse)
+        key, size, _ = store(tmp_path / "nochmod", "src_abc", "n.pdf",
+                             base64.b64encode(one_page_pdf("x")).decode())
+        assert size > 0 and key == "src_abc.pdf"
+
+    def test_no_route_serves_a_raw_upload(self):
+        """
+        The reason storage permissions are the whole of this control: nothing
+        hands a stored file back over HTTP. If that changes, this fails and the
+        new route needs an ownership check before it ships.
+        """
+        import pathlib as _p
+        api = _p.Path("student/api.py").read_text()
+        for giveaway in ("application/pdf", "octet-stream", "read_bytes()",
+                         "send_file", "Content-Disposition"):
+            assert giveaway not in api, (
+                f"student/api.py now contains {giveaway!r}. If a route serves stored "
+                "files, it needs an ownership join -- storage_key is derived from a "
+                "source id, and knowing an id must not be enough to read the file.")
