@@ -51,6 +51,8 @@ _DEMO_RULE = (
 )
 
 
+from .untrusted import block as fenced_block, fence_for, fence_rule
+
 class GenerationFailed(RuntimeError):
     pass
 
@@ -272,15 +274,31 @@ class QuestionGenerator:
     def build_prompt(self, *, count: int, passages: list[dict], target_names: list[str],
                      related_names: list[str], demos: list[dict], family: str,
                      difficulty: str, reasoning_depth: str, constraints: str) -> str:
+        # The fence is drawn against every piece of untrusted text that will go
+        # into this prompt -- passages, demo prose, the caller's constraints --
+        # so no one of them can contain the marker that delimits it. See
+        # `student/untrusted.py`; this used to be a bare f-string and a source
+        # could forge `[passage 2 | ...]`, a second GROUNDING RULE and a
+        # pre-filled reply block.
+        untrusted_texts = [p.get("text") or "" for p in passages]
+        untrusted_texts += [str(d.get(k) or "") for d in demos for k in
+                            ("title", "question", "stem_structure", "question_target",
+                             "distractor_strategy", "answer_format")]
+        untrusted_texts.append(constraints or "")
+        nonce = fence_for(*untrusted_texts)
+
         parts = [
             f"Write {count} postgraduate-level medical question(s).",
             "",
             "GROUNDING RULE", _GROUNDING_RULE, "",
+            fence_rule(nonce),
+            "",
             "SOURCE PASSAGES",
         ]
         for i, p in enumerate(passages, start=1):
             loc = json.loads(p["locator_json"]) if p.get("locator_json") else {}
-            parts.append(f"[passage {i} | {json.dumps(loc)}]\n{p['text']}")
+            parts.append(fenced_block(f"passage {i} | {json.dumps(loc)}",
+                                      p["text"], nonce))
         parts += ["", f"TARGET CONCEPTS: {', '.join(target_names) or '(any in the passages)'}"]
         if related_names:
             parts.append(f"RELATED CONCEPTS (may be integrated): {', '.join(related_names)}")
@@ -291,16 +309,19 @@ class QuestionGenerator:
             f"REASONING DEPTH: {reasoning_depth or 'requires integrating two concepts'}",
         ]
         if constraints:
-            parts.append(f"ADDITIONAL CONSTRAINTS: {constraints}")
+            parts += ["", "ADDITIONAL CONSTRAINTS",
+                      fenced_block("constraints", constraints, nonce)]
 
         if demos:
             parts += ["", "DEMONSTRATIONS", _DEMO_RULE]
-            for d in demos:
-                parts.append(
+            for n, d in enumerate(demos, start=1):
+                parts.append(fenced_block(
+                    f"demonstration {n}",
                     f"- {d['title']}: structure={d['stem_structure'] or 'n/a'}; "
                     f"target={d['question_target'] or 'n/a'}; "
                     f"distractors={d['distractor_strategy'] or 'n/a'}; "
-                    f"format={d['answer_format'] or 'n/a'}\n  example: {d['question']}")
+                    f"format={d['answer_format'] or 'n/a'}\n  example: {d['question']}",
+                    nonce))
             parts.append(_DEMO_RULE)   # repeated: this is the fact-leak failure mode
 
         parts += [
