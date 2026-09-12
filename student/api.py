@@ -19,8 +19,32 @@ from typing import Any
 from .db import Database, new_id, now_iso
 from pathlib import Path
 
+from . import safety
 from .uploads import BINARY_KINDS, UploadError
 from .uploads import store as store_upload
+
+
+
+def _provenance_of(chunk) -> dict:
+    """
+    What the learner is told about where a question came from and how much to
+    trust it.
+
+    ONE function, used by every path that hands a question to a learner.
+    `get_question` and the `/attempts` reveal each built this inline and each
+    selected only `text, locator_json`, so `confidence` and `needs_review` --
+    set by the ingestion quality gate, stored, and never read again -- were
+    dropped between the gate and the screen. A flag that stops at the database
+    is worse than no flag: it leaves a record saying the material was checked
+    while the person reading it was told nothing.
+    """
+    return {
+        "source_passage": chunk["text"],
+        "source_locator": json.loads(chunk["locator_json"] or "{}"),
+        "chunk_confidence": chunk["confidence"],
+        "needs_review": bool(chunk["needs_review"]),
+        "extraction_method": chunk["extraction_method"],
+    }
 
 
 class ApiError(Exception):
@@ -177,6 +201,16 @@ class StudentAPI:
             from .ingestion import source_capabilities
             return 200, {"sources": source_capabilities()}
 
+        # What this is and is not. Unauthenticated and served from the server
+        # rather than hard-coded in each client, so every surface says the same
+        # words and none of them can quietly soften them. A learner revising
+        # for a postgraduate medical exam is exactly the person who might act
+        # on a model-generated claim, so this belongs on the screen rather than
+        # in a terms document nobody opens.
+        if seg == ["scope"] and method == "GET":
+            return 200, {"scope_statement": safety.SCOPE_STATEMENT,
+                         "report_kinds": list(safety.REPORT_KINDS)}
+
         user = self._user(token)
         uid = user["id"]
 
@@ -216,6 +250,16 @@ class StudentAPI:
 
         if len(seg) == 2 and seg[0] == "questions" and method == "GET":
             return 200, self.get_question(uid, seg[1])
+
+        # --- reporting a question ---
+        if len(seg) == 3 and seg[0] == "questions" and seg[2] == "reports":
+            if method == "POST":
+                return 201, self.report_question(uid, seg[1], body)
+            if method == "GET":
+                return 200, {"reports": self.question_reports(uid, seg[1])}
+
+        if seg == ["reports"] and method == "GET":
+            return 200, {"reports": self.my_reports(uid)}
 
         if seg == ["demos"]:
             if method == "GET":
@@ -741,14 +785,40 @@ class StudentAPI:
             " JOIN concepts c ON c.id = qc.concept_id WHERE qc.question_id = ?", (qid,))]
         if q["chunk_id"]:
             chunk = self.db.query_one(
-                "SELECT text, locator_json FROM source_chunks WHERE id = ?", (q["chunk_id"],))
+                "SELECT text, locator_json, confidence, needs_review, extraction_method"
+                "  FROM source_chunks WHERE id = ?", (q["chunk_id"],))
             if chunk:
-                q["source_passage"] = chunk["text"]
-                q["source_locator"] = json.loads(chunk["locator_json"])
+                q.update(_provenance_of(chunk))
         q["attempts"] = [dict(r) for r in self.db.query(
             "SELECT id, user_answer, is_correct, user_colour, created_at FROM attempts"
             " WHERE question_id = ? AND user_id = ? ORDER BY created_at DESC", (qid, uid))]
         return q
+
+    # ---------- reporting a question ----------
+
+    def report_question(self, uid: str, qid: str, body: dict) -> dict:
+        """
+        A learner says a question is wrong.
+
+        The ownership join first, and by the same pattern as every sibling: a
+        learner may only report a question they can see, and a stranger's id
+        must give 404 rather than creating a report row that names it.
+        """
+        self._owned_question(uid, qid)
+        try:
+            return safety.record(self.db, user_id=uid, question_id=qid,
+                                 kind=(body.get("kind") or "").strip(),
+                                 note=body.get("note") or "")
+        except safety.ReportRejected as exc:
+            raise ApiError(400, str(exc))
+
+    def question_reports(self, uid: str, qid: str) -> list[dict]:
+        """This learner's own reports on one question."""
+        self._owned_question(uid, qid)
+        return [r for r in safety.for_question(self.db, qid) if r["user_id"] == uid]
+
+    def my_reports(self, uid: str) -> list[dict]:
+        return safety.for_user(self.db, uid)
 
     # ---------- demonstrations ----------
 
@@ -869,13 +939,14 @@ class StudentAPI:
                 " JOIN concepts c ON c.id = qc.concept_id WHERE qc.question_id = ?",
                 (question_id,))],
         }
+        reveal["validation_status"] = question["validation_status"]
         if question["chunk_id"]:
             chunk = self.db.query_one(
-                "SELECT text, locator_json FROM source_chunks WHERE id = ?",
+                "SELECT text, locator_json, confidence, needs_review, extraction_method"
+                "  FROM source_chunks WHERE id = ?",
                 (question["chunk_id"],))
             if chunk:
-                reveal["source_passage"] = chunk["text"]
-                reveal["source_locator"] = json.loads(chunk["locator_json"])
+                reveal.update(_provenance_of(chunk))
         return {"attempt_id": result["attempt_id"], "reveal": reveal}
 
     # ---------- progress ----------

@@ -384,3 +384,32 @@ CREATE TABLE IF NOT EXISTS production_deployments (
     deactivated_by      TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS ix_deploy_task ON production_deployments(task_type, deactivated_at);
+
+-- Reports from learners about questions they were shown.
+--
+-- The validator lowers the rate of wrong questions; nothing lowers it to
+-- zero. Without this table a wrong question is found by the person it
+-- misleads and goes no further.
+--
+-- `provenance_json` is FROZEN at report time rather than joined on read:
+-- questions are regenerated and chunks re-ingested, so a report holding only
+-- ids would describe something that no longer exists by the time it is read.
+CREATE TABLE IF NOT EXISTS question_reports (
+    id              TEXT PRIMARY KEY,
+    question_id     TEXT NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind            TEXT NOT NULL,
+    note            TEXT NOT NULL DEFAULT '',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    resolution      TEXT NOT NULL DEFAULT 'open',
+    resolved_by     TEXT NOT NULL DEFAULT '',
+    resolution_note TEXT NOT NULL DEFAULT '',
+    resolved_at     TEXT,
+    created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_reports_open
+    ON question_reports(resolution, created_at);
+CREATE INDEX IF NOT EXISTS idx_reports_user
+    ON question_reports(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_reports_question
+    ON question_reports(question_id);

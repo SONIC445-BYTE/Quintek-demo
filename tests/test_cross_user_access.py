@@ -174,6 +174,9 @@ CONTENT_FIELDS = frozenset({
     "strategy", "selected_question_count",
     # attempt payload: what the learner did, not what they are pointing at
     "user_answer", "user_colour", "colour", "gaps",
+    # reporting a question: the learner's own words about what is wrong with
+    # it. `kind` is above already; `note` is free text and names nothing.
+    "note",
 })
 
 
@@ -236,6 +239,10 @@ COVERAGE: dict[str, dict] = {
     "/notebooks/<id>/questions":          dict(kind="notebook", method="GET", expect=REFUSED),
     "/sources/<id>/progress":             dict(kind="source", method="GET", expect=REFUSED),
     "/questions/<id>":                    dict(kind="question", method="GET", expect=REFUSED),
+    # Reporting a question is a WRITE against someone else's row if the join is
+    # missing, and the report would then name a question its author cannot see.
+    "/questions/<id>/reports":            dict(kind="question", method="POST", expect=REFUSED,
+                                               body={"kind": "factually_wrong"}),
     "/gaps/<id>":                         dict(kind="gap", method="GET", expect=SCOPED,
                                                why="joins knowledge_gaps on user_id, so a"
                                                    " stranger's id yields empty evidence"),
