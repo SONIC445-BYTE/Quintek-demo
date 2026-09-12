@@ -576,9 +576,34 @@ class IngestionEngine:
         path = None
         if row["storage_key"]:
             candidate = self.storage_dir / row["storage_key"]
+            # Defence in depth, and DEPTH IS ALL IT IS. The real fix is that
+            # `storage_key` is no longer read from a request body: the value
+            # here is derived from a server-generated source id.
+            #
+            # This check catches the two escapes -- an absolute key, which
+            # replaces the base entirely under pathlib, and `../`, which walks
+            # out of it. It does NOT catch the variant that mattered most: one
+            # learner naming another learner's key, which is a well-formed path
+            # INSIDE this directory and passes every containment test there is.
+            # Anyone tempted to treat this as sufficient should read
+            # `tests/test_storage_key_disclosure.py`, which reintroduces the
+            # body field with this check left in place and watches the
+            # cross-tenant read succeed anyway.
+            if not self._within_storage(candidate):
+                raise ExtractionUnavailable(
+                    "the stored path for this source resolves outside the storage "
+                    "directory, so it will not be read")
             if candidate.exists():
                 path = candidate
         return extract_for_kind(row["kind"], path=path, raw_text=raw_text, url=url)
+
+    def _within_storage(self, candidate: Path) -> bool:
+        """Whether `candidate` is genuinely under `storage_dir`, symlinks resolved."""
+        try:
+            root = Path(self.storage_dir).resolve()
+            return root == candidate.resolve() or root in candidate.resolve().parents
+        except OSError:
+            return False
 
     def _store_chunks(self, source_id: str, chunks: list[Chunk]) -> None:
         """Idempotent: re-ingesting a source replaces its chunk set rather than

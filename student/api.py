@@ -484,7 +484,7 @@ class StudentAPI:
             raise ApiError(400, "a text source needs text")
         if kind == "link" and not (body.get("url") or "").strip():
             raise ApiError(400, "a link source needs a url")
-        if kind in BINARY_KINDS and not content and not body.get("storage_key"):
+        if kind in BINARY_KINDS and not content:
             # Refuse at the door. Accepting a PDF source with no bytes behind
             # it creates a row that ingestion can only fail on, several
             # seconds later, with the real cause two tables away.
@@ -494,7 +494,26 @@ class StudentAPI:
                 "`content_base64`.")
 
         sid = new_id("src")
-        storage_key = body.get("storage_key", "")
+        # NOT `body.get("storage_key")`. It used to be, and that was an
+        # arbitrary-file-read and a cross-tenant read in one field.
+        #
+        # `IngestionEngine._extract` resolves this value against `storage_dir`,
+        # so a client that could set it could name any path on the machine --
+        # an absolute path replaces the base entirely in pathlib, and `../`
+        # walks out of it. Worse, and not fixable by validating the path: it
+        # could name ANOTHER LEARNER's key, which is a legitimate-looking path
+        # INSIDE the storage directory. A learner posted a source naming
+        # someone else's key and that document's text arrived in their own
+        # chunks, verified end to end.
+        #
+        # Supplying it also skipped `uploads.store` entirely -- no size cap, no
+        # base64 validation, no checksum -- because the branch below runs only
+        # when `content` is present.
+        #
+        # There is no legitimate client value. The only correct one is derived
+        # from the source id the server just generated, which is what
+        # `uploads.store` returns. So it is never read from the request.
+        storage_key = ""
         size = 0
         digest = ""
         if kind in BINARY_KINDS and content:

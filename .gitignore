@@ -26,8 +26,19 @@ frontend/dist/
 
 # Student engine local database and uploaded sources -- per-deployment data,
 # never committed.
-quintek.db
-quintek.db-*
+# Any SQLite database and its sidecars, not one name.
+#
+# This used to read `quintek.db` / `quintek.db-*`. A second database arrived
+# later called `billing.db` and matched neither, so it and a 552 KB WAL were
+# committed in 367dccd. The WAL held no credential and one opaque generated
+# user id, but a rule written around a single filename is a rule that only
+# covers the database someone remembered.
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
 sources/
 
 # Generation-run artifacts: per-run captures, useful locally, not repo content.

@@ -140,8 +140,45 @@ def route_inventory() -> tuple[set[tuple], list[str]]:
     return routes, unparsed
 
 
-def body_id_fields() -> dict[str, set[str]]:
-    """`handler name -> {body fields that carry an id}`."""
+#: Body fields that carry the CALLER'S OWN CONTENT -- prose, numbers, settings,
+#: a credential they are supplying. None of them names something the server
+#: already owns, so none needs cross-user coverage.
+#:
+#: This list is the whole predicate, and it is deny-by-default ON PURPOSE.
+#:
+#: It used to be the other way round: a field counted as an object reference
+#: only if its name ended in `_id` or `_ids`. `storage_key` ends in neither, so
+#: `add_source` was never discovered, never required to declare coverage, and
+#: shipped a field that let one learner name another learner's stored file and
+#: read its contents. That is the SECOND time a discovery predicate has been
+#: the gap rather than the coverage table -- the first was the path-shape sweep
+#: that missed `/attempts` taking its id from the body.
+#:
+#: An allow-list of names to SUSPECT can only ever catch the naming conventions
+#: someone thought of. An allow-list of names to EXCUSE fails closed: a new
+#: field nobody classified breaks this test until a human says which it is.
+CONTENT_FIELDS = frozenset({
+    # auth and profile: the caller's own details
+    "email", "name", "password", "timezone",
+    # notifications
+    "email_enabled", "push_enabled", "trigger_time", "note_text",
+    # notebooks and sources: the material being contributed
+    "title", "subject", "kind", "filename", "mime_type", "text", "url",
+    "content_base64",
+    # generation parameters: knobs, not references
+    "count", "validate", "family", "difficulty", "reasoning_depth", "constraints",
+    # demo authoring: the caller's own worked example
+    "question", "question_type", "question_target", "answer_format",
+    "distractor_strategy", "stem_structure", "notes",
+    # revision
+    "strategy", "selected_question_count",
+    # attempt payload: what the learner did, not what they are pointing at
+    "user_answer", "user_colour", "colour", "gaps",
+})
+
+
+def body_fields_read() -> dict[str, set[str]]:
+    """`handler name -> {every body field it reads}`. No filtering."""
     tree = ast.parse(API_PATH.read_text(encoding="utf-8"))
     cls = next(n for n in ast.walk(tree)
                if isinstance(n, ast.ClassDef) and n.name == "StudentAPI")
@@ -155,11 +192,21 @@ def body_id_fields() -> dict[str, set[str]]:
             and n.func.value.id == "body" and n.args
             and isinstance(n.args[0], ast.Constant)
             and isinstance(n.args[0].value, str)
-            and (n.args[0].value.endswith("_id") or n.args[0].value.endswith("_ids"))
         }
         if hits:
             found[fn.name] = hits
     return found
+
+
+def body_id_fields() -> dict[str, set[str]]:
+    """
+    `handler name -> {body fields that name something the SERVER owns}`.
+
+    Everything that is not declared caller content. See `CONTENT_FIELDS`.
+    """
+    return {handler: refs
+            for handler, fields in body_fields_read().items()
+            if (refs := fields - CONTENT_FIELDS)}
 
 
 def _key(shape: tuple) -> str:
@@ -336,8 +383,13 @@ def test_every_body_borne_id_is_covered():
         if (handler, field) not in BODY_ID_COVERAGE
     }
     assert not missing, (
-        "these handlers read an id from the request body with no declared cross-user "
-        "coverage:\n  " + "\n  ".join(f"{h}.{f}" for h, f in sorted(missing)))
+        "these handlers read a body field that names something the SERVER owns, with "
+        "no declared cross-user coverage:\n  "
+        + "\n  ".join(f"{h}.{f}" for h, f in sorted(missing))
+        + "\n\nIf the field carries the caller's own content, add it to CONTENT_FIELDS "
+          "and say so. If it names a server-owned object, it needs a test proving one "
+          "learner cannot use it to reach another's rows. `storage_key` looked like "
+          "the former and was the latter.")
 
 
 def test_scoped_routes_state_a_reason():
