@@ -48,6 +48,7 @@ DEFAULT_KEY_ENV = {
     "fireworks": "FIREWORKS_API_KEY",
     "together": "TOGETHER_API_KEY",
     "groq": "GROQ_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
     "openai-compatible": "OPENAI_API_KEY",
 }
 

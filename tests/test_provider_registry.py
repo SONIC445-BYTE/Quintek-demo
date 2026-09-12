@@ -28,18 +28,28 @@ def test_the_known_providers_are_named(monkeypatch):
     """
     assert set(available()) == {"scripted", "nvidia", "openai-compatible", "local",
                                 "cerebras", "openrouter", "fireworks", "together",
-                                "groq"}
+                                "groq", "deepseek"}
 
 
-def test_every_paid_host_needs_its_own_key(monkeypatch):
-    for provider, key_env, model in (("cerebras", "CEREBRAS_API_KEY", "llama3.1-8b"),
-                                     ("openrouter", "OPENROUTER_API_KEY", "x/y"),
-                                     ("fireworks", "FIREWORKS_API_KEY", "a/b/c"),
-                                     ("together", "TOGETHER_API_KEY", "org/model"),
-                                     ("groq", "GROQ_API_KEY", "some-model-id")):
-        monkeypatch.delenv(key_env, raising=False)
-        with pytest.raises(ProviderUnavailable, match=key_env):
-            build_provider({"provider": provider, "model_id": model})
+#: The providers that legitimately have no credential of their own. Everything
+#: else in the registry is a paid host and is covered by the test below.
+#: Listing the EXCEPTIONS rather than the paid hosts is what makes a newly
+#: added host covered by default instead of silently untested.
+KEYLESS = {"scripted", "local"}
+SHARED_KEY = {"openai-compatible", "nvidia"}
+
+
+@pytest.mark.parametrize("provider", sorted(
+    set(available()) - KEYLESS - SHARED_KEY))
+def test_every_paid_host_needs_its_own_key(monkeypatch, provider):
+    """
+    Derived from the registry, not listed: a host added without its own
+    credential variable fails here without anyone remembering to add a row.
+    """
+    key_env = f"{provider.upper().replace('-', '_')}_API_KEY"
+    monkeypatch.delenv(key_env, raising=False)
+    with pytest.raises(ProviderUnavailable, match=key_env):
+        build_provider({"provider": provider, "model_id": "some-model-id"})
 
 
 def test_each_gateway_keeps_its_own_default_endpoint(monkeypatch):

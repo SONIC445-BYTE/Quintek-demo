@@ -296,6 +296,44 @@ def _groq(spec: dict):
                                 "string against Groq's docs, none is assumed here")
 
 
+@register("deepseek")
+def _deepseek(spec: dict):
+    """
+    DeepSeek. OpenAI-compatible, registered in its own right rather than
+    reached through `openai-compatible` for three reasons, all of which bit
+    this project already.
+
+    THE SEATS MUST BE ABLE TO SIT ON DIFFERENT HOSTS. `tools_validator_eval`
+    applies one `--endpoint` to BOTH seats, so reaching a host through
+    `openai-compatible` forces the candidate and the judge onto the same
+    endpoint -- and `judge.assert_independent` exists precisely because a
+    second opinion from the same weights is the first opinion again. A
+    registered provider carries its own base_url, so `--candidate deepseek:X
+    --judge groq:Y` needs no `--endpoint` at all and each seat keeps its own
+    host and its own credential.
+
+    THE RECORD MUST NAME THE HOST THAT SERVED THE CALL. `openai-compatible`
+    hard-codes `name="openai-compatible"`, so every artifact would file these
+    runs under a name that identifies no vendor. That is the defect fixed in
+    "The adapter was telling every host it was NVIDIA", and reintroducing it
+    for a new host would undo the fix by another route.
+
+    THE CREDENTIAL MUST HAVE ITS OWN NAME. `openai-compatible` defaults to
+    `OPENAI_API_KEY` and the CLI cannot override it, so a DeepSeek key would
+    have to live in a variable named for a different vendor. Read at call
+    time, never stored, never logged -- see `_openai_host`.
+
+    Model ids are plain names and the catalogue changes, so none is defaulted:
+    give it explicitly and check it with `tools_provider_preflight.py`, which
+    prints the id back without spending a call.
+    """
+    return _openai_host(spec, name="deepseek", key_env="DEEPSEEK_API_KEY",
+                        base_url="https://api.deepseek.com/v1/chat/completions",
+                        example="a plain model id from DeepSeek's catalogue -- check "
+                                "the exact string against DeepSeek's docs, none is "
+                                "assumed here")
+
+
 def _openai_host(spec: dict, *, name: str, key_env: str, base_url: str, example: str):
     """Shared body for the OpenAI-compatible hosts. `name` is keyword-only and
     has no default: see the comment on the constructor call below."""
