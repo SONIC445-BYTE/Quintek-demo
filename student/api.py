@@ -19,7 +19,7 @@ from typing import Any
 from .db import Database, new_id, now_iso
 from pathlib import Path
 
-from . import safety
+from . import operations, safety
 from .uploads import BINARY_KINDS, UploadError
 from .uploads import store as store_upload
 
@@ -174,6 +174,19 @@ class StudentAPI:
             raise ApiError(401, "authentication required")
         return row
 
+    def _require_admin(self, token: str | None):
+        """
+        Operational data is not a learner's business.
+
+        404 rather than 403, matching every other ownership refusal here: a
+        403 confirms the route exists and that the caller is merely the wrong
+        person, which is a fact worth not handing out.
+        """
+        user = self._user(token)
+        if (user["role"] or "") != "admin":
+            raise ApiError(404, "no such route")
+        return user
+
     def _route(self, method: str, path: str, params: dict, body: dict,
                token: str | None) -> tuple[int, Any]:
         seg = [p for p in path.strip("/").split("/") if p]
@@ -207,6 +220,25 @@ class StudentAPI:
         # for a postgraduate medical exam is exactly the person who might act
         # on a model-generated claim, so this belongs on the screen rather than
         # in a terms document nobody opens.
+        # --- operations: what is failing and what it is costing ---
+        #
+        # Behind the admin role, because an incident list names operations and
+        # user ids. A deployment discovers an outage from here rather than from
+        # a learner's message.
+        if seg == ["ops", "incidents"] and method == "GET":
+            self._require_admin(token)
+            return 200, operations.since(
+                self.db, hours=float(params.get("hours") or 24))
+
+        if seg == ["ops", "alerts"] and method == "GET":
+            self._require_admin(token)
+            return 200, {"alerts": operations.alerts(self.db)}
+
+        if seg == ["ops", "spend"] and method == "GET":
+            self._require_admin(token)
+            return 200, operations.spend_summary(
+                self.db, hours=float(params.get("hours") or 24))
+
         if seg == ["scope"] and method == "GET":
             return 200, {"scope_statement": safety.SCOPE_STATEMENT,
                          "report_kinds": list(safety.REPORT_KINDS)}

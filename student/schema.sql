@@ -413,3 +413,42 @@ CREATE INDEX IF NOT EXISTS idx_reports_user
     ON question_reports(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_reports_question
     ON question_reports(question_id);
+
+-- Failures, append-only.
+--
+-- `error_type` is separate from `message` because grouping by message groups
+-- by whatever string the failure interpolated -- a row id, a path -- so one
+-- fault looks like a hundred. No trigger permits deletion: an incident table
+-- that can be tidied is one whose quiet periods cannot be trusted.
+CREATE TABLE IF NOT EXISTS incidents (
+    id           TEXT PRIMARY KEY,
+    operation    TEXT NOT NULL,
+    error_type   TEXT NOT NULL,
+    message      TEXT NOT NULL DEFAULT '',
+    user_id      TEXT NOT NULL DEFAULT '',
+    context_json TEXT NOT NULL DEFAULT '{}',
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_incidents_window ON incidents(created_at);
+CREATE INDEX IF NOT EXISTS idx_incidents_fault ON incidents(operation, error_type);
+
+CREATE TRIGGER IF NOT EXISTS incidents_no_delete
+BEFORE DELETE ON incidents
+BEGIN
+    SELECT RAISE(ABORT, 'incidents is append-only: a quiet period must mean quiet');
+END;
+
+-- What an account has spent, so a ceiling can be enforced per user.
+--
+-- The COUNTING is validator/budget.Budget; this is only the per-user history
+-- that a validator run has no need of. A second counter would be a second
+-- thing to disagree with the first.
+CREATE TABLE IF NOT EXISTS spend_log (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL,
+    operation  TEXT NOT NULL,
+    units      INTEGER NOT NULL DEFAULT 1,
+    note       TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_spend_user ON spend_log(user_id, operation, created_at);
