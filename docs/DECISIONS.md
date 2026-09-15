@@ -533,6 +533,29 @@ both APKs' compiled cleartext policy.
 | The APK installs and reaches the backend | a device |
 | A signed release APK | a keystore, which is a credential |
 
+**CONFIRMED FAILING — the concept graph screen is not wired to the backend.**
+Found 2026-09-15 by read-only inspection; not a hypothesis and not blocked on
+anything external.
+
+`GET /graph` is real, working and tested — `ConceptStore.graph_for_user`
+(`student/concepts.py:217`) returns the user's own concepts and the edges
+between them, and computes `cross_subject` server-side. Verified live: HTTP
+200, correct shape, `cross_subject: true` on a cardiology↔biochemistry edge.
+Covered by `tests/test_student_concepts.py:167,182,183` and
+`tests/test_student_e2e.py:214`, including the isolation case.
+
+**Nothing calls it.** `frontend/quintek-student-api.js` has no graph method and
+the shipped bundle never requests the route. The screen renders the prototype's
+hardcoded `NODES`/`EDGES` literals, so a learner with their own notebooks and
+their own ingested sources still sees fourteen fabricated medical concepts.
+
+This is fixture data presented as live data — the failure mode the manual test
+plan exists to catch. **Deferred by owner instruction (2026-09-15), to be fixed
+in the same batch as concept detail and notebook view.** When it is fixed, the
+renderer must take the server's `cross_subject` flag rather than recomputing it
+from the node's subject: the client's four-colour palette does not cover every
+subject, so its recomputation is wrong for any subject outside that set.
+
 **Credentials required, and only these:** `QUINTEK_DATABASE_URL`, entered in
 the Render dashboard. Supabase's anon key, service-role key and JWT secret are
 **not** used — Quintek connects as a PostgreSQL role over TLS and never goes

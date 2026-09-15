@@ -63,7 +63,12 @@ Two failure modes matter more than the rest, so check for them everywhere:
 | Q | **Admin / report panels** | Run reports render. With no runs, they say so rather than showing zeros that look like results | ☐ |
 | R | **AI transparency / powering** | Reports the honest state: nothing promoted, nothing routed, generation refusing | ☐ |
 | S | **Production model refusal** | `/health` reports `generation: no_qualified_model` and `status: ok`. **`no_qualified_model` is healthy** — the platform must not restart over it | ☐ |
-| T | **No fake data as live data** | Sweep every screen with the backend connected. Anything still showing built-in samples is a defect | ☐ |
+| T | **No fake data as live data** | Sweep every screen with the backend connected. Anything still showing built-in samples is a defect | **✗ CONFIRMED FAILING** |
+
+**Item T is already known to fail, so do not spend device time rediscovering it.** The concept graph screen is not wired to `GET /graph`; it renders hardcoded prototype concepts regardless of what the backend holds. The endpoint itself is real, working and tested — only the client call is missing. Recorded in ADR-025 and deferred to the batch that also covers concept detail and notebook view.
+
+Sweep the *other* screens for the same class of defect: any screen still showing built-in samples once a backend is configured.
+
 
 ## Two extra checks worth doing
 
