@@ -88,6 +88,44 @@ def test_production_refuses_a_development_model_override():
     assert "UNQUALIFIED" in problems[0]
 
 
+def test_production_refuses_a_development_validator_override():
+    """
+    The twin of the test above, and the more dangerous override of the two.
+
+    `student/server.py` builds a SECOND AIEngine for validation and passes
+    QUINTEK_DEV_VALIDATOR_CANDIDATE straight to its `development_candidate`, so
+    it bypasses promotion and routing exactly as the generation override does.
+
+    Worse, because validation is what decides whether a generated question is
+    fit to show a learner: an unqualified generator writes a bad question, an
+    unqualified validator APPROVES it.
+
+    This was missed when the generation override was closed -- the ordinary way
+    a safety gate ends up half-applied, with the obvious variable named in the
+    brief and its sibling not.
+    """
+    problems = check({**GOOD, "QUINTEK_DEV_VALIDATOR_CANDIDATE": "nvidia:some-model"})
+    assert len(problems) == 1
+    assert "VALIDATOR" in problems[0]
+    assert "APPROVES" in problems[0]
+
+
+def test_both_development_overrides_are_reported_together():
+    """A deployment carrying both must not be told about one and left to
+    discover the other on the next boot."""
+    problems = check({**GOOD, "QUINTEK_DEV_CANDIDATE": "a:b",
+                      "QUINTEK_DEV_VALIDATOR_CANDIDATE": "c:d"})
+    assert len(problems) == 2
+
+
+def test_describe_flags_either_override():
+    """The boot banner and /health must not report a clean deployment while the
+    validator override is set."""
+    assert describe({**GOOD, "QUINTEK_DEV_CANDIDATE": "a:b"})["development_override_set"] is True
+    assert describe({**GOOD, "QUINTEK_DEV_VALIDATOR_CANDIDATE": "c:d"})["development_override_set"] is True
+    assert describe(GOOD)["development_override_set"] is False
+
+
 def test_missing_ai_and_gateway_keys_are_not_boot_failures():
     """
     Refusing to generate, and refusing to sell, are correct states.
@@ -100,8 +138,9 @@ def test_missing_ai_and_gateway_keys_are_not_boot_failures():
 
 def test_every_problem_is_reported_at_once():
     """One redeploy per fault is not a diagnostic loop anybody should run."""
-    problems = check({"QUINTEK_ENV": "production", "QUINTEK_DEV_CANDIDATE": "x:y"})
-    assert len(problems) == 3
+    problems = check({"QUINTEK_ENV": "production", "QUINTEK_DEV_CANDIDATE": "x:y",
+                      "QUINTEK_DEV_VALIDATOR_CANDIDATE": "p:q"})
+    assert len(problems) == 4
 
 
 def test_the_refusal_names_variables_and_never_their_values():

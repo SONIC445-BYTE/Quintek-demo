@@ -108,6 +108,27 @@ def check(env: dict[str, str] | None = None) -> list[str]:
             "INSUFFICIENT EVIDENCE -- and refusing to generate is the correct "
             "behaviour, not a fault to work around. Unset it.")
 
+    # The twin override, and the more dangerous of the two.
+    #
+    # It was missed when the generation override was closed, which is the
+    # ordinary way a safety gate ends up half-applied: the obvious variable
+    # gets named in the brief and its sibling does not. `student/server.py`
+    # builds a SECOND AIEngine for validation and hands this straight to its
+    # `development_candidate`, so it bypasses promotion and routing exactly as
+    # the generation override does.
+    #
+    # Worse, because validation is what decides whether a generated question is
+    # fit to put in front of a learner. An unqualified generator produces a bad
+    # question; an unqualified validator APPROVES it. A deployment with this set
+    # and the generation override unset looks correctly configured and is not.
+    if (source.get("QUINTEK_DEV_VALIDATOR_CANDIDATE") or "").strip():
+        problems.append(
+            "QUINTEK_DEV_VALIDATOR_CANDIDATE is set. It bypasses promotion and routing "
+            "for the VALIDATOR -- the check that decides whether a generated question "
+            "is fit to show a learner. An unqualified validator does not merely fail to "
+            "catch a bad question, it APPROVES it. Nothing is currently qualified. "
+            "Unset it.")
+
     return problems
 
 
@@ -140,5 +161,7 @@ def describe(env: dict[str, str] | None = None) -> dict:
         "cors_origin": (source.get("QUINTEK_CORS_ORIGIN") or "*").strip(),
         "ai_key_configured": bool((source.get("NVIDIA_API_KEY") or "").strip()),
         "gateway_configured": bool((source.get("RAZORPAY_KEY_ID") or "").strip()),
-        "development_override_set": bool((source.get("QUINTEK_DEV_CANDIDATE") or "").strip()),
+        "development_override_set": bool((source.get("QUINTEK_DEV_CANDIDATE") or "").strip()
+                                         or (source.get("QUINTEK_DEV_VALIDATOR_CANDIDATE")
+                                             or "").strip()),
     }

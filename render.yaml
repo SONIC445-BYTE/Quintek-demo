@@ -78,7 +78,11 @@ services:
       - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
 
-      # QUINTEK_DEV_CANDIDATE is deliberately ABSENT and must stay absent. It
-      # bypasses promotion and routing, so setting it here would put an
-      # unqualified model in front of learners' medical questions. With
-      # QUINTEK_ENV=production the server refuses to start if it is set.
+      # QUINTEK_DEV_CANDIDATE and QUINTEK_DEV_VALIDATOR_CANDIDATE are
+      # deliberately ABSENT and must stay absent. Both bypass promotion and
+      # routing. The first would put an unqualified model in front of
+      # learners' medical questions; the second would let an unqualified model
+      # APPROVE those questions, which is worse, because validation is the
+      # check that decides whether a generated question is fit to show anyone.
+      # With QUINTEK_ENV=production the server refuses to start if either is
+      # set, and names both at once rather than one per redeploy.

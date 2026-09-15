@@ -1,6 +1,15 @@
 # Runtime.
 pyyaml>=6.0
 
+# PDF text extraction. NOT optional in a real deployment, whatever the graceful
+# import guard in student/ingestion.py suggests: uploading a PDF is the primary
+# way a learner gets material into Quintek, and without this the build succeeds,
+# the service starts, /health reports ok, and every PDF upload fails with
+# "PDF extraction needs the 'pypdf' package". It was imported but declared
+# nowhere, so `pip install -r requirements.txt` never installed it -- which is
+# exactly the shape of failure that only appears in front of a user.
+pypdf>=4.0
+
 # PostgreSQL, for production persistence. OPTIONAL: with QUINTEK_DATABASE_URL
 # unset the application runs on stdlib sqlite3 and never imports psycopg, so a
 # local checkout still needs no database and the test suite still runs with
