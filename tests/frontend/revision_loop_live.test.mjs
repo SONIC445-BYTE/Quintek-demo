@@ -179,6 +179,110 @@ test('the revision loop runs end to end against a real server', async (t) => {
   delete globalThis.window;
 });
 
+test('the four screens fetch live data through the real client', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'quintek-screens-'));
+  const dbPath = join(dir, 'q.db');
+  const seedPath = join(dir, 'seed.py');
+  const port = PORT + 1;
+  const origin = `http://127.0.0.1:${port}`;
+
+  /* A FIFTH subject on purpose. The client palette names four; the corpus
+   * does not stop at four. An edge touching "renal" is the case a client-side
+   * recomputation of cross_subject would silently get wrong. */
+  writeFileSync(seedPath, `
+import json, sys
+sys.path.insert(0, ".")
+from student.db import Database, new_id, now_iso
+db = Database(sys.argv[1])
+uid = db.create_user("screens@example.com", "correct-horse")
+nid = new_id("nb")
+db.execute("INSERT INTO notebooks (id,owner_id,title,subject,created_at) VALUES (?,?,?,?,?)",
+           (nid, uid, "Cardiology Block 3", "cardiology", now_iso()))
+sid = new_id("src")
+db.execute("INSERT INTO sources (id,notebook_id,kind,filename,status,uploaded_at)"
+           " VALUES (?,?,?,?,?,?)", (sid, nid, "pdf", "valvular.pdf", "extracted", now_iso()))
+for cid, name, subj in [("c-hf", "Heart failure", "cardiology"),
+                        ("c-iron", "Iron metabolism", "biochemistry"),
+                        ("c-fena", "Fractional excretion of sodium", "renal")]:
+    db.execute("INSERT INTO concepts (id,canonical_name,normalized_name,subject,first_seen_at)"
+               " VALUES (?,?,?,?,?)", (cid, name, name.lower(), subj, now_iso()))
+    db.execute("INSERT INTO notebook_concepts (notebook_id,concept_id,role) VALUES (?,?,?)",
+               (nid, cid, "primary"))
+for a, b, rel in [("c-hf", "c-iron", "precipitated_by"), ("c-hf", "c-fena", "assessed_by")]:
+    db.execute("INSERT INTO concept_relationships (id,source_concept_id,target_concept_id,"
+               "relation_type,confidence,created_at) VALUES (?,?,?,?,?,?)",
+               (new_id("rel"), a, b, rel, 0.9, now_iso()))
+db.execute("INSERT INTO questions (id,primary_notebook_id,family,stem,options_json,"
+           "correct_index,rationale,source_id,validation_status,generated_by_candidate_id,"
+           "prompt_version,generated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+           ("q-nb-1", nid, "mcq", "A stem.", json.dumps(["A","B"]), 0, "r", sid,
+            "approved", "cand", "v1", now_iso()))
+print("seeded")
+`);
+
+  const seeded = await run('python3', [seedPath, dbPath], { cwd: process.cwd() });
+  assert.equal(seeded.code, 0, `seeding failed: ${seeded.err}`);
+
+  const server = spawn('python3', ['-m', 'benchmark.cli', 'serve-student',
+    '--host', '127.0.0.1', '--port', String(port), '--db', dbPath, '--no-ai'],
+    { cwd: process.cwd(), stdio: ['ignore', 'pipe', 'pipe'] });
+  t.after(() => { server.kill('SIGKILL'); rmSync(dir, { recursive: true, force: true }); });
+
+  let up = false;
+  for (let i = 0; i < 80 && !up; i++) {
+    try { up = (await fetch(`${origin}/health`)).ok; } catch { /* not up */ }
+    if (!up) await new Promise((r) => setTimeout(r, 250));
+  }
+  assert.ok(up, 'the server did not start, so NOTHING was verified');
+
+  globalThis.window = { __QUINTEK_STUDENT_API__: origin };
+  const api = await import('../../frontend/quintek-student-api.js?screens=' + Date.now());
+  api.setToken((await api.login('screens@example.com', 'correct-horse')).token);
+
+  // --- GRAPH ------------------------------------------------------------
+  const graph = await api.graph();
+  assert.equal(graph.nodes.length, 3);
+  assert.equal(graph.edges.length, 2);
+
+  // THE CLAIM. cross_subject comes from the server, and the server sees
+  // subjects the client palette does not name.
+  const byPair = Object.fromEntries(graph.edges.map(
+    (e) => [`${e.source_concept_id}->${e.target_concept_id}`, e]));
+  assert.equal(byPair['c-hf->c-iron'].cross_subject, true,
+    'cardiology -> biochemistry should cross');
+  assert.equal(byPair['c-hf->c-fena'].cross_subject, true,
+    'cardiology -> renal should cross -- "renal" is NOT in the four-colour palette, '
+    + 'which is exactly the edge a client-side recomputation gets wrong');
+
+  // Every node carries a subject; one of them is outside the palette.
+  const subjects = new Set(graph.nodes.map((n) => n.subject));
+  assert.ok(subjects.has('renal'),
+    'the fixture no longer exercises an unmapped subject, so it proves less');
+
+  // --- NOTEBOOK ---------------------------------------------------------
+  const nbs = await api.notebooks();
+  assert.equal(nbs.length, 1);
+  const nb = await api.notebook(nbs[0].id);
+  assert.equal(nb.title, 'Cardiology Block 3');
+  const nbq = await api.notebookQuestions(nbs[0].id);
+  assert.equal(nbq.length, 1);
+
+  // --- CONCEPT DETAIL ---------------------------------------------------
+  const detail = await api.conceptDetail('c-fena');
+  assert.ok(detail, 'no concept detail came back');
+  assert.ok(JSON.stringify(detail).includes('Fractional excretion'),
+    `the detail payload did not name the concept: ${JSON.stringify(detail).slice(0, 200)}`);
+
+  // --- SCOPE, without an account ---------------------------------------
+  const anon = await fetch(`${origin}/scope`);
+  assert.ok(anon.ok, 'the scope statement required an account');
+  const scope = await anon.json();
+  assert.ok(scope.scope_statement.length > 40);
+  assert.ok(Array.isArray(scope.report_kinds) || scope.report_kinds === undefined);
+
+  delete globalThis.window;
+});
+
 test('the scope statement is served without an account', async () => {
   const res = await fetch(`${ORIGIN}/scope`).catch(() => null);
   if (!res) return;               // server already torn down by the test above

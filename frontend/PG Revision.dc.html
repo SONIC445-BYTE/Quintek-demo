@@ -2021,6 +2021,8 @@ class Component extends DCLogic {
     liveReveal: null, liveQuestionId: null,
     liveSessionId: null, liveQuestion: null, liveSummary: null, liveSourceName: '',
     sessionState: 'off', sessionError: '',
+    liveConcept: null, cptState: 'off', cptError: '',
+    liveNotebook: null, liveNotebookQuestions: [], nbState: 'off', nbError: '',
     questionState: 'off', questionError: '',
     attemptState: 'idle', attemptError: '',
     reportOpen: false, reportSent: false, reportError: '',
@@ -2055,7 +2057,18 @@ class Component extends DCLogic {
     submitted: false, judgement: null, gaps: [],
   };
 
-  openConcept = (name, subject, from) => () => this.setState({ route: 'concept', cpt: { name, subject }, cptFrom: from || 'weak', generated: false });
+  /* Opening a concept fetches THAT concept, not the bulk list.
+   *
+   * `concepts()` returns list rows; a detail screen padded out from those
+   * would show a learner numbers nobody measured. `id` is present when the
+   * concept came from a live payload and absent when it came from the in-file
+   * constants, which is exactly when there is nothing to fetch. */
+  openConcept = (name, subject, from, id) => () => {
+    this.setState({ route: 'concept', cpt: { name, subject, id: id || null },
+                    cptFrom: from || 'weak', generated: false });
+    if (id) this.loadConceptDetail(id);
+    else this.setState({ cptState: 'off', liveConcept: null });
+  };
   setWeakFilter = (f) => () => this.setState({ weakFilter: f });
   setBankFilter = (f) => () => this.setState({ bankFilter: f });
   setStudio = (k, v) => () => this.setState((st) => ({ studio: { ...st.studio, [k]: v }, route: k === 'demo' && st.route === 'demos' ? 'studio' : st.route }));
@@ -2301,6 +2314,75 @@ class Component extends DCLogic {
       }));
   };
 
+  /* --- the four screens that need a fetch on entry ---------------------
+   *
+   * Each loads on ENTRY rather than at boot: a learner who never opens the
+   * graph should not pay for it, and a payload fetched at boot is stale by
+   * the time the screen opens. All four report through `screenState`, so no
+   * screen invents a fifth state -- most often "error rendered as empty",
+   * which tells a learner their notebook is empty when the truth is that
+   * nobody could reach the server. */
+
+  loadGraph = (notebookId) => {
+    const api = this.state.studentApi;
+    if (!api || !api.graph) { this.setState({ graphState: 'off' }); return null; }
+    this.setState({ graphState: 'loading', graphError: '' });
+    return api.graph(notebookId)
+      .then((payload) => this.setState({ graphState: 'ready', liveGraph: payload || null }))
+      .catch((err) => this.setState({
+        graphState: 'error', liveGraph: null,
+        graphError: (err && err.message) ? err.message : String(err),
+      }));
+  };
+
+  loadConceptDetail = (conceptId) => {
+    const api = this.state.studentApi;
+    if (!api || !api.conceptDetail || !conceptId) { this.setState({ cptState: 'off' }); return null; }
+    this.setState({ cptState: 'loading', cptError: '', liveConcept: null });
+    return api.conceptDetail(conceptId)
+      .then((payload) => this.setState({ cptState: 'ready', liveConcept: payload || null }))
+      .catch((err) => this.setState({
+        cptState: 'error', liveConcept: null,
+        cptError: (err && err.message) ? err.message : String(err),
+      }));
+  };
+
+  loadNotebook = (notebookId) => {
+    const api = this.state.studentApi;
+    if (!api || !api.notebook || !notebookId) { this.setState({ nbState: 'off' }); return null; }
+    this.setState({ nbState: 'loading', nbError: '', liveNotebook: null });
+    /* Both halves together. A notebook header that arrived while its question
+     * list failed would render as "0 questions", which is a claim about the
+     * learner's material rather than about the request. */
+    return Promise.all([api.notebook(notebookId), api.notebookQuestions(notebookId)])
+      .then(([notebook, questions]) => this.setState({
+        nbState: 'ready', liveNotebook: notebook || null,
+        liveNotebookQuestions: questions || [],
+        liveSourceName: (notebook && notebook.sources && notebook.sources[0]
+                         && notebook.sources[0].filename) || '',
+      }))
+      .catch((err) => this.setState({
+        nbState: 'error', liveNotebook: null, liveNotebookQuestions: [],
+        nbError: (err && err.message) ? err.message : String(err),
+      }));
+  };
+
+  loadScope = () => {
+    const api = this.state.studentApi;
+    if (!api || !api.scope) { this.setState({ scopeState: 'off' }); return null; }
+    this.setState({ scopeState: 'loading' });
+    return api.scope()
+      .then((payload) => this.setState({
+        scopeState: 'ready', scopeText: (payload && payload.scope_statement) || '',
+      }))
+      /* The scope statement failing to load is NOT silent. It is the one
+       * screen that says what this app is and is not, and a learner revising
+       * for a postgraduate medical exam is exactly the person who might act on
+       * a model-generated claim. Better to say it could not be loaded than to
+       * render nothing where a limitation should be. */
+      .catch(() => this.setState({ scopeState: 'error', scopeText: '' }));
+  };
+
   loadDemos = (api) => {
     const client = api || this.state.studentApi;
     if (!client || !client.listDemos) return;
@@ -2397,6 +2479,31 @@ class Component extends DCLogic {
   generate = () => this.setState({ generated: true });
 
   toggleReport = () => this.setState((st) => ({ reportOpen: !st.reportOpen }));
+
+  /* Which of the four states a screen is in, decided in ONE place.
+   *
+   * Mirrors `screenState` in quintek-student-api.js rather than importing it,
+   * because the module is loaded asynchronously and this runs during render.
+   * `error` wins over everything: if the fetch failed, what came back is not
+   * data and its emptiness means nothing. 'off' is a fifth value only in the
+   * sense that it means "no backend configured at all" -- the design file
+   * opened from disk -- which is not a failure and must not render as one. */
+  screenStateFor = (name) => {
+    const s = this.state;
+    const table = {
+      graph:    [s.graphState, s.liveGraph, (d) => !(d.nodes || []).length],
+      concept:  [s.cptState, s.liveConcept, () => false],
+      notebook: [s.nbState, s.liveNotebook, () => false],
+      scope:    [s.scopeState, s.scopeText, (d) => !d],
+    };
+    const entry = table[name];
+    if (!entry) return 'off';
+    const [status, data, isEmpty] = entry;
+    if (status === 'off') return 'off';
+    if (status === 'error') return 'error';
+    if (status === 'loading' || data === null || data === undefined) return 'loading';
+    return isEmpty(data) ? 'empty' : 'ready';
+  };
 
   /* Send one report and say so.
    *
@@ -2505,8 +2612,16 @@ class Component extends DCLogic {
 
   reheat() { const cold = this.heat <= 0; this.heat = 90; if (cold) this.loop(); }
 
-  go = (route) => () => this.setState({ route });
-  openNotebook = (id) => () => this.setState({ route: 'notebook', notebook: id });
+  /* Entering a screen is what fetches it. See the loaders above. */
+  go = (route) => () => {
+    this.setState({ route });
+    if (route === 'graph') this.loadGraph(null);
+    if (route === 'trust' || route === 'more') this.loadScope();
+  };
+  openNotebook = (id) => () => {
+    this.setState({ route: 'notebook', notebook: id });
+    this.loadNotebook(id);
+  };
   openMake = (name, detail) => () => this.setState({ route: 'make', makeSrc: { name, detail }, makeStage: 'idle', makeDone: 0 });
   clampQ = (v) => { const n = parseInt(String(v).replace(/[^0-9]/g, ''), 10); return isNaN(n) ? '' : Math.max(0, Math.min(500, n)); };
   setMakeCount = (n) => () => (n === 'custom'
@@ -3593,37 +3708,72 @@ class Component extends DCLogic {
     const active = Object.keys(s.filters).filter((k) => s.filters[k]);
     const visible = (id) => {
       if (!active.length) return true;
-      const n = NODES.find((x) => x.id === id);
+      const n = NODES_IN.find((x) => x.id === id);
+      if (!n) return true;
       return active.indexOf(n.subject) >= 0;
     };
 
-    const sel = NODES.find((n) => n.id === s.sel) || NODES[0];
-    const neighbours = EDGES.filter((e) => e[0] === s.sel || e[1] === s.sel)
-      .map(([a, b, rel]) => {
-        const other = NODES.find((n) => n.id === (a === s.sel ? b : a));
-        const cross = other.subject !== sel.subject;
-        return { name: other.name, relation: rel.replace(/_/g, ' '), color: SUBJ[other.subject].color,
-          select: this.select(other.id), tag: cross ? 'Crosses subject' : SUBJ[other.subject].label,
+    /* THE GRAPH, from the server when one has answered.
+     *
+     * `GET /graph` returns the learner's own concepts, the edges between them,
+     * and a `cross_subject` flag computed SERVER-SIDE. That flag is used as
+     * given and never recomputed here: the client's palette covers four
+     * subjects, the corpus does not stop at four, and a client that re-derived
+     * the flag would quietly call every edge touching a fifth subject
+     * "within subject" -- silently erasing the one relationship the graph
+     * exists to show.
+     *
+     * A subject with no colour of its own gets the neutral one rather than a
+     * borrowed one. Reusing another subject's hue would assert a kinship that
+     * is not in the data. */
+    const UNMAPPED = { label: 'OTHER', color: '#8a9093' };
+    const subjectOf = (name) => SUBJ[name] || UNMAPPED;
+    const lg = s.liveGraph;
+    const liveNodes = lg && Array.isArray(lg.nodes) ? lg.nodes : null;
+    const NODES_IN = liveNodes && liveNodes.length
+      ? liveNodes.map((n) => ({ id: n.id, name: n.canonical_name, subject: n.subject || '',
+                                note: '' }))
+      : NODES;
+    const EDGES_IN = liveNodes && liveNodes.length
+      ? (lg.edges || []).map((e) => [e.source_concept_id, e.target_concept_id,
+                                     e.relation_type || 'related to', !!e.cross_subject])
+      : EDGES.map(([a, b, rel]) => {
+          const na = NODES.find((n) => n.id === a), nbb = NODES.find((n) => n.id === b);
+          return [a, b, rel, !!(na && nbb && na.subject !== nbb.subject)];
+        });
+
+    const sel = NODES_IN.find((n) => n.id === s.sel) || NODES_IN[0] || { id: '', name: '', subject: '', note: '' };
+    const neighbours = EDGES_IN.filter((e) => e[0] === sel.id || e[1] === sel.id)
+      .map(([a, b, rel, cross]) => {
+        const other = NODES_IN.find((n) => n.id === (a === sel.id ? b : a))
+          || { id: '', name: '(unknown)', subject: '' };
+        const meta = subjectOf(other.subject);
+        return { name: other.name, relation: String(rel).replace(/_/g, ' '), color: meta.color,
+          select: this.select(other.id), tag: cross ? 'Crosses subject' : meta.label,
           tagFg: cross ? '#8a5f13' : '#6f7679', tagBg: cross ? 'rgba(181,129,43,.12)' : '#F1EFE8' };
       });
-    const nbrIds = EDGES.filter((e) => e[0] === s.sel || e[1] === s.sel).map((e) => (e[0] === s.sel ? e[1] : e[0]));
+    const nbrIds = EDGES_IN.filter((e) => e[0] === sel.id || e[1] === sel.id)
+      .map((e) => (e[0] === sel.id ? e[1] : e[0]));
 
     const p = this.pos || {};
-    const nodes = NODES.map((n) => {
+    const nodes = NODES_IN.map((n) => {
       const q = p[n.id] || { x: 195, y: 200 };
       const isSel = n.id === s.sel;
       const near = isSel || nbrIds.indexOf(n.id) >= 0;
-      const deg = EDGES.filter((e) => e[0] === n.id || e[1] === n.id).length;
+      const deg = EDGES_IN.filter((e) => e[0] === n.id || e[1] === n.id).length;
       const rr = 7 + deg * 1.6;
       const showLbl = this.props.graphLabels ?? true;
       return { x: q.x, y: q.y, r: rr, lx: q.x, ty: q.y + rr + 3, label: !showLbl ? '' : n.name.length > 18 ? n.name.slice(0, 17) + '…' : n.name,
-        fill: isSel ? SUBJ[n.subject].color : 'rgba(255,255,255,.9)', stroke: SUBJ[n.subject].color,
+        /* subjectOf, never SUBJ[...] directly: a live concept may carry a
+         * subject the four-colour palette does not name, and indexing would
+         * throw on `.color` of undefined -- a blank screen instead of a graph. */
+        fill: isSel ? subjectOf(n.subject).color : 'rgba(255,255,255,.9)',
+        stroke: subjectOf(n.subject).color,
         sw: isSel ? 2.5 : 1.6, op: !visible(n.id) ? 0.16 : near ? 1 : 0.5, select: this.select(n.id) };
     });
-    const edges = EDGES.map(([a, b]) => {
-      const na = NODES.find((n) => n.id === a), nb2 = NODES.find((n) => n.id === b);
-      const cross = na.subject !== nb2.subject;
-      const touch = a === s.sel || b === s.sel;
+    const edges = EDGES_IN.map(([a, b, _rel, cross]) => {
+      /* `cross` is the SERVER's flag. Not recomputed -- see above. */
+      const touch = a === sel.id || b === sel.id;
       const pa = p[a] || { x: 195, y: 200 }, pb = p[b] || { x: 195, y: 200 };
       return { x1: pa.x, y1: pa.y, x2: pb.x, y2: pb.y,
         stroke: cross ? '#B5812B' : '#A9AFA8', w: touch ? 1.8 : 1, dash: cross ? '4 4' : '0',
@@ -4068,7 +4218,17 @@ class Component extends DCLogic {
       filters: Object.keys(SUBJ).map((k) => ({ label: SUBJ[k].label, dot: SUBJ[k].color, toggle: this.toggleFilter(k),
         bg: s.filters[k] ? 'rgba(30,122,87,.08)' : '#fff', bd: s.filters[k] ? '#1E7A57' : '#E6E4DE', fg: s.filters[k] ? '#1E7A57' : '#6f7679' })),
       nodes, edges,
-      selName: sel.name, selSubject: SUBJ[sel.subject].label, selColor: SUBJ[sel.subject].color, selNote: sel.note,
+      selName: sel.name, selSubject: subjectOf(sel.subject).label,
+      selColor: subjectOf(sel.subject).color,
+      /* A live concept has no prose note -- `/graph` returns id, name and
+       * subject. Saying how many notebooks touch it is a fact the payload
+       * supports; inventing a description is not. */
+      selNote: sel.note || (s.liveGraph
+        ? 'One of ' + ((s.liveGraph.nodes || []).length) + ' concepts in your notebooks.'
+        : ''),
+      graphState: this.screenStateFor('graph'),
+      graphError: s.graphError,
+      graphEmptyNote: 'No concepts yet. Upload a source and Quintek will extract them.',
       selLinks: neighbours, selLinkCount: neighbours.length + ' LINKED CONCEPTS · ' + neighbours.filter((n) => n.tag === 'Crosses subject').length + ' CROSS-SUBJECT',
 
       /* THE QUESTION ON SCREEN.
