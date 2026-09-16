@@ -180,6 +180,12 @@ CONTENT_FIELDS = frozenset({
     # an administrator's stated reason for suspending an account. Their own
     # words, recorded so the suspended person can be told why.
     "reason",
+    # closing a report. `resolution` is checked against a fixed set in
+    # safety.resolve and reaches no row lookup; `resolved_by` is the NAME of
+    # whoever made the call, free text, recorded so an anonymous resolution is
+    # impossible. Neither points at a server-owned object -- the report itself
+    # is named in the path, and that id IS covered, as /ops/reports/<id>.
+    "resolution", "resolved_by",
 })
 
 
@@ -252,6 +258,15 @@ COVERAGE: dict[str, dict] = {
     "/admin/users/<id>":                  dict(kind="notebook", method="GET", expect=REFUSED),
     "/admin/users/<id>/<id>":             dict(kind="notebook", method="POST", expect=REFUSED,
                                                body={"reason": "test"}),
+    # Resolving a report. Admin-only, so a learner -- including the one who
+    # filed it -- gets 404 from `_require_admin`. That matters beyond the usual
+    # ownership argument: a complainant who could mark their own report
+    # "upheld" would make the resolution meaningless, and a content error
+    # promoted to an adjudication candidate on nobody's judgement but the
+    # reporter's is exactly the corpus contamination the gold pathway exists to
+    # prevent.
+    "/ops/reports/<id>":                  dict(kind="question", method="POST", expect=REFUSED,
+                                               body={"resolution": "upheld"}),
     "/gaps/<id>":                         dict(kind="gap", method="GET", expect=SCOPED,
                                                why="joins knowledge_gaps on user_id, so a"
                                                    " stranger's id yields empty evidence"),

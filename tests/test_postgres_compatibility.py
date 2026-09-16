@@ -362,3 +362,72 @@ def test_the_application_can_still_read_its_own_tables_under_rls(pg_schema):
     uid = db.create_user("rls@example.com", "password123")
     assert db.query_one("SELECT email FROM users WHERE id = ?", (uid,))["email"] \
         == "rls@example.com"
+
+
+# ---------------------------------------------------------------------------
+# Row access across backends
+# ---------------------------------------------------------------------------
+
+
+def test_resolving_a_report_names_the_operator_on_either_backend(any_backend):
+    """
+    The report queue's resolver, on both backends.
+
+    Written because the first version of `StudentAPI.resolve_report` called
+    `admin.get("name")`. On Postgres the adapter returns a dict subclass and
+    that works; on SQLite it is a `sqlite3.Row`, which supports `row["name"]`
+    but has no `.get` at all. The handler now normalises with `dict(...)`.
+
+    The general trap: a row is not a dict on every backend, and code that
+    reaches for a dict method works on whichever one the author happened to be
+    running.
+    """
+    db = any_backend.student()
+    from student.api import StudentAPI
+
+    api = StudentAPI(db)
+    learner = api.handle("POST", "/auth/register", {},
+                         {"email": "rq-learner@example.com",
+                          "password": "correct-horse"}, None)[1]["token"]
+    operator = api.handle("POST", "/auth/register", {},
+                          {"email": "rq-ops@example.com",
+                           "password": "correct-horse"}, None)[1]["token"]
+    db.execute("UPDATE users SET role = 'admin', name = ? WHERE email = ?",
+               ("Dr Ops", "rq-ops@example.com"))
+
+    nid = api.handle("POST", "/notebooks", {},
+                     {"title": "N", "subject": "Med"}, learner)[1]["id"]
+    _seed_question_for_reports(db, nid)
+
+    created = api.handle("POST", "/questions/rq-q1/reports", {},
+                         {"kind": "factually_wrong", "note": "wrong key"}, learner)
+    assert created[0] == 201, created[1]
+
+    queued = api.handle("GET", "/ops/reports", {}, {}, operator)[1]["reports"]
+    assert len(queued) == 1
+
+    status, resolved = api.handle("POST", f"/ops/reports/{queued[0]['id']}", {},
+                                  {"resolution": "upheld"}, operator)
+    assert status == 200, resolved
+    assert resolved["resolved_by"] == "Dr Ops"
+    assert api.handle("GET", "/ops/reports", {}, {}, operator)[1]["reports"] == []
+
+
+def _seed_question_for_reports(db, notebook_id: str) -> None:
+    import json
+    from student.db import now_iso
+
+    db.execute("INSERT INTO sources (id, notebook_id, kind, filename, status,"
+               " uploaded_at) VALUES (?,?,?,?,?,?)",
+               ("rq-s1", notebook_id, "pdf", "scan.pdf", "extracted", now_iso()))
+    db.execute("INSERT INTO source_chunks (id, source_id, ordinal, text,"
+               " locator_json, confidence, extraction_method, needs_review, status)"
+               " VALUES (?,?,?,?,?,?,?,?,?)",
+               ("rq-c1", "rq-s1", 1, "Blurry OCR text.", json.dumps({"page": 7}),
+                0.31, "ocr_low", 1, "processed"))
+    db.execute("INSERT INTO questions (id, primary_notebook_id, family, stem,"
+               " options_json, correct_index, rationale, source_id, chunk_id,"
+               " validation_status, generated_by_candidate_id, prompt_version,"
+               " generated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               ("rq-q1", notebook_id, "mcq", "Stem?", json.dumps(["A", "B"]), 0,
+                "Because.", "rq-s1", "rq-c1", "approved", "cand", "v1", now_iso()))

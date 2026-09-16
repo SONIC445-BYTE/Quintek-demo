@@ -248,6 +248,38 @@ class StudentAPI:
             return 200, operations.spend_summary(
                 self.db, hours=float(params.get("hours") or 24))
 
+        # --- the report queue: the other end of the learner's report path ---
+        #
+        # `student/safety.py` records a report with its provenance frozen, and
+        # promotes content errors to adjudication candidates. Until these
+        # routes existed, all of that was reachable from Python and nowhere
+        # else -- so a learner pressing "this question is wrong" wrote a row
+        # into a table nobody could read.
+        #
+        # That is worse than having no report button at all, because the
+        # button implies a loop that closes. These are what closes it.
+        #
+        # Admin-only, and 404 rather than 403 like every other refusal here:
+        # the queue names other learners' ids and the stems they complained
+        # about.
+        if seg == ["ops", "reports"] and method == "GET":
+            self._require_admin(token)
+            return 200, {"reports": safety.open_reports(
+                self.db, limit=int(params.get("limit") or 200))}
+
+        # The queue that feeds adjudication, kept SEPARATE from the open queue
+        # rather than filtered out of it by a query parameter. They answer
+        # different questions -- "what has nobody looked at" versus "what
+        # asserts the corpus is wrong" -- and an upheld report belongs in the
+        # second long after it has left the first.
+        if seg == ["ops", "reports", "gold-candidates"] and method == "GET":
+            self._require_admin(token)
+            return 200, {"candidates": safety.gold_candidates(self.db)}
+
+        if len(seg) == 3 and seg[:2] == ["ops", "reports"] and method == "POST":
+            admin = self._require_admin(token)
+            return 200, self.resolve_report(admin, seg[2], body)
+
         # --- an account being turned off, and erased on request ---
         if seg == ["account", "export"] and method == "GET":
             return 200, accounts.export(self.db, self._user(token)["id"])
@@ -887,6 +919,34 @@ class StudentAPI:
             return safety.record(self.db, user_id=uid, question_id=qid,
                                  kind=(body.get("kind") or "").strip(),
                                  note=body.get("note") or "")
+        except safety.ReportRejected as exc:
+            raise ApiError(400, str(exc))
+
+    def resolve_report(self, admin: dict, report_id: str, body: dict) -> dict:
+        """
+        Close one report, in the name of whoever closed it.
+
+        `resolved_by` defaults to the authenticated admin rather than being
+        taken from the body: a resolution that can name anybody is a
+        resolution that names nobody. A caller may still pass one explicitly --
+        an operator acting on a clinician's judgement should be able to record
+        the clinician -- but they cannot leave it blank, and `safety.resolve`
+        refuses an empty one.
+        """
+        # dict(admin) rather than admin.get(...): on SQLite this is a
+        # sqlite3.Row, which supports ["name"] but has no .get and raises
+        # IndexError on a missing column. The Postgres adapter returns a dict
+        # subclass that does. Normalising here means one code path behaves the
+        # same on both, which is the whole point of the persistence layer.
+        who = dict(admin)
+        named = (body.get("resolved_by") or "").strip() \
+            or (who.get("name") or "").strip() \
+            or who.get("email", "")
+        try:
+            return safety.resolve(self.db, report_id,
+                                  resolution=(body.get("resolution") or "").strip(),
+                                  resolved_by=named,
+                                  note=body.get("note") or "")
         except safety.ReportRejected as exc:
             raise ApiError(400, str(exc))
 
