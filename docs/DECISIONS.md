@@ -544,10 +544,24 @@ between them, and computes `cross_subject` server-side. Verified live: HTTP
 Covered by `tests/test_student_concepts.py:167,182,183` and
 `tests/test_student_e2e.py:214`, including the isolation case.
 
-**Nothing calls it.** `frontend/quintek-student-api.js` has no graph method and
-the shipped bundle never requests the route. The screen renders the prototype's
-hardcoded `NODES`/`EDGES` literals, so a learner with their own notebooks and
-their own ingested sources still sees fourteen fabricated medical concepts.
+**Corrected 2026-09-16.** The first version of this entry said the client had
+no graph method. That was written against a checkout 23 commits behind the
+branch and was wrong. `frontend/quintek-student-api.js:256` has `graph()`, and
+`tests/frontend/model_free_surface.test.mjs:91,92,132` cover it.
+
+The gap is one layer further out, and it is the same gap for every item below:
+**no screen calls any of it.** The screens are built by
+`tools_build_standalone.py` from the `.dc.html` design sources, and
+`frontend/PG Revision.dc.html` is dated 2026-08-28 -- untouched by any of the
+wiring work. It calls none of `graph()`, `conceptDetail()`,
+`notebookQuestions()`, `reportQuestion()`, `myReports()`, `scope()` or
+`screenState()`. So the concept graph still renders its hardcoded
+`NODES`/`EDGES`, and a learner with their own notebooks sees fourteen
+fabricated medical concepts.
+
+The same is true of the content-safety fields: `student/api.py:44-45` returns
+`chunk_confidence` and `needs_review` and `student/api.py:43` returns
+`source_locator`, and no screen renders any of them.
 
 This is fixture data presented as live data — the failure mode the manual test
 plan exists to catch. **Deferred by owner instruction (2026-09-15), to be fixed
