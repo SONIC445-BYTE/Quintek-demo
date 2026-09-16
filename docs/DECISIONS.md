@@ -580,3 +580,56 @@ stated the validator holdout was "0 of 5 used". The ledger contains **one**
 entry, an `inspection` dated 2026-08-21, and `validator/holdout.py:212` counts
 every entry against `MAX_USES`. It is **1 of 5**. The ledger has been unchanged
 since `df99141`; the error was in the reporting, not in the ledger.
+
+## ADR-026 — Two open loops that must not be closed with code
+
+**Date/phase:** 2026-09-16 · **Status:** OPEN — PROCESS, NOT CODE
+**Provenance:** CONTEMPORANEOUS — owner instruction
+
+Both of these look like software problems and are not. Written here because
+the failure mode for both is the same: somebody reads the code, sees the
+mechanism present, and concludes the loop is closed.
+
+### 1. The report queue has no operator
+
+`GET /ops/reports`, `GET /ops/reports/gold-candidates` and
+`POST /ops/reports/<id>` exist, are tested, and work. **Nobody reads them on a
+schedule.** Today that is the project owner, by hand, with curl.
+
+A report path whose queue nobody reads is still an open loop, and it is worse
+than no report path at all, because the button implies a loop that closes. A
+learner who reports a wrong question and hears nothing has been told, by the
+interface, that somebody would look.
+
+This cannot be fixed by writing more code. It needs a named person, a cadence,
+and a target — who reads the queue, how often, and how long a report may sit
+before it is answered. An alerting rule or an auto-responder would make the
+silence *look* addressed, which is the one outcome worse than the current
+state. **Do not close this with software.**
+
+Until it has an owner: the report button is live in the app, and the
+resolution a learner sees on `GET /reports` will stay `open` indefinitely.
+
+### 2. The 28-item corpus audit needs a clinician
+
+The development corpus is `provenance: model_authored`, `gold_standard:
+false`, `reviewed_by: ""` across all 100 items. 28 items are queued for label
+audit, and **at least one item labelled clean is known to be wrong** — found
+during Track D construction and recorded in the holdout ledger's inspection
+entry.
+
+The consequence is precise and worth stating rather than softening: **the
+clean arm's specificity is measured against labels at least one of which is
+known to be incorrect.** Every specificity figure downstream of that carries
+the error, whatever its confidence interval says.
+
+This needs a qualified clinician ruling on those 28 labels. It is not an
+adjudication the model, the validator or this session can perform — a
+model-authored label re-checked by a model is the same evidence twice, and
+`docs/JUDGE_INDEPENDENCE.md` exists because that distinction is the project's
+whole basis. **Authoring and adjudication are the owner's, explicitly out of
+scope for implementation work.**
+
+Until those labels are ruled on, `NO MODEL QUALIFIED / INSUFFICIENT EVIDENCE`
+is not merely the current state — it is the only state the evidence supports.
+

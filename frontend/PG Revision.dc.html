@@ -1336,7 +1336,16 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
           <button onClick="{{ submit }}" style="width:100%;min-height:48px;background:#1E7A57;color:#fff;border:none;border-radius:6px;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:14.5px;font-weight:600;cursor:pointer" style-hover="background:#155F42">Submit answer</button>
         </sc-if>
 
-        <sc-if value="{{ submitted }}" hint-placeholder-val="{{ true }}">
+        <!-- THE ANSWER WAITS FOR THE JUDGEMENT, not merely for submit.
+             Forced by the server and correct anyway: POST /attempts requires
+             user_colour and refuses to infer it -- "the learner chooses it and
+             the system never infers it" -- and an attempt is immutable once
+             written, so there is no way to record first and judge after. Which
+             means the reveal cannot precede the judgement.
+             That is the better order regardless. Asking "how well did you know
+             this?" after showing the answer collects a judgement already
+             contaminated by it. -->
+        <sc-if value="{{ revealReady }}" hint-placeholder-val="{{ true }}">
           <div style="display:flex;flex-direction:column;gap:14px;padding:15px;background:#fff;border:1px solid #E6E4DE;border-radius:6px;animation:pgfade .3s ease both">
             <div style="display:flex;flex-direction:column;gap:8px">
               <div style="display:flex;gap:10px;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11px;font-weight:600;letter-spacing:.01em;color:#8a9093">Your answer</div>
@@ -1393,6 +1402,13 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
             </div>
             <button onClick="{{ openSource }}" style="align-self:flex-start;display:flex;align-items:center;gap:8px;padding:9px 11px;min-height:40px;background:#FAFAF8;border:1px solid #E0DDD4;border-radius:5px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;color:#1E7A57" style-hover="border-color:#1E7A57">{{ qSource }} →</button>
           </div>
+        </sc-if>
+
+        <!-- The judgement, asked once an answer is submitted and BEFORE
+             the reveal. On a live backend this is the call that records
+             the attempt: choosing a colour is what POSTs it, and the
+             server's response is what reveals the answer. -->
+        <sc-if value="{{ submitted }}" hint-placeholder-val="{{ true }}">
 
           <div style="display:flex;flex-direction:column;gap:10px;padding:15px;background:#F5F3EC;border-radius:6px">
             <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">How well did you know this?</span>
@@ -2003,6 +2019,10 @@ class Component extends DCLogic {
      * report button stays hidden -- there is no live question to report, and a
      * button that posted a constant's id would be worse than no button. */
     liveReveal: null, liveQuestionId: null,
+    liveSessionId: null, liveQuestion: null, liveSummary: null, liveSourceName: '',
+    sessionState: 'off', sessionError: '',
+    questionState: 'off', questionError: '',
+    attemptState: 'idle', attemptError: '',
     reportOpen: false, reportSent: false, reportError: '',
     liveGraph: null, graphState: 'off', graphError: '',
     scopeText: '', scopeState: 'off',
@@ -2743,17 +2763,121 @@ class Component extends DCLogic {
 
   pick = (i) => () => { if (!this.state.submitted) this.setState({ picked: i }); };
   submit = () => this.setState({ submitted: true });
-  judge = (colour) => () => this.setState({ judgement: colour, gaps: [] });
+
+  /* Choosing a colour is what RECORDS the attempt.
+   *
+   * POST /attempts needs user_colour and refuses to infer one, and an attempt
+   * is immutable once written -- so there is exactly one moment at which the
+   * attempt can be written, and this is it. The server's response carries the
+   * reveal, which is why the answer cannot appear before this point.
+   *
+   * A failed POST does NOT reveal the answer. Showing it anyway would tell the
+   * learner their attempt was recorded when it was not, and their progress
+   * would silently disagree with what they remember doing. */
+  judge = (colour) => () => {
+    const st = this.state;
+    this.setState({ judgement: colour, gaps: [] });
+    const api = st.studentApi;
+    if (!api || !api.recordAttempt || !st.liveQuestionId) return;
+    this.setState({ attemptState: 'saving', attemptError: '' });
+    api.recordAttempt(st.liveQuestionId, st.picked, colour, { sessionId: st.liveSessionId })
+      .then((res) => this.setState({
+        attemptState: 'ready', liveReveal: (res && res.reveal) || null,
+      }))
+      .catch((err) => this.setState({
+        attemptState: 'error', liveReveal: null,
+        attemptError: (err && err.message) ? err.message : String(err),
+      }));
+  };
   toggleGap = (g) => () => this.setState((st) => ({ gaps: st.gaps.indexOf(g) >= 0 ? st.gaps.filter((x) => x !== g) : st.gaps.concat([g]) }));
 
+  /* Ask the server for the next question, or finish.
+   *
+   * `/revision/next` is the ONLY route this loop may use for a question the
+   * learner is about to answer. `/questions/<id>` returns `correct_index`, so
+   * fetching a live question through it would put the answer on the device
+   * before the learner had chosen one -- the reveal-timing failure the whole
+   * sequence above exists to prevent. Pinned by a test. */
+  loadNextQuestion = (sessionId) => {
+    const api = this.state.studentApi;
+    if (!api || !api.nextQuestion || !sessionId) return null;
+    this.setState({ questionState: 'loading', questionError: '' });
+    return api.nextQuestion(sessionId)
+      .then((res) => {
+        if (!res || res.finished || !res.question) {
+          this.setState({ questionState: 'ready', liveQuestion: null, liveQuestionId: null });
+          return this.finishSession(sessionId);
+        }
+        return this.setState({
+          questionState: 'ready', liveQuestion: res.question,
+          liveQuestionId: res.question.question_id, liveReveal: null,
+          picked: null, submitted: false, judgement: null, gaps: [],
+          reportOpen: false, reportSent: false, reportError: '',
+        });
+      })
+      .catch((err) => this.setState({
+        questionState: 'error', liveQuestion: null, liveQuestionId: null,
+        questionError: (err && err.message) ? err.message : String(err),
+      }));
+  };
+
+  finishSession = (sessionId) => {
+    const api = this.state.studentApi;
+    if (!api || !api.completeSession || !sessionId) { this.setState({ done: true }); return null; }
+    return api.completeSession(sessionId)
+      .then((summary) => this.setState({ done: true, liveSummary: summary }))
+      /* A summary that fails to load still ends the session. The attempts are
+       * already written; refusing to move on would strand the learner on a
+       * question they have answered. */
+      .catch(() => this.setState({ done: true, liveSummary: null }));
+  };
+
   next = () => {
-    const st = this.state, q = QUESTIONS[st.qi];
+    const st = this.state;
+    if (st.liveSessionId) { this.loadNextQuestion(st.liveSessionId); return; }
+    const q = QUESTIONS[st.qi];
     this.attempts.push({ q: st.qi, answer: q.options[st.picked], correct: st.picked === q.correct,
       colour: st.judgement, gaps: st.gaps.slice(), at: '15 Aug' });
     this.setState((s) => (s.qi >= QUESTIONS.length - 1
       ? { done: true, picked: null, submitted: false, judgement: null, gaps: [] }
       : { qi: s.qi + 1, picked: null, submitted: false, judgement: null, gaps: [] }));
   };
+
+  /* Start a real session, or fall back to the in-file questions.
+   *
+   * `strategy` is one of the six the server accepts; "adaptive" is its own
+   * default. An earlier version of this sent WEAKNESS_FIRST, which the server
+   * rejected with 422 -- caught by running it, not by reading it. */
+  startLiveSession = (count, strategy) => {
+    const api = this.state.studentApi;
+    if (!api || !api.startSession) { this.setState({ sessionState: 'off' }); return null; }
+    this.setState({ sessionState: 'loading', sessionError: '', done: false, liveSummary: null });
+    return api.startSession(count || 10, strategy || 'adaptive')
+      .then((res) => {
+        const id = res && res.session_id;
+        if (!id) throw new Error('the server started no session');
+        this.setState({ sessionState: 'ready', liveSessionId: id,
+                        sessionCount: res.selected_question_count || count || 10 });
+        return this.loadNextQuestion(id);
+      })
+      .catch((err) => this.setState({
+        sessionState: 'error', liveSessionId: null,
+        sessionError: (err && err.message) ? err.message : String(err),
+      }));
+  };
+  /* Entering the revision screen.
+   *
+   * With a backend this starts a REAL session and fetches a real first
+   * question; without one it opens the in-file walkthrough exactly as before.
+   * The same button, because a learner has one "Start" and should not have to
+   * know which of the two they are getting. */
+  startRevision = () => {
+    this.setState({ route: 'dashboard' });
+    const api = this.state.studentApi;
+    if (!api || !api.startSession) return;
+    this.startLiveSession(this.state.qCount, 'adaptive');
+  };
+
   restart = () => { this.attempts = []; this.setState({ qi: 0, picked: null, submitted: false, judgement: null, gaps: [], done: false }); };
   stepNext = () => {
     const s = this.state;
@@ -3506,10 +3630,34 @@ class Component extends DCLogic {
         op: (visible(a) && visible(b)) ? (touch ? 0.95 : 0.4) : 0.08 };
     });
 
-    const q = QUESTIONS[s.qi];
-    const meta = QMETA[s.qi] || { concepts: [], gaps: [] };
+    /* THE QUESTION ON SCREEN: live when a session is running, the in-file
+     * sample otherwise.
+     *
+     * `/revision/next` deliberately carries no correct answer, so on the live
+     * path `correct` is UNKNOWN until the attempt is recorded and the server
+     * returns its reveal. Everything downstream reads `reveal`, which is null
+     * until then -- that is what keeps the answer off the device while the
+     * learner is still deciding. */
+    const reveal = s.liveReveal;
+    const live = !!s.liveQuestionId;
+    const q = live
+      ? { stem: s.liveQuestion ? s.liveQuestion.stem : '',
+          family: (s.liveQuestion && s.liveQuestion.family) || 'mcq',
+          options: (s.liveQuestion && s.liveQuestion.options) || [],
+          correct: reveal ? reveal.correct_answer : null,
+          rationale: reveal ? reveal.rationale : '',
+          source: '', next: '' }
+      : QUESTIONS[s.qi];
+    const meta = live ? { concepts: [], gaps: [] } : (QMETA[s.qi] || { concepts: [], gaps: [] });
     const submitted = s.submitted;
-    const right = submitted && s.picked === q.correct;
+    /* On the live path the server decides correctness; the client never
+     * recomputes it from an index it was not given. */
+    const right = live ? !!(reveal && reveal.is_correct)
+                       : (submitted && s.picked === q.correct);
+    /* The reveal is ready when the SERVER has returned one. Locally, when the
+     * learner has judged -- the same ordering, so the design file shows the
+     * real interaction rather than an easier one. */
+    const revealReady = live ? !!reveal : (submitted && !!s.judgement);
     const options = q.options.map((text, i) => {
       const isCorrect = i === q.correct, isPicked = i === s.picked;
       let bg = '#fff', bd = '#E6E4DE', fg = '#16191A', mark = String.fromCharCode(65 + i), markFg = '#9aa0a2';
@@ -3704,7 +3852,7 @@ class Component extends DCLogic {
         { label: 'Delete account', value: '', fg: '#BC4C43' }],
 
       isRevise: r === 'revise' && !s.done, isProgress: r === 'progress', isOnboard: r === 'onboard',
-      goHome: this.go('home'), goRevise: this.go('dashboard'), goOnboard: this.go('onboard'),
+      goHome: this.go('home'), goRevise: this.startRevision, goOnboard: this.go('onboard'),
       goDashboard: this.go('dashboard'),
       tabs: [
         ['today', 'Today', ['dashboard'], 'inbox'],
@@ -3923,6 +4071,12 @@ class Component extends DCLogic {
       selName: sel.name, selSubject: SUBJ[sel.subject].label, selColor: SUBJ[sel.subject].color, selNote: sel.note,
       selLinks: neighbours, selLinkCount: neighbours.length + ' LINKED CONCEPTS · ' + neighbours.filter((n) => n.tag === 'Crosses subject').length + ' CROSS-SUBJECT',
 
+      /* THE QUESTION ON SCREEN.
+       *
+       * Live when a session is running, the in-file sample otherwise. The
+       * reveal fields (correct answer, rationale) come from the SERVER's
+       * reveal on the live path and are simply absent until the attempt is
+       * recorded -- `/revision/next` does not carry them, by design. */
       qStem: q.stem, qFamily: q.family.toUpperCase(), qOptions: options, qRationale: q.rationale,
       qSource: q.source, qNextDue: q.next,
 
@@ -3952,7 +4106,14 @@ class Component extends DCLogic {
             provReviewNote: 'This came from a passage Quintek could not read cleanly, so it '
               + 'has not been verified against the original. Check it against your source '
               + 'before you trust it.',
-            provSource: (live.source_filename || 'your uploaded source') + page,
+            /* The reveal carries `source_locator` and `source_passage` but NOT
+             * a filename -- established by running the route, not by reading
+             * it. `liveSourceName` is filled from the notebook view when that
+             * screen has loaded; absent it, the locator alone still tells a
+             * learner which page to check. Inventing a filename here would be
+             * the same failure as a fabricated citation. */
+            provSource: (s.liveSourceName || 'the passage this came from')
+              + (page || (loc.paragraph ? ' para ' + loc.paragraph : '')),
             provConfidence: conf,
           };
         }
@@ -4003,9 +4164,14 @@ class Component extends DCLogic {
         };
       })(),
       canSubmit: s.picked !== null && !submitted, submit: this.submit, submitted,
-      yourAnswer: s.picked === null ? '' : q.options[s.picked],
+      revealReady,
+      yourAnswer: s.picked === null ? '' : (q.options[s.picked] || ''),
       yourFg: right ? '#1E7A57' : '#B5812B',
-      correctAnswer: q.options[q.correct],
+      /* Never index with a null. On the live path `q.correct` is null until
+       * the reveal arrives, and `options[null]` is undefined -- which would
+       * render the correct answer as the word "undefined" to a learner. */
+      correctAnswer: (q.correct === null || q.correct === undefined)
+        ? '' : (q.options[q.correct] || ''),
       qConcepts: meta.concepts.map(([name, subject]) => ({ name, color: SUBJ[subject].color })),
       judgements: JUDGEMENTS.map(([label, colour, note]) => {
         const on = s.judgement === label;
