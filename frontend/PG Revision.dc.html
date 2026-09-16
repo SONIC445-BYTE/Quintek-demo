@@ -1346,6 +1346,46 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
             </div>
             <div style="height:1px;background:#EDEBE4"></div>
             <div style="font-family:'Source Serif 4',Georgia,'Times New Roman',serif;font-size:14.5px;line-height:1.55;color:#33393b;text-wrap:pretty">{{ qRationale }}</div>
+
+            <!-- WHERE THIS CAME FROM, AND HOW SURE THE MACHINE IS OF IT.
+                 The needs_review banner is the point of the whole confidence
+                 contract: a question written from a blurry scan reads exactly
+                 like one written from clean text, and the learner is the only
+                 person who can tell the difference once they see the passage.
+                 It sits ABOVE the passage reference on purpose -- the warning
+                 has to arrive before the citation that would otherwise make
+                 the question look sourced and therefore settled. -->
+            <sc-if value="{{ provNeedsReview }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;gap:10px;padding:11px 12px;background:#FDF6E8;border-left:2px solid #B5812B;border-radius:0 5px 5px 0">
+                <span style="width:6px;height:6px;border-radius:50%;background:#B5812B;flex:none;margin-top:6px"></span>
+                <span style="font-size:12px;line-height:1.5;color:#5d6467;text-wrap:pretty">{{ provReviewNote }}</span>
+              </div>
+            </sc-if>
+
+            <div style="display:flex;flex-direction:column;gap:5px;padding:11px 12px;background:#F5F3EC;border-radius:5px">
+              <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.05em;color:#8a9093">WRITTEN FROM</span>
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#16191A">{{ provSource }}</span>
+              <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;color:#7c8386">{{ provConfidence }}</span>
+            </div>
+
+            <!-- The report path. A question a learner cannot challenge is one
+                 they have to either believe or abandon, and neither is what
+                 revision is for. -->
+            <sc-if value="{{ canReport }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <sc-if value="{{ reportSent }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;color:#1E7A57">{{ reportSentNote }}</span>
+                </sc-if>
+                <sc-if value="{{ reportOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-wrap:wrap;gap:6px">
+                    <sc-for list="{{ reportKinds }}" as="k" hint-placeholder-count="6">
+                      <button onClick="{{ k.send }}" style="padding:8px 10px;min-height:36px;background:#fff;border:1px solid #E6E4DE;border-radius:5px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;color:#33393b" style-hover="border-color:#B5812B">{{ k.label }}</button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <button onClick="{{ toggleReport }}" style="align-self:flex-start;padding:6px 0;background:none;border:none;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;color:#8a9093;text-decoration:underline;text-underline-offset:3px">{{ reportLabel }}</button>
+              </div>
+            </sc-if>
             <div style="display:flex;flex-wrap:wrap;gap:6px">
               <sc-for list="{{ qConcepts }}" as="c" hint-placeholder-count="3">
                 <span style="display:flex;align-items:center;gap:6px;padding:6px 9px;background:#F5F3EC;border-radius:14px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;letter-spacing:.04em;color:#5d6467"><span style="width:5px;height:5px;border-radius:50%;background:{{ c.color }}"></span>{{ c.name }}</span>
@@ -1702,6 +1742,21 @@ const EDGES = [
   ['k', 'ecg', 'related_to'], ['o2', 'hf', 'related_to'], ['hfpef', 'bnp', 'related_to'],
 ];
 
+/* The report kinds the server accepts, mirrored here as [value, label].
+ *
+ * The VALUES must match student/safety.py REPORT_KINDS exactly -- the server
+ * refuses an unknown kind with a 400 naming the valid set, so a drift here
+ * shows up as a learner pressing a button that does nothing. The labels are
+ * what a learner would actually say; "wrong_answer_keyed" is not. */
+const REPORT_KINDS = [
+  ['factually_wrong',     'The content is wrong'],
+  ['wrong_answer_keyed',  'The marked answer is wrong'],
+  ['not_in_source',       "This isn't in my source"],
+  ['ambiguous',           'More than one answer fits'],
+  ['offensive_or_unsafe', 'Unsafe or offensive'],
+  ['other',               'Something else'],
+];
+
 const QUESTIONS = [
   { family: 'Clinical vignette',
     stem: 'A 62-year-old woman with HFpEF reports worsening exertional dyspnoea over six weeks. Hb 8.9 g/dL, MCV 71 fL, ferritin 9 ng/mL, CRP normal. Which single change is most likely responsible for her decompensation?',
@@ -1941,6 +1996,16 @@ class Component extends DCLogic {
     route: 'today', notebook: 'cardio', sel: 'ida', filters: {},
     learnerState: 'off', learnerError: '',
     liveProgress: null, liveGaps: null, liveDashboard: null, liveConcepts: null,
+    /* The server's reveal for the question on screen, and its id.
+     *
+     * Both null until the revision loop itself is wired to the backend. While
+     * they are null the reveal renders the in-file sample and SAYS SO, and the
+     * report button stays hidden -- there is no live question to report, and a
+     * button that posted a constant's id would be worse than no button. */
+    liveReveal: null, liveQuestionId: null,
+    reportOpen: false, reportSent: false, reportError: '',
+    liveGraph: null, graphState: 'off', graphError: '',
+    scopeText: '', scopeState: 'off',
     weakFilter: 'All', query: '', cptFrom: 'weak', qCount: 10, strategy: 'WEAKNESS_FIRST',
     studio: {}, studioOut: false, studioAct: null, bankFilter: 'All',
     evalApi: null, evalState: 'loading', howOpen: false, openTrack: null,
@@ -2310,6 +2375,27 @@ class Component extends DCLogic {
   toggleChannel = (k) => () => this.setState((st) => ({ channels: { ...st.channels, [k]: !st.channels[k] } }));
   sendTest = () => this.setState({ tested: true });
   generate = () => this.setState({ generated: true });
+
+  toggleReport = () => this.setState((st) => ({ reportOpen: !st.reportOpen }));
+
+  /* Send one report and say so.
+   *
+   * Failure is NOT silent and NOT a fake success: a learner who reports a
+   * wrong question and is told "thanks" when nothing was recorded has been
+   * lied to about the one interaction where being believed is the point.
+   * `reportError` carries the server's message. */
+  sendReport = (kind) => () => {
+    const api = this.state.studentApi;
+    const qid = this.state.liveQuestionId;
+    if (!api || !api.reportQuestion || !qid) return;
+    this.setState({ reportOpen: false });
+    api.reportQuestion(qid, kind, '')
+      .then(() => this.setState({ reportSent: true, reportError: '' }))
+      .catch((err) => this.setState({
+        reportSent: false,
+        reportError: (err && err.message) ? err.message : String(err),
+      }));
+  };
 
   componentDidMount() {
     this.initGraph();
@@ -3839,6 +3925,56 @@ class Component extends DCLogic {
 
       qStem: q.stem, qFamily: q.family.toUpperCase(), qOptions: options, qRationale: q.rationale,
       qSource: q.source, qNextDue: q.next,
+
+      /* PROVENANCE AND THE CONFIDENCE FLAGS.
+       *
+       * `liveReveal` is the server's reveal payload when a backend is
+       * configured and the learner has just answered; otherwise these fall
+       * back to the in-file sample, which deliberately carries a LOW
+       * confidence chunk so the banner is visible in the design file. The
+       * fallback says "sample" in the text rather than dressing a constant up
+       * as a measurement.
+       *
+       * `needs_review` is read from the server and never recomputed from the
+       * confidence number: the server decides what counts as needing review,
+       * and a client that re-derived it would drift from that threshold
+       * silently. */
+      ...(() => {
+        const live = s.liveReveal;
+        if (live) {
+          const loc = live.source_locator || {};
+          const page = loc.page ? ' p.' + loc.page : '';
+          const conf = typeof live.chunk_confidence === 'number'
+            ? 'extraction confidence ' + live.chunk_confidence.toFixed(2)
+            : 'extraction confidence not recorded';
+          return {
+            provNeedsReview: !!live.needs_review,
+            provReviewNote: 'This came from a passage Quintek could not read cleanly, so it '
+              + 'has not been verified against the original. Check it against your source '
+              + 'before you trust it.',
+            provSource: (live.source_filename || 'your uploaded source') + page,
+            provConfidence: conf,
+          };
+        }
+        return {
+          provNeedsReview: true,
+          provReviewNote: 'Sample question. In a connected app this banner appears when the '
+            + 'passage behind a question was extracted with low confidence -- a blurry scan, '
+            + 'a photographed page -- and the question has not been checked against it.',
+          provSource: q.source + '  (sample)',
+          provConfidence: 'sample data, not a measurement',
+        };
+      })(),
+
+      canReport: !!(s.studentApi && s.studentApi.reportQuestion && s.liveQuestionId),
+      reportOpen: !!s.reportOpen,
+      reportSent: !!s.reportSent,
+      reportSentNote: s.reportSent
+        ? 'Reported. An operator sees this with the passage it came from.' : '',
+      reportLabel: s.reportOpen ? 'Cancel' : 'Report a problem with this question',
+      toggleReport: this.toggleReport,
+      reportKinds: REPORT_KINDS.map(([value, label]) => ({
+        label, send: this.sendReport(value) })),
       qProgress: (s.qi + 1) + ' of ' + (s.sessionCount || 8) + ' this session',
       qTicks: (() => {
         const total = s.sessionCount || 8;
