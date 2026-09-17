@@ -26,9 +26,25 @@ That module already counts outbound attempts, already distinguishes the
 boundary it counts at, and already turns exhaustion into an ordinary exception
 the caller can handle. A second counter would be a second thing to disagree
 with the first, which is the defect that produced the `arm` field in the
-journal key. `spend_guard()` wraps it for the ingestion and generation paths
-and adds the only thing they need that a validator run does not: a per-user
-ceiling, because a runaway loop belongs to one account.
+journal key. `spend_guard()` wraps it and adds the only thing an ingestion loop
+needs that a validator run does not: a per-user ceiling, because a runaway loop
+belongs to one account.
+
+**NOT WIRED. `spend_guard()` and `charge()` have no production call site.**
+
+This paragraph previously said `spend_guard()` "wraps it for the ingestion and
+generation paths", which was never true. The ceiling works, is tested against a
+running server, refuses correctly and reloads from history rather than from
+memory -- and nothing charges against it, so nothing is ceilinged.
+
+Connecting it needs a number: how many generation calls one account may make
+per period. That is a business decision rather than an implementation detail,
+and inventing one here would put a made-up figure in the path of every
+learner's spend. Recorded in `docs/NOT_BUILT.md` and `docs/INVENTORY.md` as
+waiting on that decision.
+
+`record()`, by contrast, needs no such number and IS wired: see
+`IngestionEngine._record_incident`.
 
 BACKUPS ARE VERIFIED BY RESTORING
 -----------------------------------

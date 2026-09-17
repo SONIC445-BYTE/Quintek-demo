@@ -568,9 +568,44 @@ class IngestionEngine:
         except ExtractionUnavailable as exc:
             self.db.execute("UPDATE sources SET status='failed', error=? WHERE id=?",
                             (str(exc), source_id))
+            self._record_incident(row, exc)
         except Exception as exc:
             self.db.execute("UPDATE sources SET status='failed', error=? WHERE id=?",
                             (f"{type(exc).__name__}: {exc}", source_id))
+            self._record_incident(row, exc)
+
+    def _record_incident(self, row, exc: BaseException) -> None:
+        """
+        Write the failure where an operator can see it.
+
+        `student/operations.py` -- the incident table, the fault grouping and
+        the alert threshold -- was built, tested and **never called**. Every
+        failure was recorded on the SOURCE, where only the learner who uploaded
+        it would ever see it, so `/ops/incidents` and `/ops/alerts` were
+        permanently empty in production and an alert could not fire however
+        badly ingestion was failing. That is the third time on this project
+        that working machinery has terminated in a table nothing writes to or
+        nothing reads from -- see ADR-026 for the first.
+
+        The source row stays as it is. The two records answer different
+        questions: the source says "your upload failed and here is why", the
+        incident says "this is failing repeatedly and somebody should look".
+
+        `operations.record` never raises, by design, so this cannot turn a
+        handled ingestion failure into an unhandled one.
+        """
+        from . import operations
+
+        owner = self.db.query_one(
+            "SELECT n.owner_id AS uid FROM sources s"
+            "  JOIN notebooks n ON n.id = s.notebook_id WHERE s.id = ?", (row["id"],))
+        operations.record(
+            self.db, operation=operations.INGESTION, error=exc,
+            user_id=(owner["uid"] if owner else ""),
+            # The filename, not its contents. An incident row is read by an
+            # operator who is not this learner.
+            context={"source_id": row["id"], "kind": row["kind"],
+                     "filename": row["filename"]})
 
     def _extract(self, row, *, raw_text: str, url: str) -> list[ExtractedPage]:
         path = None

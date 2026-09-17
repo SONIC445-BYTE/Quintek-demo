@@ -295,3 +295,61 @@ def test_an_ops_route_is_indistinguishable_from_one_that_does_not_exist(live, pa
     assert admin_status == 200, (
         f"{path} answered {admin_status} to an admin, so the comparisons above "
         "may be passing because the route is simply broken")
+
+
+# ---------------------------------------------------------------------------
+# The engine actually writes incidents
+# ---------------------------------------------------------------------------
+
+def test_a_failed_ingestion_writes_an_incident_an_operator_can_read(tmp_path):
+    """The routes above are only worth having if something populates them.
+
+    `student/operations.py` was built, tested and never called: every ingestion
+    failure was recorded on the SOURCE row, where only the learner who uploaded
+    it would see it, so `/ops/incidents` was permanently empty in production and
+    `/ops/alerts` could not fire however badly ingestion was failing.
+
+    This drives a real failure through `IngestionEngine.process_source` and then
+    reads the incident back, because "the function exists" is what was true
+    before and it was not enough.
+    """
+    from student.ingestion import IngestionEngine
+    from student.db import Database as DB
+
+    db = DB(tmp_path / "ing.db")
+    from student.api import StudentAPI
+    api = StudentAPI(db)
+    token = api.handle("POST", "/auth/register", {},
+                       {"email": "up@example.com", "password": "correct-horse"},
+                       None)[1]["token"]
+    uid = db.query_one("SELECT id FROM users WHERE email=?", ("up@example.com",))["id"]
+    nid = api.handle("POST", "/notebooks", {}, {"title": "N", "subject": "Med"}, token)[1]["id"]
+
+    sid = new_id_local = "src_broken"
+    db.execute("INSERT INTO sources (id,notebook_id,kind,filename,status,uploaded_at)"
+               " VALUES (?,?,?,?,?,?)",
+               (sid, nid, "text", "empty.txt", "uploaded", "2026-09-17T00:00:00Z"))
+
+    engine = IngestionEngine(db, storage_dir=tmp_path / "uploads")
+    # Empty text: `chunk_pages` yields nothing and the engine raises
+    # ExtractionUnavailable, which is an ordinary, handled failure -- exactly
+    # the kind that was previously invisible to an operator.
+    engine.process_source(sid, raw_text="")
+
+    assert db.query_one("SELECT status FROM sources WHERE id=?", (sid,))["status"] == "failed"
+
+    report = ops.since(db, hours=1)
+    assert report["total"] >= 1, (
+        "the ingestion failed and no incident was written; /ops/incidents is "
+        "still a table nothing populates")
+    faults = {(f["operation"], f["error_type"]) for f in report["by_fault"]}
+    assert any(op == ops.INGESTION for op, _ in faults), report
+
+    row = db.query_one("SELECT user_id, context_json FROM incidents LIMIT 1")
+    assert row["user_id"] == uid, "the incident does not name the affected account"
+    context = json.loads(row["context_json"])
+    assert context["source_id"] == sid
+    assert context["filename"] == "empty.txt"
+    # The FILENAME, never the contents. An incident is read by an operator who
+    # is not this learner.
+    assert "text" not in context or context.get("text") is None

@@ -1,5 +1,12 @@
 # Document Index and Reading Order v0.4
 
+## Start here
+
+* [`INVENTORY.md`](INVENTORY.md) — **where the project actually stands**, as
+  of 2026-09-17: what is verified by execution, what is open, and what is
+  blocked on the owner. Written so that picking the project back up takes one
+  message rather than a re-derivation. Read it before anything else.
+
 ## Testing
 
 * [`ANDROID_MANUAL_TEST.md`](ANDROID_MANUAL_TEST.md) — the on-device
