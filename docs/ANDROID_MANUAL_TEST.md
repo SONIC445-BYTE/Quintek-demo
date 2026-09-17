@@ -70,22 +70,43 @@ Two failure modes matter more than the rest, so check for them everywhere:
 | Q | **Admin / report panels** | Run reports render. With no runs, they say so rather than showing zeros that look like results | ☐ |
 | R | **AI transparency / powering** | Reports the honest state: nothing promoted, nothing routed, generation refusing | ☐ |
 | S | **Production model refusal** | `/health` reports `generation: no_qualified_model` and `status: ok`. **`no_qualified_model` is healthy** — the platform must not restart over it | ☐ |
-| T | **No fake data as live data** | Sweep every screen with the backend connected. Anything still showing built-in samples is a defect | **PARTIALLY CLOSED** |
+| T | **No fake data as live data** | Sweep every screen with the backend connected. Anything still showing built-in samples is a defect | **CLOSED for the screens named below · still worth a device sweep** |
 
-**Item T has moved.** When this list was written the concept graph, concept
-detail, notebook view and the scope statement all rendered constants whatever
-the backend held. All four now fetch on screen entry through `screenState()`,
-and the revision loop serves real questions. So the specific defect recorded
-in ADR-025 is closed.
+**Item T is closed in code (2026-09-17).** Every screen `APP_BEHAVIOUR.md`
+§2.6–2.8 named as FIXTURE now reads live data or says why it cannot:
 
-What is NOT closed, and is what you should sweep for: the screens this pass did
-not touch still render constants — the progress heatmap, the gap lists,
-per-concept recall strength, the mastery split, the demonstration library and
-the question studio. `docs/APP_BEHAVIOUR.md` §2.6–2.8 names them. They are
-honest in a disconnected app and misleading in a connected one, which is
-exactly the class T exists to catch.
+| Screen | Now reads |
+|---|---|
+| Progress — mastery split | `/progress` `colour_counts` and `due_count` |
+| Progress — 12-week heatmap | `/progress` `activity`, keyed by date |
+| Progress — per-concept recall | `/concepts`, with an em dash where nothing was attempted |
+| Notebook list | `/notebooks` |
+| Question bank / studio | `/questions` |
+| Demonstrations | `/demos` |
+| Reminder settings | `/settings/notifications` + its delivery log |
+| Revision dashboard | `/revision/dashboard`, and the strategy picker now offers the six names the server accepts |
 
-Sweep the *other* screens for the same class of defect: any screen still showing built-in samples once a backend is configured.
+**Two things this pass found that the sweep was supposed to find:**
+
+1. **The app did not parse.** `frontend/PG Revision.dc.html` declared `const
+   live` twice in one scope. That is a SyntaxError, so the component class was
+   never constructed and **every screen rendered blank** — on the built
+   bundle, in the android assets and in `app-debug.apk`. It shipped that way
+   from the revision-loop commit onward. `tests/frontend/component_parses.test.mjs`
+   now parses every design source, every built bundle and every android asset,
+   and fails on all three with the bug reintroduced.
+
+2. **The strategy picker was inert.** It offered `WEAKNESS_FIRST`,
+   `WEAK_PLUS_SECTION` and `COVERAGE`. The server accepts
+   `adaptive/red/orange/green/due/unseen` and rejects the rest with 422 —
+   and `startRevision` passed the literal `'adaptive'` regardless, so choosing
+   a strategy moved a highlight and changed nothing.
+
+**What a device sweep is still for.** Everything above is verified by tests
+that drive the real client against a real server, and by `vm`-parsing the
+shipped bundles. None of it is a phone. A WebView difference, a layout that
+clips, a control that cannot be tapped — those still need item T walked on
+hardware, and nothing in this repository can close that.
 
 
 ## Two extra checks worth doing
@@ -109,7 +130,8 @@ Sweep the *other* screens for the same class of defect: any screen still showing
 
 | Still open | Why |
 |---|---|
-| The screens in `APP_BEHAVIOUR.md` §2.6–2.8 | progress, gaps, mastery, demos, studio — still constants |
+| A device run | Nothing in this repository has touched a phone |
+| Notification DELIVERY | No sender is configured, so a test send honestly reports "not sent". The settings, the schedule and the log are real; the transport is not built |
 | The report queue has no operator | ADR-026. The routes work; nobody reads them on a schedule |
 | The 28-item corpus audit | ADR-026. Needs a clinician; at least one "clean" label is known wrong |
 

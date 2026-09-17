@@ -81,12 +81,30 @@ def tables_holding_user_data(db: Database) -> list[tuple[str, str]]:
     `storage_key`. A table added tomorrow with a `user_id` is covered by this
     the day it appears.
     """
+    # `persistence.schema.table_names` and `.columns_of`, NOT `sqlite_master`
+    # and `PRAGMA table_info`.
+    #
+    # Those two were the original implementation and they are SQLite-only, so
+    # on PostgreSQL this raised `UndefinedTable: relation "sqlite_master" does
+    # not exist` before it examined a single table -- and `erase()` calls this
+    # first, so **erasure failed for every account on the backend production
+    # actually runs on.** A learner asking to be forgotten got a 500.
+    #
+    # ADR-020 catalogued four dialect incompatibilities and translated the
+    # SQLite-only constructs out of `schema.sql`. This one was not in
+    # `schema.sql`. It was runtime introspection in application code, so the
+    # DDL translation never saw it and the audit that found the other four was
+    # not looking here. It is the fifth.
+    #
+    # The two helpers below already existed, in `persistence/schema.py`,
+    # written for exactly this and used by the migration path. This function
+    # simply never called them.
+    from persistence import schema as pschema
+
     con = db.connect()
     found = []
-    for (table,) in con.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' "
-            "AND name NOT LIKE 'sqlite_%'"):
-        columns = {row[1] for row in con.execute(f"PRAGMA table_info('{table}')")}
+    for table in pschema.table_names(con):
+        columns = pschema.columns_of(con, table)
         for column in ("user_id", "owner_id"):
             if column in columns:
                 found.append((table, column))
@@ -152,7 +170,7 @@ def export(db: Database, user_id: str) -> dict:
     for table, column in tables_holding_user_data(db):
         if table == "sessions_auth":
             continue          # live credentials, not personal data
-        rows = db.query(f"SELECT * FROM '{table}' WHERE {column} = ?", (user_id,))
+        rows = db.query(f'SELECT * FROM "{table}" WHERE {column} = ?', (user_id,))
         if rows:
             out["tables"][table] = [dict(r) for r in rows]
     return out
@@ -182,13 +200,13 @@ def erase(db: Database, user_id: str, *, confirm: str) -> dict:
     for table, column in tables_holding_user_data(db):
         if table in RETAINED_ANONYMISED:
             count = db.execute(
-                f"UPDATE '{table}' SET {column} = '' WHERE {column} = ?",
+                f'UPDATE "{table}" SET {column} = \'\' WHERE {column} = ?',
                 (user_id,)).rowcount
             if count:
                 anonymised[table] = count
             continue
         count = db.execute(
-            f"DELETE FROM '{table}' WHERE {column} = ?", (user_id,)).rowcount
+            f'DELETE FROM "{table}" WHERE {column} = ?', (user_id,)).rowcount
         if count:
             removed[table] = count
     removed["users"] = db.execute(
@@ -200,7 +218,7 @@ def erase(db: Database, user_id: str, *, confirm: str) -> dict:
         if table in RETAINED_ANONYMISED:
             continue
         left = db.query_one(
-            f"SELECT COUNT(*) AS n FROM '{table}' WHERE {column} = ?", (user_id,))
+            f'SELECT COUNT(*) AS n FROM "{table}" WHERE {column} = ?', (user_id,))
         if left and left["n"]:
             survivors[table] = left["n"]
     if survivors:

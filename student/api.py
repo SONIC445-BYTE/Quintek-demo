@@ -855,15 +855,36 @@ class StudentAPI:
         the revision queue -- 'what questions exist for this topic' is a
         different question from 'what should I revise'.
         """
+        # `needs_review` and `chunk_confidence` travel with the LIST too, not
+        # only with a single question.
+        #
+        # `_provenance_of` covers the two paths that hand over one question:
+        # `get_question` and the `/attempts` reveal. It does not cover this
+        # one, and this one feeds three screens -- the question bank, a
+        # notebook's question list, and the question list on a concept -- each
+        # of which shows the STEM. A stem is the question. A learner reading a
+        # list where one row came from a chunk the ingestion gate flagged as
+        # unreliable was told nothing about it, which is the same failure
+        # `_provenance_of` was written to fix, one layer out.
+        #
+        # LEFT JOIN, deliberately. A question with no chunk -- generated
+        # before chunking, or from a source that produced none -- gets NULL
+        # rather than being dropped from the learner's own bank. NULL means
+        # "no provenance recorded", which the screen must not render as
+        # "reviewed and fine"; `0` and `false` would say exactly that.
         sql = ["""SELECT q.id, q.stem, q.family, q.difficulty, q.validation_status,
                          q.generated_at, q.primary_notebook_id, n.title AS notebook_title,
+                         q.chunk_id,
+                         ch.confidence   AS chunk_confidence,
+                         ch.needs_review AS chunk_needs_review,
                          (SELECT COUNT(*) FROM attempts a
                            WHERE a.question_id = q.id AND a.user_id = ?) AS attempt_count,
                          (SELECT a2.user_colour FROM attempts a2
                            WHERE a2.question_id = q.id AND a2.user_id = ?
                            ORDER BY a2.created_at DESC LIMIT 1) AS last_colour
                     FROM questions q
-                    JOIN notebooks n ON n.id = q.primary_notebook_id AND n.owner_id = ?"""]
+                    JOIN notebooks n ON n.id = q.primary_notebook_id AND n.owner_id = ?
+               LEFT JOIN source_chunks ch ON ch.id = q.chunk_id"""]
         params: list = [uid, uid, uid]
         if notebook_id:
             self._owned_notebook(uid, notebook_id)
@@ -877,7 +898,17 @@ class StudentAPI:
             sql.append(" AND q.validation_status = ?")
             params.append(status)
         sql.append(" ORDER BY q.generated_at DESC")
-        return [dict(r) for r in self.db.query("".join(sql), tuple(params))]
+        rows = []
+        for r in self.db.query("".join(sql), tuple(params)):
+            row = dict(r)
+            # THREE-VALUED on purpose: True, False, or None for "no chunk, so
+            # nothing is recorded". Collapsing None to False here would hand
+            # every pre-chunking question a clean bill of health it was never
+            # given, and the screen has no way to tell the difference back.
+            flag = row.get("chunk_needs_review")
+            row["chunk_needs_review"] = None if flag is None else bool(flag)
+            rows.append(row)
+        return rows
 
     def get_question(self, uid: str, qid: str) -> dict:
         row = self.db.query_one(

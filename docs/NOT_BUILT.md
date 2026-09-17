@@ -57,8 +57,12 @@ production by `student/production.check()`.
 
 | Not built | Notes |
 |---|---|
-| A packaged mobile app | The Android WebView path is manually tested (`docs/ANDROID_MANUAL_TEST.md`); there is no store build. |
+| A packaged mobile app | The Android WebView path is manually tested (`docs/ANDROID_MANUAL_TEST.md`); there is no store build, and **nothing in this repository has ever run on a phone**. |
+| A signed release APK | Needs a keystore, which is a credential. `app-debug.apk` builds. |
 | Offline use | Every screen needs the backend. An outage is reported as an outage and never as empty data. |
+| Notification DELIVERY | **New entry, 2026-09-17.** The reminder screen is now real: the trigger time, timezone, channel toggles and note text persist server-side, and the delivery log is read back from `notification_log`. Nothing is delivered. `NotificationService` takes an injected `sender` and `student/api.py` constructs it without one, so `fire()` returns `ok: false` with `"no notification sender is configured"`. "Send test" shows that reason rather than claiming a send. No OS notification is posted and no permission is requested. |
+| Spaced-repetition intervals on screen | `revision_state` computes SM-2 intervals server-side and the revision queue uses them. No screen shows a learner when a question is next due or why. |
+| Mastery and review percentages per notebook | The notebook list payload carries source, concept, question and due counts, and no mastery figure. The tile renders an em dash rather than a number nothing computed. |
 
 ## Known defects, recorded rather than fixed
 
@@ -67,6 +71,9 @@ production by `student/production.check()`.
 | TLS errors are typed as `TimeoutError` | In `benchmark/providers/nvidia.py`, a `URLError` becomes `TimeoutError` whatever caused it. Misleading in a traceback; no behavioural consequence, since both are transport failures the retry loop handles identically. |
 | Auth rejections are retried three times | A 401 will never succeed on retry. Costs two wasted attempts on a misconfigured credential, and nothing else. |
 | `runs.record` names artifacts `{timestamp}_{kind}_{config}.json` | Two runs in the same second with the same config label overwrite each other. Not reachable in the normal flow, where arms carry different labels. |
+| **Account erasure fails for any learner who has answered a question** | ADR-029. `DELETE /account` returns 500: `attempts_are_immutable_delete` refuses the delete, correctly, and a learner may also ask to be erased. Both are deliberate and they collide. A policy decision, not a bug with an obvious fix — three options are written out in the ADR. Three `xfail(strict=True)` tests hold the place. **The beta brief now warns testers.** |
+| **The operator surface is enumerable by any logged-in learner** | ADR-028. `_require_admin` answers 404 so the route is not advertised, and then the BODY says `no such route` where a genuinely absent path says `no such endpoint: GET /x`. Diffing two strings maps the whole admin API. Grants no access; defeats a control that was built on purpose. Held unfixed under the standing rule that a disclosure route is reported before it is closed. |
+| An unknown strategy and an empty queue are both 422 | `student/api.py` maps every `ValueError` out of `start_session` to 422, and the engine raises one both for a strategy name it does not know and for a known strategy that matched no questions. A learner with nothing orange asking for the orange queue gets the same status as a client bug. The message distinguishes them; the code does not, so the screen shows an error where it should show an empty state. |
 
 ## Deliberately absent, not missing
 

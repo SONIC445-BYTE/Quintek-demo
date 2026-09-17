@@ -67,7 +67,7 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
               <span style="flex:none;min-width:30px;text-align:center;padding:5px 8px;border-radius:20px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:{{ nb.dueFg }};background:{{ nb.dueBg }};border:1px solid {{ nb.dueBd }}">{{ nb.dueLabel }}</span>
             </div>
             <div style="display:flex;gap:14px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;color:#7c8386">
-              <span>{{ nb.sources }} src</span><span>{{ nb.concepts }} concepts</span><span>{{ nb.questions }} Q</span>
+              <span>{{ nb.sourceCount }} src</span><span>{{ nb.conceptCount }} concepts</span><span>{{ nb.questionCount }} Q</span>
             </div>
             <div style="display:flex;height:3px;width:100%;border-radius:2px;overflow:hidden;background:#EDEBE4">
               <span style="width:{{ nb.masteredPct }};background:#1E7A57"></span>
@@ -628,6 +628,12 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
               <span>{{ b.family }} · {{ b.notebook }}</span><span>{{ b.attempts }}</span>
             </div>
             <div style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;line-height:1.6;color:#9aa0a2">{{ b.provenance }}</div>
+            <sc-if value="{{ b.needsReview }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:8px 10px;background:rgba(181,129,43,.1);border-left:2px solid #B5812B;border-radius:3px;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:10.5px;line-height:1.5;color:#8a5f13">{{ b.reviewNote }}</div>
+            </sc-if>
+            <sc-if value="{{ b.canReport }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ b.report }}" style="align-self:flex-start;background:none;border:none;padding:2px 0;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:10.5px;font-weight:600;color:#BC4C43">Report a problem with this question</button>
+            </sc-if>
           </div>
         </sc-for>
       </div>
@@ -1764,6 +1770,29 @@ const EDGES = [
  * refuses an unknown kind with a 400 naming the valid set, so a drift here
  * shows up as a learner pressing a button that does nothing. The labels are
  * what a learner would actually say; "wrong_answer_keyed" is not. */
+/* The six selection strategies `RevisionEngine.STRATEGIES` accepts, and what
+ * each one actually does.
+ *
+ * Both lists are transcribed from `RevisionEngine.select_questions`, step by
+ * step, rather than written to make each strategy look equally considered.
+ * `unseen` really is one step; padding it to five would describe selection
+ * that does not happen. Anything not in this list is rejected by the server
+ * with 422, which is how the previous three names were found. */
+const STRATEGIES = [
+  ['adaptive', 'Adaptive'], ['red', 'Red only'], ['orange', 'Orange only'],
+  ['green', 'Green only'], ['due', 'Due now'], ['unseen', 'Unseen'],
+];
+const STRATEGY_ORDER = {
+  adaptive: ['Red knowledge gaps', 'Red concepts', 'Orange knowledge gaps',
+    'Orange concepts', 'Questions you previously got wrong', 'Questions due for review',
+    'Concepts neighbouring the weak ones', 'Questions you have never seen'],
+  red: ['Questions on your red concepts'],
+  orange: ['Questions on your orange concepts'],
+  green: ['Questions on your green concepts'],
+  due: ['Questions whose review date has passed, earliest first'],
+  unseen: ['Questions you have never attempted, newest first'],
+};
+
 const REPORT_KINDS = [
   ['factually_wrong',     'The content is wrong'],
   ['wrong_answer_keyed',  'The marked answer is wrong'],
@@ -2026,9 +2055,28 @@ class Component extends DCLogic {
     questionState: 'off', questionError: '',
     attemptState: 'idle', attemptError: '',
     reportOpen: false, reportSent: false, reportError: '',
+    /* WHICH question a report is about.
+     *
+     * The report path used to read `liveQuestionId`, which is only set
+     * inside a revision session. So the one screen a learner could report
+     * from was the reveal -- and the question bank, a notebook's question
+     * list and a concept's question list could all show a question with no
+     * way to say anything about it. `null` means "whatever is on screen in
+     * the loop". */
+    reportTarget: null,
     liveGraph: null, graphState: 'off', graphError: '',
     scopeText: '', scopeState: 'off',
-    weakFilter: 'All', query: '', cptFrom: 'weak', qCount: 10, strategy: 'WEAKNESS_FIRST',
+    /* The screens APP_BEHAVIOUR 2.6-2.8 recorded as FIXTURE. Each one has a
+     * route behind it and had none of it wired: the question bank, the
+     * demonstration library, the notebook list and the reminder settings all
+     * rendered module constants, and the progress screen rendered a heatmap
+     * synthesised from `i % 12`. */
+    liveBank: null, bankState: 'off', bankError: '',
+    liveNotebooks: null, nbsState: 'off', nbsError: '',
+    liveNotifPrefs: null, notifState: 'off', notifError: '',
+    notifHistory: [], notifBusy: '', notifSaveError: '',
+    demosState: 'off', demosError: '',
+    weakFilter: 'All', query: '', cptFrom: 'weak', qCount: 10, strategy: 'adaptive',
     studio: {}, studioOut: false, studioAct: null, bankFilter: 'All',
     evalApi: null, evalState: 'loading', howOpen: false, openTrack: null,
     trigger: '20:00', channels: { push: true, email: false }, tested: false,
@@ -2083,7 +2131,17 @@ class Component extends DCLogic {
   setCount = (n) => () => this.setState({ qCount: n, custom: false });
   openCustom = () => this.setState({ custom: true });
   setStrategy = (v) => () => this.setState({ strategy: v });
-  setTrigger = (t) => () => this.setState({ trigger: t, tested: false, customTime: false });
+  /* Every reminder control writes through to the server.
+   *
+   * The patch is passed EXPLICITLY rather than read back out of state after
+   * `setState`, because `setState` is not guaranteed to have applied by the
+   * time the next statement runs -- reading it back would save the previous
+   * value and leave the screen showing one time while the server held
+   * another. */
+  setTrigger = (t) => () => {
+    this.setState({ trigger: t, tested: false, customTime: false });
+    this.saveNotifPrefs({ trigger_time: t });
+  };
   openCustomTime = () => this.setState({ customTime: true });
   /* Back to the start of the flow, not wherever it was left.
    *
@@ -2288,6 +2346,254 @@ class Component extends DCLogic {
     };
   };
 
+  /* --- the progress screen ---------------------------------------------
+   *
+   * Everything below reads `liveProgress` and `liveConcepts`, which
+   * `loadLearnerState` already fetches. No new request: the data was arriving
+   * and the screen was rendering constants next to it. */
+
+  /* Twelve weeks of activity as 84 cells, oldest first, ending today.
+   *
+   * Keyed by date. See the comment at the call site for why positional
+   * layout is the bug this exists to avoid. */
+  heatCells = () => {
+    const s = this.state;
+    const shade = (n) => ['#EDEBE4', 'rgba(30,122,87,.25)', 'rgba(30,122,87,.55)', '#1E7A57']
+      [n <= 0 ? 0 : n < 3 ? 1 : n < 8 ? 2 : 3];
+
+    if (s.learnerState !== 'ready') {
+      if (s.learnerState === 'error') return [];
+      /* The design file's pattern, unchanged, for the disconnected file. */
+      return Array.from({ length: 84 }, (_, i) => ({
+        bg: ['#EDEBE4', 'rgba(30,122,87,.25)', 'rgba(30,122,87,.55)', '#1E7A57']
+          [[0, 0, 1, 2, 3, 2, 1, 3, 2, 0, 1, 2][i % 12] * ((i % 7 === 6) ? 0 : 1)],
+      }));
+    }
+
+    /* The layout itself comes from `activityGrid` in the client module, which
+     * is where it can be tested directly -- including the mutation that made
+     * extracting it worthwhile: a positional `.map()` over `activity` passes a
+     * naive test and paints a history nobody lived. The module is loaded by
+     * the time `learnerState` can be 'ready', because reaching 'ready'
+     * required a fetch through it. */
+    const api = s.studentApi;
+    if (!api || !api.activityGrid) return [];
+    return api.activityGrid((s.liveProgress && s.liveProgress.activity) || [])
+      .map(({ date, n }) => ({
+        bg: shade(n),
+        title: date + ' · ' + n + (n === 1 ? ' attempt' : ' attempts'),
+      }));
+  };
+
+  /* The three headline counts, and the per-concept list under them.
+   *
+   * The constants were `96 Mastered / 62 Due / 30 Struggling` and a six-row
+   * `CONCEPT_MASTERY` table. Each live number below is one the server
+   * actually reports: GREEN concepts, the due count, RED concepts. ORANGE is
+   * deliberately absent rather than folded into "Struggling" -- orange means
+   * unsettled, and counting it as struggling would overstate what the learner
+   * is failing at. */
+  masteryView = () => {
+    const s = this.state;
+    if (s.learnerState !== 'ready') {
+      if (s.learnerState === 'error') return { masteryStats: [], conceptMastery: [] };
+      return {
+        masteryStats: [{ n: 96, label: 'Mastered', color: '#1E7A57' },
+          { n: 62, label: 'Due', color: '#B5812B' },
+          { n: 30, label: 'Struggling', color: '#BC4C43' }],
+        conceptMastery: CONCEPT_MASTERY.map(([name, state, color, pct, meta]) =>
+          ({ name, state, color, pct, meta })),
+      };
+    }
+
+    const counts = (s.liveProgress && s.liveProgress.colour_counts) || {};
+    const colourOf = (c) => ({ RED: '#BC4C43', ORANGE: '#B5812B', GREEN: '#1E7A57' }
+                              [String(c || '').toUpperCase()] || '#B5812B');
+    /* `masteryPercent` returns null for a concept with no attempts, and the
+     * screen renders that as an em dash. See the module for why it is not 0. */
+    const api = s.studentApi;
+    const pctOf = (right, wrong) => {
+      const p = (api && api.masteryPercent)
+        ? api.masteryPercent(right, wrong)
+        : ((right + wrong) > 0 ? Math.round((right / (right + wrong)) * 100) : null);
+      return p === null ? '—' : p + '%';
+    };
+    return {
+      masteryStats: [
+        { n: counts.GREEN || 0, label: 'Mastered', color: '#1E7A57' },
+        { n: (s.liveProgress && s.liveProgress.due_count) || 0, label: 'Due', color: '#B5812B' },
+        { n: counts.RED || 0, label: 'Struggling', color: '#BC4C43' }],
+      conceptMastery: (s.liveConcepts || []).map((c) => {
+        const right = Number(c.correct_count) || 0;
+        const wrong = Number(c.wrong_count) || 0;
+        const seen = right + wrong;
+        const colour = String(c.colour || '').toUpperCase();
+        return {
+          name: c.canonical_name || c.concept_id,
+          state: colour ? colour.charAt(0) + colour.slice(1).toLowerCase() : 'Unseen',
+          color: colourOf(colour),
+          /* A concept with no attempts has NO percentage, not a percentage of
+           * zero. "0%" is a measurement, and it would be read as "you get this
+           * wrong every time" by a learner who has simply never been asked. */
+          pct: pctOf(right, wrong),
+          meta: seen
+            ? right + ' of ' + seen + ' correct'
+              + (c.last_seen_at ? ' · last seen ' + String(c.last_seen_at).slice(0, 10) : '')
+            : 'not attempted yet',
+        };
+      }),
+    };
+  };
+
+  /* The delivery log, and what the last line of the reminder screen may claim.
+   *
+   * `lastNotif` was the string "Delivered 14 Aug at 20:00". With a backend
+   * there is a row in `notification_log` or there is not, and the difference
+   * matters: no sender is configured on any deployment today, so a test send
+   * records a FAILED row with the reason, and the screen has to say that
+   * rather than relabel its own button "Sent". */
+  /* Consecutive days ending today or yesterday, from the activity the server
+   * returned. Yesterday counts as the end of a live streak because a learner
+   * who has not studied yet today has not broken one. */
+  streakLabel = () => {
+    const s = this.state;
+    if (s.learnerState !== 'ready') {
+      if (s.learnerState === 'error') return '';
+      return (this.props.showStreak ?? true) ? '41-day streak' : '84 sessions logged';
+    }
+    const api = s.studentApi;
+    const activity = (s.liveProgress && s.liveProgress.activity) || [];
+    const n = (api && api.studyStreak) ? api.studyStreak(activity) : 0;
+    const total = (s.liveProgress && s.liveProgress.attempts_total) || 0;
+    if (n > 1) return n + '-day streak';
+    /* One day is not a streak, and zero is not a zero-day streak. Falls back
+     * to the count of attempts, which is a fact either way. */
+    return total + (total === 1 ? ' attempt logged' : ' attempts logged');
+  };
+
+  notifVals = () => {
+    const s = this.state;
+    const live = s.notifState === 'ready';
+    if (!live) {
+      const failed = s.notifState === 'error';
+      return {
+        lastNotif: failed ? 'Reminder settings could not be loaded.'
+                          : 'Delivered 14 Aug at ' + s.trigger,
+        lastNotifFg: failed ? '#BC4C43' : '#1E7A57',
+        testNotif: this.sendTest,
+        testLabel: failed ? 'Unavailable' : s.tested ? 'Sent' : 'Send test',
+      };
+    }
+    const last = (s.notifHistory || [])[0];
+    const busy = s.notifBusy === 'testing';
+    const problem = s.notifSaveError;
+    return {
+      lastNotif: problem ? 'Not sent — ' + problem
+        : !last ? 'No reminder has been sent to this account yet.'
+        : (last.status === 'sent' ? 'Delivered ' : 'Failed ')
+          + String(last.scheduled_at || '').slice(0, 16).replace('T', ' ')
+          + (last.detail && last.status !== 'sent' ? ' — ' + last.detail : ''),
+      lastNotifFg: (problem || (last && last.status !== 'sent')) ? '#BC4C43' : '#1E7A57',
+      testNotif: this.sendTest,
+      testLabel: busy ? 'Sending…' : s.tested ? 'Sent' : 'Send test',
+    };
+  };
+
+  /* The learner's notebooks, in the shape every notebook tile expects.
+   *
+   * One normalised list rather than a ternary at each of the three use sites
+   * (home tiles, settings list, notebook picker), because those three drifting
+   * apart is how a learner sees three notebooks on one screen and two on the
+   * next. `sourceCount`, `conceptCount` and `questionCount` are named
+   * explicitly: the fixture's `sources`/`concepts`/`questions` were numbers,
+   * and the server's `sources` is an array, so reusing the names would render
+   * "[object Object] sources" or silently count wrong. */
+  notebookRows = () => {
+    const s = this.state;
+    if (s.nbsState !== 'ready') {
+      if (s.nbsState === 'error') return [];
+      return NOTEBOOKS.map((n) => ({
+        id: n.id, title: n.title, subject: n.subject,
+        sourceCount: n.sources, conceptCount: n.concepts, questionCount: n.questions,
+        due: n.due, mastered: n.mastered, review: n.review,
+      }));
+    }
+    return (s.liveNotebooks || []).map((n) => ({
+      id: n.id,
+      title: n.title || 'Untitled notebook',
+      subject: n.subject || '',
+      sourceCount: Number(n.source_count) || 0,
+      conceptCount: Number(n.concept_count) || 0,
+      questionCount: Number(n.question_count) || 0,
+      due: Number(n.due_count) || 0,
+      /* No mastery or review percentage in this payload, so the tile omits
+       * them rather than showing a number. Inventing a percentage to keep the
+       * tile's layout intact is exactly how the constants got there. */
+      mastered: null, review: null,
+    }));
+  };
+
+  /* The question bank.
+   *
+   * `validation_status` is the server's word and is shown as the server's
+   * word. The fixture used 'Approved' / 'Flagged' / 'Pending'; the column
+   * holds 'approved', 'rejected', 'pending' and 'flagged'. Title-casing the
+   * real value keeps the filter honest instead of mapping an unknown status
+   * onto the nearest familiar one. */
+  bankView = () => {
+    const s = this.state;
+    const wanted = String(s.bankFilter || 'All').toLowerCase();
+    if (s.bankState !== 'ready') {
+      if (s.bankState === 'error') return [];
+      return BANK.filter((b) => wanted === 'all' || b[2].toLowerCase() === wanted)
+        .map(([id, stem, validation, family, notebook, concepts, attempts, provenance]) => ({
+          id, stem, validation, family, notebook, attempts, provenance,
+          concepts: concepts.map(([name, subject]) => ({ name, color: SUBJ[subject].color })),
+          /* The same keys as the live branch. A row missing them binds
+           * `undefined` into the template, and `sc-if` on undefined is a
+           * hidden control rather than a visible error -- which is how a
+           * report button quietly disappears. */
+          needsReview: false, reviewNote: '',
+          canReport: false, report: this.noopPick,
+        }));
+    }
+    const title = (v) => {
+      const t = String(v || '').trim();
+      return t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : 'Unknown';
+    };
+    const canReport = !!(s.studentApi && s.studentApi.reportQuestion);
+    return (s.liveBank || [])
+      .filter((q) => wanted === 'all' || String(q.validation_status || '').toLowerCase() === wanted)
+      .map((q) => ({
+        id: q.id,
+        stem: q.stem || '',
+        validation: title(q.validation_status),
+        family: q.family || '',
+        notebook: q.notebook_title || '',
+        attempts: Number(q.attempt_count) || 0,
+        /* No passage is quoted in a list row -- that is the concept screen's
+         * job and it does fetch it. What DOES travel with the list is the
+         * ingestion gate's verdict on the chunk behind the question. */
+        provenance: q.generated_at ? 'Generated ' + String(q.generated_at).slice(0, 10) : '',
+        /* THREE-VALUED, and only `true` raises the banner.
+         *
+         * `null` means the question has no chunk, so nothing was recorded --
+         * which is not the same as "checked and fine" and must not be shown
+         * as either a warning or a clean bill. It says so in the row's
+         * provenance line instead. */
+        needsReview: q.chunk_needs_review === true,
+        reviewNote: q.chunk_needs_review === true
+          ? 'The passage this came from was flagged during extraction'
+            + (typeof q.chunk_confidence === 'number'
+               ? ' (confidence ' + q.chunk_confidence.toFixed(2) + ')' : '')
+            + '. Check it against your own source before trusting it.'
+          : '',
+        concepts: [],
+        canReport,
+        report: this.openReportFor(q.id),
+      }));
+  };
+
   loadLearnerState = (api) => {
     const client = api || this.state.studentApi;
     if (!client || !client.progress) { this.setState({ learnerState: 'off' }); return null; }
@@ -2383,14 +2689,136 @@ class Component extends DCLogic {
       .catch(() => this.setState({ scopeState: 'error', scopeText: '' }));
   };
 
+  /* The demonstration library.
+   *
+   * Two consumers, one fetch. The generation screen needs the list to offer a
+   * style reference, and the demonstrations screen renders the library itself.
+   * They used to disagree: the picker was live and the screen was `DEMOS`, so
+   * a learner could read three demonstrations on one screen and be offered
+   * none on the next.
+   *
+   * `demosState` is added for the screen. The picker keeps treating a failure
+   * as an empty list, because there the list is an OFFER -- showing references
+   * that may not exist would let a learner pick one generation cannot apply --
+   * whereas the screen is a CLAIM about what they have saved, and "none" is
+   * the wrong thing to say when the truth is "could not ask". */
   loadDemos = (api) => {
     const client = api || this.state.studentApi;
-    if (!client || !client.listDemos) return;
-    client.listDemos()
-      .then((payload) => this.setState({ availableDemos: payload.demos || [] }))
-      /* An empty list is the honest fallback: showing references that may not
-       * exist would let a learner pick one generation could not apply. */
-      .catch(() => this.setState({ availableDemos: [] }));
+    if (!client || !client.listDemos) { this.setState({ demosState: 'off' }); return null; }
+    this.setState({ demosState: 'loading', demosError: '' });
+    return client.listDemos()
+      .then((payload) => this.setState({
+        demosState: 'ready', demosError: '', availableDemos: payload.demos || [],
+      }))
+      .catch((err) => this.setState({
+        demosState: 'error', availableDemos: [],
+        demosError: (err && err.message) ? err.message : String(err),
+      }));
+  };
+
+  /* The question bank.
+   *
+   * Every question this learner owns, with its validation status. Fetched on
+   * screen entry rather than at boot: the bank grows as generation runs, and a
+   * list read at login is wrong by the time anyone opens it.
+   *
+   * The FILTER IS APPLIED CLIENT-SIDE over a single unfiltered fetch, not by
+   * refetching per tab. `/questions` accepts a `status` parameter, but using
+   * it would leave the screen briefly showing the previous tab's results while
+   * the new request is in flight -- rows under a heading that does not
+   * describe them, which is worse than a moment's wait. */
+  loadBank = (client) => {
+    const api = client || this.state.studentApi;
+    if (!api || !api.questionBank) { this.setState({ bankState: 'off' }); return null; }
+    this.setState({ bankState: 'loading', bankError: '' });
+    return api.questionBank()
+      .then((rows) => this.setState({ bankState: 'ready', liveBank: rows || [] }))
+      .catch((err) => this.setState({
+        bankState: 'error', liveBank: null,
+        bankError: (err && err.message) ? err.message : String(err),
+      }));
+  };
+
+  /* The learner's notebooks.
+   *
+   * This one mattered more than it looks. `NOTEBOOKS` is three fixtures with
+   * ids 'cardio', 'haem' and 'renal', and every notebook tile on the home
+   * screen opened one of them. With a backend configured those ids belong to
+   * nobody, so the tiles were navigation into another learner's vocabulary --
+   * a list of somebody else's notebooks rendered as if it were yours. */
+  loadNotebooks = (client) => {
+    /* `client` is passed explicitly at sign-in: `setState({studentApi})` may not
+     * have applied by the time this runs, and reading it back would see null
+     * and report the screen as having no backend. */
+    const api = client || this.state.studentApi;
+    if (!api || !api.notebooks) { this.setState({ nbsState: 'off' }); return null; }
+    this.setState({ nbsState: 'loading', nbsError: '' });
+    return api.notebooks()
+      .then((rows) => this.setState({ nbsState: 'ready', liveNotebooks: rows || [] }))
+      .catch((err) => this.setState({
+        nbsState: 'error', liveNotebooks: null,
+        nbsError: (err && err.message) ? err.message : String(err),
+      }));
+  };
+
+  /* Reminder settings, and the delivery log behind them.
+   *
+   * Both together. The settings say what SHOULD happen and the history says
+   * what DID; showing the first while the second failed is how a screen ends
+   * up announcing "Delivered 14 Aug" with nothing behind it, which is what the
+   * constant did. */
+  loadNotifPrefs = (client) => {
+    const api = client || this.state.studentApi;
+    if (!api || !api.notificationPrefs) { this.setState({ notifState: 'off' }); return null; }
+    this.setState({ notifState: 'loading', notifError: '' });
+    return Promise.all([api.notificationPrefs(), api.notificationHistory()])
+      .then(([prefs, history]) => this.setState({
+        notifState: 'ready', liveNotifPrefs: prefs || null,
+        notifHistory: history || [],
+        /* The controls follow the server, not the other way round. Seeding
+         * them from the fixture defaults and then saving would write
+         * 20:00/push-on over whatever the learner had actually chosen. */
+        trigger: (prefs && prefs.trigger_time) || this.state.trigger,
+        channels: {
+          push: !!(prefs && prefs.push_enabled),
+          email: !!(prefs && prefs.email_enabled),
+        },
+        savedNote: (prefs && prefs.note_text) || '',
+        noteDraft: (prefs && prefs.note_text) || '',
+      }))
+      .catch((err) => this.setState({
+        notifState: 'error', liveNotifPrefs: null, notifHistory: [],
+        notifError: (err && err.message) ? err.message : String(err),
+      }));
+  };
+
+  /* Persist a reminder preference.
+   *
+   * Every control on the screen routes through here, so there is one place
+   * where a save can fail and one place that says so. A toggle that flips in
+   * the UI and does not reach the server is the same lie as a fixture, just
+   * harder to spot. */
+  saveNotifPrefs = (patch) => {
+    const api = this.state.studentApi;
+    if (!api || !api.setNotificationPrefs) return null;
+    this.setState({ notifBusy: 'saving', notifSaveError: '' });
+    const s = this.state;
+    return api.setNotificationPrefs({
+      trigger_time: s.trigger, push_enabled: s.channels.push,
+      email_enabled: s.channels.email, note_text: s.savedNote,
+      ...(patch || {}),
+    })
+      .then((prefs) => this.setState({
+        notifBusy: '', notifSaveError: '', liveNotifPrefs: prefs || null,
+      }))
+      /* The control is NOT reverted on failure. The learner's intent is still
+       * on screen and the error says it was not saved; silently snapping the
+       * toggle back would look like the app disagreeing with them rather than
+       * like a request that failed. */
+      .catch((err) => this.setState({
+        notifBusy: '',
+        notifSaveError: (err && err.message) ? err.message : String(err),
+      }));
   };
 
   ingestVals() {
@@ -2474,11 +2902,59 @@ class Component extends DCLogic {
     const cur = st.families || [];
     return { families: cur.indexOf(l) >= 0 ? cur.filter((x) => x !== l) : cur.concat([l]) };
   });
-  toggleChannel = (k) => () => this.setState((st) => ({ channels: { ...st.channels, [k]: !st.channels[k] } }));
-  sendTest = () => this.setState({ tested: true });
+  toggleChannel = (k) => () => {
+    const next = { ...this.state.channels, [k]: !this.state.channels[k] };
+    this.setState({ channels: next });
+    this.saveNotifPrefs({ push_enabled: !!next.push, email_enabled: !!next.email });
+  };
+
+  /* Send one reminder now, and report what actually happened.
+   *
+   * This button used to set `tested: true` and relabel itself "Sent". Nothing
+   * was delivered. The route it now posts to returns `ok: false` with a reason
+   * when no sender is configured -- which is the case on every deployment
+   * today -- and the screen says so rather than claiming a delivery. A button
+   * that reports success for an unsent notification is worse than one that
+   * does nothing, because it is the control a learner would use to satisfy
+   * themselves that reminders work. */
+  sendTest = () => {
+    const api = this.state.studentApi;
+    if (!api || !api.testNotification) { this.setState({ tested: true }); return null; }
+    this.setState({ notifBusy: 'testing', notifSaveError: '' });
+    return api.testNotification()
+      .then((res) => {
+        const ok = !!(res && res.ok);
+        this.setState({
+          notifBusy: '', tested: ok,
+          notifSaveError: ok ? '' : ((res && res.detail) || 'the notification was not sent'),
+        });
+        /* Re-read the log rather than appending what we just sent. The row the
+         * server wrote is the record; a row this screen invented would agree
+         * with itself even when the insert failed. */
+        return api.notificationHistory()
+          .then((history) => this.setState({ notifHistory: history || [] }))
+          .catch(() => {});
+      })
+      .catch((err) => this.setState({
+        notifBusy: '', tested: false,
+        notifSaveError: (err && err.message) ? err.message : String(err),
+      }));
+  };
   generate = () => this.setState({ generated: true });
 
-  toggleReport = () => this.setState((st) => ({ reportOpen: !st.reportOpen }));
+  /* Closing the sheet CLEARS the target.
+   *
+   * Otherwise a target set on the question bank would still be there when the
+   * learner next opened the sheet from the revision reveal, and the report
+   * would be filed against a question they are not looking at. */
+  toggleReport = () => this.setState((st) => (st.reportOpen
+    ? { reportOpen: false, reportTarget: null }
+    : { reportOpen: true }));
+
+  /* Open the report sheet for a specific question, from any screen that
+   * shows one. */
+  openReportFor = (qid) => () => this.setState({
+    reportTarget: qid, reportOpen: true, reportSent: false, reportError: '' });
 
   /* Which of the four states a screen is in, decided in ONE place.
    *
@@ -2513,7 +2989,7 @@ class Component extends DCLogic {
    * `reportError` carries the server's message. */
   sendReport = (kind) => () => {
     const api = this.state.studentApi;
-    const qid = this.state.liveQuestionId;
+    const qid = this.state.reportTarget || this.state.liveQuestionId;
     if (!api || !api.reportQuestion || !qid) return;
     this.setState({ reportOpen: false });
     api.reportQuestion(qid, kind, '')
@@ -2529,16 +3005,23 @@ class Component extends DCLogic {
     import('./quintek-eval-api.js')
       .then((api) => this.setState({ evalApi: api, evalState: api.state }))
       .catch(() => this.setState({ evalState: 'error' }));
-    /* The learner backend. Only ONE interaction is wired to it so far --
-     * "write questions" on the Make screen. Everything else on this screen
-     * still runs on the in-file constants, deliberately: wiring a screen at a
-     * time keeps the debugging surface small enough to actually debug. */
+    /* The learner backend.
+     *
+     * Two things are fetched at sign-in rather than on screen entry, because
+     * the first screen a learner sees needs both: `loadLearnerState` for the
+     * queue, the weak list and the progress ring, and `loadNotebooks` for the
+     * notebook tiles under them. Everything else waits for its own screen.
+     *
+     * The demonstration library is fetched here too, because the generation
+     * screen offers it as a picker and reaching that screen does not
+     * necessarily pass through the demonstrations screen. */
     import('./quintek-student-api.js')
       .then((api) => {
         this.setState({ studentApi: api.configured ? api : null });
         if (!api.configured || !api.capabilities) return null;
         this.loadDemos(api);
         this.loadLearnerState(api);
+        this.loadNotebooks(api);
         return api.capabilities()
           .then((caps) => this.setState({ sourceCaps: caps.sources || {} }))
           /* A capability lookup that fails leaves every kind offered. Hiding
@@ -2612,11 +3095,25 @@ class Component extends DCLogic {
 
   reheat() { const cold = this.heat <= 0; this.heat = 90; if (cold) this.loop(); }
 
-  /* Entering a screen is what fetches it. See the loaders above. */
+  /* Entering a screen is what fetches it. See the loaders above.
+   *
+   * On entry rather than at boot, for every screen and for the same two
+   * reasons: a learner who never opens the question bank should not pay for
+   * it, and a payload fetched at login is stale by the time the screen opens.
+   * `progress` is the exception that needs no line here -- it reads what
+   * `loadLearnerState` already fetched at sign-in for the home screen. */
   go = (route) => () => {
     this.setState({ route });
     if (route === 'graph') this.loadGraph(null);
     if (route === 'trust' || route === 'more') this.loadScope();
+    if (route === 'bank') this.loadBank();
+    if (route === 'demos' || route === 'studio') this.loadDemos();
+    if (route === 'home') this.loadNotebooks();
+    if (route === 'settings') { this.loadNotifPrefs(); this.loadNotebooks(); }
+    /* The dashboard's counts and recommendation come from the same payload
+     * the home screen uses, and it is the screen most likely to be opened
+     * after a session has changed them. */
+    if (route === 'dashboard' || route === 'progress') this.loadLearnerState();
   };
   openNotebook = (id) => () => {
     this.setState({ route: 'notebook', notebook: id });
@@ -2990,7 +3487,9 @@ class Component extends DCLogic {
     this.setState({ route: 'dashboard' });
     const api = this.state.studentApi;
     if (!api || !api.startSession) return;
-    this.startLiveSession(this.state.qCount, 'adaptive');
+    /* The learner's chosen strategy, not a hardcoded 'adaptive'. The picker
+     * set state that nothing read. */
+    this.startLiveSession(this.state.qCount, this.state.strategy);
   };
 
   restart = () => { this.attempts = []; this.setState({ qi: 0, picked: null, submitted: false, judgement: null, gaps: [], done: false }); };
@@ -3678,12 +4177,94 @@ class Component extends DCLogic {
     const s = this.state;
     const live = this.learnerView();
     const r = s.route;
-    const nb = NOTEBOOKS.find((n) => n.id === s.notebook) || NOTEBOOKS[0];
+    /* --- the screens APP_BEHAVIOUR 2.6-2.8 recorded as FIXTURE ------------
+     *
+     * Each list is built ONCE here and used wherever the screen needs it, so
+     * a list and the count printed beside it cannot come from different
+     * sources. That exact split is what made the search screen list the
+     * learner's own concepts and announce a fixture's total. */
+    const notebookRows = this.notebookRows();
+    const bankRows = this.bankView();
+    const notifLive = s.notifState === 'ready' && !!s.liveNotifPrefs;
+    const dashLive = s.learnerState === 'ready' && !!s.liveDashboard;
+    const dashCounts = (dashLive && s.liveDashboard.colour_counts) || {};
+
+    /* Demonstrations, normalised from whichever source is in play. The server
+     * stores the SHAPE of an example question as named columns; the fixture
+     * held the same thing as `[key, value]` pairs. */
+    const DEMO_SPEC = [['question_type', 'question type'], ['difficulty', 'difficulty'],
+      ['reasoning_depth', 'reasoning depth'], ['stem_structure', 'stem structure'],
+      ['question_target', 'question target'],
+      ['distractor_strategy', 'distractor strategy'], ['answer_format', 'answer format']];
+    const demoRows = s.demosState === 'ready'
+      ? (s.availableDemos || []).map((d) => ({
+        id: d.id, title: d.title || 'Untitled demonstration',
+        created: d.created_at ? String(d.created_at).slice(0, 10) : '',
+        question: d.question || '',
+        /* Only the fields this demonstration actually carries. A blank row
+         * rendered for every column would describe a specification the
+         * generator was never given. */
+        spec: DEMO_SPEC.filter(([k]) => d[k]).map(([k, label]) => ({ k: label, v: d[k] })),
+        /* The server does not count how many questions were framed from a
+         * demonstration, so nothing is claimed about it. */
+        usage: '',
+      }))
+      : s.demosState === 'error' ? []
+      : DEMOS.map(([id, title, created, question, spec, usage]) => ({
+        id, title, created, question, usage, spec: spec.map(([k, v]) => ({ k, v })) }));
+
+    /* What the "Concept graph" row on the More screen claims. "14 concepts,
+     * 7 crossing subjects" was true of the fixture graph only. */
+    const graphNote = (s.graphState === 'ready' && s.liveGraph)
+      ? ((s.liveGraph.nodes || []).length + ' concepts, '
+         + (s.liveGraph.edges || []).filter((e) => e.cross_subject).length + ' crossing subjects')
+      : (s.graphState === 'off' ? '14 concepts, 7 crossing subjects'
+                                : 'Concepts and how they connect');
+
+    /* The notebook whose screen is open.
+     *
+     * Looked up in the LIVE list first. `NOTEBOOKS.find(...) || NOTEBOOKS[0]`
+     * alone meant that with a backend configured -- where `s.notebook` holds a
+     * real id like `nb_4afd54...` and the fixtures are 'cardio', 'haem' and
+     * 'renal' -- the lookup always missed and always fell through to the first
+     * fixture. Every notebook a learner opened was titled "Cardiology" and
+     * headed "4 sources · 31 concepts", whichever notebook they had opened. */
+    const nb = notebookRows.find((n) => n.id === s.notebook)
+              || notebookRows[0]
+              || { id: '', title: 'Notebook', subject: '',
+                   sourceCount: 0, conceptCount: 0, questionCount: 0 };
+    /* SCREEN SUBTITLES.
+     *
+     * Every one of these was a sentence with a number in it: "9 open gaps",
+     * "3 demonstrations", "188 concepts tracked", "30 due", "14 concepts · 18
+     * links · 7 cross subjects". They are the first thing on each screen and
+     * they were describing the design file's fixtures while the body below
+     * them rendered the learner's own data -- a header and a list disagreeing,
+     * with the header the part that gets remembered.
+     *
+     * Each one below either counts what is actually on the screen or says
+     * nothing. Saying nothing is the right answer more often than it looks:
+     * a subtitle exists to orient, and an orienting sentence that is wrong is
+     * worse than a plain label. */
+    const n_of = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
+    const learnerReady = s.learnerState === 'ready';
+    const gapCount = learnerReady
+      ? (s.liveGaps || []).filter((g) => String(g.colour || '').toUpperCase() !== 'GREEN').length
+      : null;
     const heads = {
-      today: ['Today', 'Thursday 15 August · reminder at 20:00', false],
-      weak: ['Forgotten / weak', '9 open gaps, graded by you', false],
+      today: ['Today', learnerReady
+        ? (notifLive && s.liveNotifPrefs.trigger_time
+           ? 'Reminder at ' + s.liveNotifPrefs.trigger_time : 'Your queue and your open gaps')
+        : s.learnerState === 'error' ? 'Could not load your day'
+        : 'Thursday 15 August · reminder at 20:00', false],
+      weak: ['Forgotten / weak', gapCount === null
+        ? (s.learnerState === 'error' ? 'Could not load your gaps' : '9 open gaps, graded by you')
+        : n_of(gapCount, 'open gap') + ', graded by you', false],
       more: ['More', 'Search, library and settings', false],
-      dashboard: ['Revision', 'Queue built at 20:00 today', false],
+      dashboard: ['Revision', dashLive
+        ? n_of(s.liveDashboard.recommended_question_count || 0, 'question') + ' recommended'
+        : s.learnerState === 'error' ? 'Could not load your queue'
+        : 'Queue built at 20:00 today', false],
       make: ['Make questions', nb.title, true, 'notebook', '← Notebook'],
       srcview: ['In the source', 'Where this question came from', true, 'revise', '← Question'],
       trust: ['Quintek', 'How reliable your question engine is', true, 'more', '← More'],
@@ -3691,12 +4272,29 @@ class Component extends DCLogic {
       model: ['Configuration profile', 'Benchmark evidence', true, 'chooses', '← BENCHMARK'],
       modelcmp: ['Compare configurations', 'Task by task', true, 'chooses', '← BENCHMARK'],
       studio: ['Question studio', 'Grounded in your sources', true, 'more', '← More'],
-      demos: ['Demonstrations', 'Framing library · 3 demonstrations', true, 'more', '← More'],
+      demos: ['Demonstrations', s.demosState === 'ready'
+        ? 'Framing library · ' + n_of(demoRows.length, 'demonstration')
+        : s.demosState === 'error' ? 'Framing library · could not load'
+        : 'Framing library · 3 demonstrations', true, 'more', '← More'],
       bank: ['Question bank', 'Provenance and validation state', true, 'more', '← More'],
-      progress: ['Progress', '188 concepts tracked · demo data', true, 'more', '← More'],
-      home: ['Notebooks', 'Thursday 15 August · 30 due', true, 'more', '← More'],
-      notebook: [nb.title, nb.sources + ' sources · ' + nb.concepts + ' concepts', true, 'home', '← Notebooks'],
-      graph: ['Concept graph', '14 concepts · 18 links · 7 cross subjects', false],
+      /* "188 concepts tracked · demo data" said the quiet part out loud and
+       * was still wrong: the number was not 188 and nothing was tracked. */
+      progress: ['Progress', learnerReady
+        ? n_of((s.liveProgress && s.liveProgress.concepts_tracked) || 0, 'concept') + ' tracked'
+        : s.learnerState === 'error' ? 'Could not load your progress'
+        : '188 concepts tracked · demo data', true, 'more', '← More'],
+      home: ['Notebooks', s.nbsState === 'ready'
+        ? n_of(notebookRows.length, 'notebook') + ' · '
+          + notebookRows.reduce((t, x) => t + (x.due || 0), 0) + ' due'
+        : s.nbsState === 'error' ? 'Could not load your notebooks'
+        : 'Thursday 15 August · 30 due', true, 'more', '← More'],
+      notebook: [nb.title, nb.sourceCount + ' sources · ' + nb.conceptCount + ' concepts', true, 'home', '← Notebooks'],
+      graph: ['Concept graph', (s.graphState === 'ready' && s.liveGraph)
+        ? n_of((s.liveGraph.nodes || []).length, 'concept') + ' · '
+          + n_of((s.liveGraph.edges || []).length, 'link') + ' · '
+          + (s.liveGraph.edges || []).filter((e) => e.cross_subject).length + ' cross subjects'
+        : s.graphState === 'error' ? 'Could not load the graph'
+        : '14 concepts · 18 links · 7 cross subjects', false],
       revise: ['Revision', 'Mixed queue · spaced repetition', false],
       onboard: ['', '', false],
       concept: [(s.cpt && s.cpt.name) || 'Concept', 'Concept in ' + ((s.cpt && SUBJ[s.cpt.subject].label.charAt(0) + SUBJ[s.cpt.subject].label.slice(1).toLowerCase()) || ''), true, s.cptFrom || 'weak', '← Back'],
@@ -3789,8 +4387,22 @@ class Component extends DCLogic {
      * until then -- that is what keeps the answer off the device while the
      * learner is still deciding. */
     const reveal = s.liveReveal;
-    const live = !!s.liveQuestionId;
-    const q = live
+    /* `qLive`, NOT `live`.
+     *
+     * `live` is already bound at the top of this function to the object
+     * `learnerView()` returns, and is read as `live.headline`,
+     * `live.weakGaps`, `live.searchable` two hundred lines below. Declaring
+     * it a second time here is a SyntaxError -- `let`/`const` redeclaration
+     * in one scope -- so the whole class failed to parse and every screen in
+     * the student app rendered blank.
+     *
+     * It shipped that way: into `frontend/dist/pg-revision.html`, into the
+     * android assets, and into app-debug.apk. No test caught it, because the
+     * frontend tests drive `quintek-student-api.js` and the server, and the
+     * Python tests read the built bundle as text. Nothing parsed the
+     * component. `tests/frontend/component_parses.test.mjs` now does. */
+    const qLive = !!s.liveQuestionId;
+    const q = qLive
       ? { stem: s.liveQuestion ? s.liveQuestion.stem : '',
           family: (s.liveQuestion && s.liveQuestion.family) || 'mcq',
           options: (s.liveQuestion && s.liveQuestion.options) || [],
@@ -3798,16 +4410,16 @@ class Component extends DCLogic {
           rationale: reveal ? reveal.rationale : '',
           source: '', next: '' }
       : QUESTIONS[s.qi];
-    const meta = live ? { concepts: [], gaps: [] } : (QMETA[s.qi] || { concepts: [], gaps: [] });
+    const meta = qLive ? { concepts: [], gaps: [] } : (QMETA[s.qi] || { concepts: [], gaps: [] });
     const submitted = s.submitted;
     /* On the live path the server decides correctness; the client never
      * recomputes it from an index it was not given. */
-    const right = live ? !!(reveal && reveal.is_correct)
-                       : (submitted && s.picked === q.correct);
+    const right = qLive ? !!(reveal && reveal.is_correct)
+                        : (submitted && s.picked === q.correct);
     /* The reveal is ready when the SERVER has returned one. Locally, when the
      * learner has judged -- the same ordering, so the design file shows the
      * real interaction rather than an easier one. */
-    const revealReady = live ? !!reveal : (submitted && !!s.judgement);
+    const revealReady = qLive ? !!reveal : (submitted && !!s.judgement);
     const options = q.options.map((text, i) => {
       const isCorrect = i === q.correct, isPicked = i === s.picked;
       let bg = '#fff', bd = '#E6E4DE', fg = '#16191A', mark = String.fromCharCode(65 + i), markFg = '#9aa0a2';
@@ -3845,10 +4457,22 @@ class Component extends DCLogic {
           detail: s.extracting ? 'page ' + s.extractPage + '/14' : NEW_CONCEPTS.length + ' concepts · 14 pages', fg: s.extracting ? '#B5812B' : '#1E7A57' }].concat(SOURCES_BASE)
       : SOURCES_BASE;
 
-    const heat = Array.from({ length: 84 }, (_, i) => {
-      const v = [0, 0, 1, 2, 3, 2, 1, 3, 2, 0, 1, 2][i % 12] * ((i % 7 === 6) ? 0 : 1);
-      return { bg: ['#EDEBE4', 'rgba(30,122,87,.25)', 'rgba(30,122,87,.55)', '#1E7A57'][v] };
-    });
+    /* Twelve weeks of activity, or the design file's pattern.
+     *
+     * The constant was `[0,0,1,2,3,2,1,3,2,0,1,2][i % 12]` with every seventh
+     * cell blanked -- a plausible-looking rhythm with a rest day, generated
+     * from an index. It is the single most convincing fixture in the app,
+     * because a heatmap is read as a record of what someone did.
+     *
+     * The live grid is keyed BY DATE, not by the order the server returned.
+     * `/progress` groups attempts by day and returns only days that have any,
+     * newest first, so a learner who studied on three days gets three rows.
+     * Laying those out positionally would paint three consecutive cells at one
+     * end of the grid and call it a twelve-week history. Each row is placed at
+     * its own date's offset from today; days with no attempts are genuinely
+     * zero, which is a measurement, not a gap. */
+    const heat = this.heatCells();
+
 
     return {
       showHeader: r !== 'onboard', showTabs: r !== 'onboard',
@@ -3857,7 +4481,7 @@ class Component extends DCLogic {
       isMake: r === 'make',
       makeSourceName: (s.makeSrc && s.makeSrc.name) || '',
       makeSourceMeta: (s.makeSrc && s.makeSrc.detail) || '',
-      makeColor: SUBJ[nb.subject].color,
+      makeColor: subjectOf(nb.subject).color,
       makeIdle: s.makeStage === 'idle',
       /* 'checking' shares the running treatment: something is happening and
        * the user should not be able to start it twice. */
@@ -3947,9 +4571,9 @@ class Component extends DCLogic {
       isBilling: r === 'billing', isPlans: r === 'plans',
       ...this.billingVals(),
       isToday: r === 'today', isWeak: r === 'weak', isMore: r === 'more',
-      isHome: r === 'home', isNotebook: r === 'notebook' && nb.sources > 0, isGraph: r === 'graph',
-      isNotebookEmpty: r === 'notebook' && nb.sources === 0,
-      nothingDue: nb.due === 0 && nb.sources > 0,
+      isHome: r === 'home', isNotebook: r === 'notebook' && nb.sourceCount > 0, isGraph: r === 'graph',
+      isNotebookEmpty: r === 'notebook' && nb.sourceCount === 0,
+      nothingDue: nb.due === 0 && nb.sourceCount > 0,
       isConcept: r === 'concept', isSettings: r === 'settings',
       showGear: r === 'home' || r === 'progress', goSettings: this.go('settings'), noop: () => {},
       cptColor: SUBJ[cptSubject].color,
@@ -3969,26 +4593,48 @@ class Component extends DCLogic {
           bg: on ? 'rgba(30,122,87,.08)' : '#FAFAF8', bd: on ? '#1E7A57' : '#E6E4DE', fg: on ? '#1E7A57' : '#5d6467' };
       }),
       customTime: s.customTime, trigger: s.trigger,
-      setCustomTime: (e) => this.setState({ trigger: e.target.value || '20:00' }),
+      setCustomTime: (e) => {
+        const t = e.target.value || '20:00';
+        this.setState({ trigger: t });
+        this.saveNotifPrefs({ trigger_time: t });
+      },
       noteDraft: s.noteDraft, setNote: (e) => this.setState({ noteDraft: e.target.value }),
       noteDirty: s.noteDraft !== s.savedNote,
-      saveNote: () => this.setState((st) => ({ savedNote: st.noteDraft })),
+      saveNote: () => {
+        const text = this.state.noteDraft;
+        this.setState({ savedNote: text });
+        this.saveNotifPrefs({ note_text: text });
+      },
       noteHint: s.noteDraft !== s.savedNote
         ? 'Unsaved. This text is what the reminder will say.'
         : s.savedNote ? 'Saved. Quintek will show this wording instead of a generic reminder.'
         : 'Leave it blank and the reminder just says how much is due.',
-      timezone: 'Asia/Kolkata (IST)',
-      nextTrigger: 'today ' + s.trigger,
+      /* The server's timezone for this learner, not a constant. It decided
+       * when the reminder fires, so showing a different one would be showing
+       * the wrong schedule. */
+      timezone: notifLive ? (s.liveNotifPrefs.timezone || 'UTC') : 'Asia/Kolkata (IST)',
+      nextTrigger: notifLive
+        ? (s.liveNotifPrefs.next_scheduled_at
+           ? String(s.liveNotifPrefs.next_scheduled_at).replace('T', ' ').replace('Z', ' UTC')
+           : 'not scheduled yet')
+        : 'today ' + s.trigger,
       channels: [
         { key: 'push', label: 'Push notification', meta: 'Opens straight into the revision dashboard' },
-        { key: 'email', label: 'Email', meta: 'r.menon@nhs.net · same queue, same time' },
+        /* The fixture named a real-looking NHS address. With a live account
+         * the only address the server could deliver to is the learner's
+         * own, and it does not hold a second one. */
+        { key: 'email', label: 'Email',
+          meta: notifLive ? 'To your account address · same queue, same time'
+                          : 'r.menon@nhs.net · same queue, same time' },
       ].map((c) => ({ ...c, toggle: this.toggleChannel(c.key),
         trackBg: s.channels[c.key] ? '#1E7A57' : '#DDD9CF', knobX: s.channels[c.key] ? '19px' : '3px' })),
-      lastNotif: s.tested ? 'Test sent at ' + s.trigger : 'Delivered 14 Aug at ' + s.trigger,
-      lastNotifFg: '#1E7A57',
-      testNotif: this.sendTest, testLabel: s.tested ? 'Sent' : 'Send test',
-      settingsNotebooks: NOTEBOOKS.map((n) => ({ title: n.title, open: this.openNotebook(n.id),
-        meta: n.sources + ' sources · ' + n.concepts + ' concepts · ' + n.questions + ' questions' })),
+      /* What the delivery log actually holds. "Delivered 14 Aug" was a string;
+       * with a backend there is a row or there is not, and no row means no
+       * reminder has ever been sent to this learner. */
+      ...this.notifVals(),
+      settingsNotebooks: notebookRows.map((n) => ({ title: n.title, open: this.openNotebook(n.id),
+        meta: n.sourceCount + ' sources · ' + n.conceptCount + ' concepts · '
+              + n.questionCount + ' questions' })),
       /* Which build is actually running, readable off the device.
        *
        * "Did the emulator pick up my rebuild?" was always a guess, because a
@@ -4016,24 +4662,40 @@ class Component extends DCLogic {
       }),
 
       isDashboard: r === 'dashboard',
-      queueStats: [
-        { n: 4, label: 'Red concepts', color: '#BC4C43' },
-        { n: 5, label: 'Orange concepts', color: '#B5812B' },
-        { n: 12, label: 'Previously incorrect', color: '#B5812B' },
-        { n: 96, label: 'Green, not queued', color: '#1E7A57' },
-      ],
-      strategies: [['WEAKNESS_FIRST', 'Weakest first'], ['WEAK_PLUS_SECTION', 'Weak + section'], ['COVERAGE', 'Full coverage']]
-        .map(([id, label]) => ({ label, set: this.setStrategy(id),
-          bg: s.strategy === id ? 'rgba(30,122,87,.08)' : '#fff',
-          bd: s.strategy === id ? '#1E7A57' : '#E6E4DE',
-          fg: s.strategy === id ? '#1E7A57' : '#6f7679' })),
-      strategyOrder: (s.strategy === 'COVERAGE'
-        ? ['Full section coverage', 'Unseen questions', 'Due concepts', 'Previously incorrect', 'Red gaps']
-        : s.strategy === 'WEAK_PLUS_SECTION'
-        ? ['Red knowledge gaps', 'Concepts surrounding those gaps', 'Orange gaps', 'Previously incorrect questions', 'New questions on the same concepts']
-        : ['Red knowledge gaps', 'Red concepts', 'Orange knowledge gaps', 'Orange concepts', 'Previously incorrect questions'])
+      queueStats: dashLive
+        ? [{ n: dashCounts.RED || 0, label: 'Red concepts', color: '#BC4C43' },
+          { n: dashCounts.ORANGE || 0, label: 'Orange concepts', color: '#B5812B' },
+          { n: (s.liveDashboard.open_gaps || 0), label: 'Open gaps', color: '#B5812B' },
+          { n: dashCounts.GREEN || 0, label: 'Green, not queued', color: '#1E7A57' }]
+        : s.learnerState === 'error' ? []
+        : [{ n: 4, label: 'Red concepts', color: '#BC4C43' },
+          { n: 5, label: 'Orange concepts', color: '#B5812B' },
+          { n: 12, label: 'Previously incorrect', color: '#B5812B' },
+          { n: 96, label: 'Green, not queued', color: '#1E7A57' }],
+
+      /* THE SIX THE SERVER ACTUALLY ACCEPTS.
+       *
+       * This offered WEAKNESS_FIRST, WEAK_PLUS_SECTION and COVERAGE. The
+       * server's `RevisionEngine.STRATEGIES` is
+       * ("adaptive","red","orange","green","due","unseen") and rejects
+       * anything else with 422 -- and `startRevision` passed the literal
+       * 'adaptive' regardless, so the picker changed a highlight and nothing
+       * else. Three names that do not exist, wired to a control with no
+       * effect: a learner choosing "Full coverage" got the adaptive queue and
+       * no way to tell. */
+      strategies: STRATEGIES.map(([id, label]) => ({ label, set: this.setStrategy(id),
+        bg: s.strategy === id ? 'rgba(30,122,87,.08)' : '#fff',
+        bd: s.strategy === id ? '#1E7A57' : '#E6E4DE',
+        fg: s.strategy === id ? '#1E7A57' : '#6f7679' })),
+      /* What the chosen strategy does, in the server's own order of
+       * preference. Read off `student/revision.py`, not invented to fill five
+       * rows -- `unseen` genuinely has one step, and padding it out would
+       * describe selection that does not happen. */
+      strategyOrder: (STRATEGY_ORDER[s.strategy] || STRATEGY_ORDER.adaptive)
         .map((label, i) => ({ n: String(i + 1).padStart(2, '0'), label })),
-      recommended: 15,
+      recommended: dashLive
+        ? (s.liveDashboard.recommended_question_count || 0)
+        : s.learnerState === 'error' ? 0 : 15,
       counts: [5, 10, 15, 20, 25, 'Custom'].map((v) => {
         const on = v === 'Custom' ? s.custom : (!s.custom && s.qCount === v);
         return { label: String(v), set: v === 'Custom' ? this.openCustom : this.setCount(v),
@@ -4120,22 +4782,37 @@ class Component extends DCLogic {
       studioVerdict: s.studioAct === 'accept' ? 'Accepted · sent for validation' : s.studioAct === 'reject' ? 'Rejected · not added to bank' : s.studioAct === 'regen' ? 'Regenerating against the same source' : s.studioAct === 'edit' ? 'Editing · provenance preserved' : '',
       studioVerdictNote: s.studioAct === 'accept' ? 'A separate validation call checks factual correctness, source grounding, distractor quality and ambiguity before the question can be served.' : 'Prototype action, no question is written to a bank yet.',
 
-      demos: DEMOS.map(([id, title, created, question, spec, usage]) => ({ id, title, created, question, usage,
-        spec: spec.map(([k, v]) => ({ k, v })),
-        use: this.setStudio('demo', id), useLabel: s.studio.demo === id ? 'In use' : 'Use in studio',
-        useBg: s.studio.demo === id ? 'rgba(30,122,87,.08)' : '#FAFAF8',
-        useBd: s.studio.demo === id ? '#1E7A57' : '#E0DDD4',
+      demos: demoRows.map((d) => ({ ...d,
+        use: this.setStudio('demo', d.id), useLabel: s.studio.demo === d.id ? 'In use' : 'Use in studio',
+        useBg: s.studio.demo === d.id ? 'rgba(30,122,87,.08)' : '#FAFAF8',
+        useBd: s.studio.demo === d.id ? '#1E7A57' : '#E0DDD4',
         useFg: '#1E7A57' })),
+      demosLive: s.demosState === 'ready',
+      demosLoading: s.demosState === 'loading',
+      demosFailed: s.demosState === 'error',
+      demosEmpty: s.demosState === 'ready' && demoRows.length === 0,
+      demosErrorText: s.demosState === 'error'
+        ? 'Your demonstrations could not be loaded. ' + (s.demosError || '') : '',
 
       bankFilters: ['All', 'Approved', 'Flagged', 'Pending'].map((label) => ({ label, set: this.setBankFilter(label),
         bg: s.bankFilter === label ? 'rgba(30,122,87,.08)' : '#fff',
         bd: s.bankFilter === label ? '#1E7A57' : '#E6E4DE',
         fg: s.bankFilter === label ? '#1E7A57' : '#6f7679' })),
-      bank: BANK.filter((b) => s.bankFilter === 'All' || b[2].toLowerCase() === s.bankFilter.toLowerCase()).map(([id, stem, validation, family, notebook, concepts, attempts, provenance]) => ({
-        id, stem, validation, family, notebook, attempts, provenance,
-        concepts: concepts.map(([name, subject]) => ({ name, color: SUBJ[subject].color })),
-        vFg: validation === 'Approved' ? '#1E7A57' : validation === 'Flagged' ? '#BC4C43' : '#B5812B',
-        vBg: validation === 'Approved' ? 'rgba(30,122,87,.1)' : validation === 'Flagged' ? 'rgba(188,76,67,.1)' : 'rgba(181,129,43,.12)' })),
+      bank: bankRows.map((b) => ({ ...b,
+        vFg: b.validation === 'Approved' ? '#1E7A57' : b.validation === 'Flagged' ? '#BC4C43' : '#B5812B',
+        vBg: b.validation === 'Approved' ? 'rgba(30,122,87,.1)' : b.validation === 'Flagged' ? 'rgba(188,76,67,.1)' : 'rgba(181,129,43,.12)' })),
+      bankLive: s.bankState === 'ready',
+      bankLoading: s.bankState === 'loading',
+      bankFailed: s.bankState === 'error',
+      /* Empty under a FILTER is not the same as an empty bank, and the screen
+       * must not tell a learner they have no questions when what they have is
+       * no flagged ones. */
+      bankEmpty: s.bankState === 'ready' && bankRows.length === 0
+                 && (s.liveBank || []).length === 0,
+      bankFilteredEmpty: s.bankState === 'ready' && bankRows.length === 0
+                         && (s.liveBank || []).length > 0,
+      bankErrorText: s.bankState === 'error'
+        ? 'The question bank could not be loaded. ' + (s.bankError || '') : '',
 
       /* LIVE WHEN THERE IS A BACKEND, CONSTANTS WHEN THERE IS NOT, AND NEITHER
        * WHEN A CONFIGURED ONE FAILED. `learnerState` decides, and the three
@@ -4180,10 +4857,21 @@ class Component extends DCLogic {
             ? this.openConcept(x.name, x.subject || 'biochemistry', 'more')
             : this.go('weak') })),
       searchFailed: s.learnerState === 'error',
-      resultCount: SEARCHABLE.filter((x) => x[0].toLowerCase().indexOf(s.query.toLowerCase()) >= 0 || x[2].toLowerCase().indexOf(s.query.toLowerCase()) >= 0).length + (SEARCHABLE.filter((x) => x[0].toLowerCase().indexOf(s.query.toLowerCase()) >= 0 || x[2].toLowerCase().indexOf(s.query.toLowerCase()) >= 0).length === 1 ? ' result' : ' results'),
+      /* Counted off the SAME list the rows are rendered from.
+       *
+       * This counted `SEARCHABLE`, the design file's fixture, while `results`
+       * above rendered `live.searchable`. With a backend the two disagreed:
+       * the screen listed the learner's own concepts and announced a total
+       * belonging to somebody else's. */
+      resultCount: (() => {
+        const q = s.query.toLowerCase();
+        const n = live.searchable.filter((x) => x.name.toLowerCase().indexOf(q) >= 0
+                                             || x.meta.toLowerCase().indexOf(q) >= 0).length;
+        return n + (n === 1 ? ' result' : ' results');
+      })(),
       moreLinks: [
         { label: 'Notebooks', note: 'Sources, concepts, extraction', go: this.go('home') },
-        { label: 'Concept graph', note: '14 concepts, 7 crossing subjects', go: this.go('graph') },
+        { label: 'Concept graph', note: graphNote, go: this.go('graph') },
         { label: 'Question studio', note: 'Generate against a source', go: this.go('studio') },
         { label: 'Question bank', note: 'Every question and its provenance', go: this.go('bank') },
         { label: 'Demonstrations', note: 'Framing library the AI writes to', go: this.go('demos') },
@@ -4192,15 +4880,30 @@ class Component extends DCLogic {
         { label: 'Billing', note: 'Plan, usage and payment', go: this.go('billing') },
       ],
 
-      notebooks: NOTEBOOKS.map((n) => ({
-        ...n, open: this.openNotebook(n.id), subject: SUBJ[n.subject].label, subjectFg: SUBJ[n.subject].color,
-        todayMeta: n.sources === 0 ? 'No sources yet · tap to add one'
-          : n.due ? n.due + ' due · ' + n.sources + ' sources' : 'Nothing due · ' + n.concepts + ' concepts',
-        dueLabel: n.sources === 0 ? 'New' : n.due || '—',
-        dueFg: n.sources === 0 ? '#6f7679' : n.due > 15 ? '#BC4C43' : n.due ? '#B5812B' : '#9aa0a2',
+      notebooks: notebookRows.map((n) => ({
+        ...n, open: this.openNotebook(n.id),
+        /* `subjectOf` rather than SUBJ[...] directly. The palette names four
+         * subjects and a learner's notebook can be about a fifth, where
+         * indexing would throw on `.label` of undefined and render nothing at
+         * all. Same fix, same reason, as the graph's node mapping. */
+        subject: subjectOf(n.subject).label, subjectFg: subjectOf(n.subject).color,
+        todayMeta: n.sourceCount === 0 ? 'No sources yet · tap to add one'
+          : n.due ? n.due + ' due · ' + n.sourceCount + ' sources'
+                  : 'Nothing due · ' + n.conceptCount + ' concepts',
+        dueLabel: n.sourceCount === 0 ? 'New' : n.due || '—',
+        dueFg: n.sourceCount === 0 ? '#6f7679' : n.due > 15 ? '#BC4C43' : n.due ? '#B5812B' : '#9aa0a2',
         dueBg: n.due > 15 ? 'rgba(188,76,67,.08)' : n.due ? 'rgba(181,129,43,.09)' : 'transparent',
         dueBd: n.due ? 'transparent' : '#E6E4DE',
-        masteredPct: n.mastered + '%', reviewPct: n.review + '%' })),
+        /* A percentage the payload does not carry renders as an em dash, not
+         * as "null%" and not as "0%". */
+        masteredPct: n.mastered === null ? '—' : n.mastered + '%',
+        reviewPct: n.review === null ? '—' : n.review + '%' })),
+      notebooksLive: s.nbsState === 'ready',
+      notebooksLoading: s.nbsState === 'loading',
+      notebooksFailed: s.nbsState === 'error',
+      notebooksEmpty: s.nbsState === 'ready' && notebookRows.length === 0,
+      notebooksErrorText: s.nbsState === 'error'
+        ? 'Your notebooks could not be loaded. ' + (s.nbsError || '') : '',
 
       sources: sources.map((x) => ({ ...x, make: this.openMake(x.name, x.detail),
         makeLabel: x.status === 'Extracted' || x.status === 'EXTRACTED' ? 'Make questions from this →' : 'Still reading…' })),
@@ -4287,7 +4990,8 @@ class Component extends DCLogic {
         };
       })(),
 
-      canReport: !!(s.studentApi && s.studentApi.reportQuestion && s.liveQuestionId),
+      canReport: !!(s.studentApi && s.studentApi.reportQuestion
+                    && (s.reportTarget || s.liveQuestionId)),
       reportOpen: !!s.reportOpen,
       reportSent: !!s.reportSent,
       reportSentNote: s.reportSent
@@ -4352,9 +5056,20 @@ class Component extends DCLogic {
       attemptLine: 'attempt ' + (this.attempts.length + 1) + ' · ' + (right ? 'correct' : 'incorrect') + ' · ' + (s.judgement || '—')
         + (s.gaps.length ? ' · ' + s.gaps.length + ' gap' + (s.gaps.length > 1 ? 's' : '') : ''),
 
-      masteryStats: [{ n: 96, label: 'Mastered', color: '#1E7A57' }, { n: 62, label: 'Due', color: '#B5812B' }, { n: 30, label: 'Struggling', color: '#BC4C43' }],
-      conceptMastery: CONCEPT_MASTERY.map(([name, state, color, pct, meta]) => ({ name, state, color, pct, meta })),
-      heat, streak: (this.props.showStreak ?? true) ? '41-day streak' : '84 sessions logged',
+      ...this.masteryView(),
+      heat,
+      /* A streak is a claim about consecutive days. Counted from the activity
+       * the server returned rather than asserted: "41-day streak" next to a
+       * grid built from three real study days is the two halves of one screen
+       * disagreeing, and the number is the half a learner remembers. */
+      streak: this.streakLabel(),
+      progressLive: s.learnerState === 'ready',
+      progressLoading: s.learnerState === 'loading',
+      progressFailed: s.learnerState === 'error',
+      progressErrorText: s.learnerState === 'error'
+        ? 'Your progress could not be loaded. ' + (s.learnerError || '') : '',
+      progressEmpty: s.learnerState === 'ready'
+        && !((s.liveProgress && s.liveProgress.attempts_total) || 0),
 
       stepNo: s.step + 1, stepTitle: STEPS[s.step][0], stepBody: STEPS[s.step][1],
       stepCta: s.step === 2

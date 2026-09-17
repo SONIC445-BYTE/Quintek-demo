@@ -108,20 +108,69 @@ requests. Production requires the value to be **set**, not to be narrow.
 
 ## Deploying
 
-1. Create a managed PostgreSQL instance (Supabase or otherwise). Nothing else
-   is needed from it — no project keys, no PostgREST configuration.
-2. Connect the repository to Render; `render.yaml` is picked up as a blueprint.
-3. Enter `QUINTEK_DATABASE_URL` in the Render dashboard. It is `sync: false`
-   and is never committed. Include `sslmode=require`.
+1. Create a managed PostgreSQL instance. Nothing else is needed from it — no
+   project keys, no PostgREST configuration.
+2. Connect the repository to Render.
+3. Set `QUINTEK_DATABASE_URL` **on the service**, in its own Environment tab.
+   Not in an environment group unless you have confirmed the group is linked
+   to this service: that distinction cost a day, and the failure it produces
+   is described below.
 4. Enter any optional secrets. None is required to boot.
-5. Deploy. Render polls `/health`. Confirm it reports
-   `"persistence": "postgresql"` — if it says `sqlite`, the variable did not
-   reach the process and the deployment must not be used.
+5. Deploy, then **check `/health` yourself**. `status: live` is not evidence.
 6. Point the Android app at the service's HTTPS URL.
+
+### `status: live` is not evidence — read `/health`
+
+A deploy that cannot reach its database does not necessarily fail. With
+`QUINTEK_ENV` absent, the server falls back to SQLite on the container's
+ephemeral disk and reports itself healthy. It happened here:
+
+```json
+{"status": "ok", "database": true, "persistence": "sqlite",
+ "environment": "development", "ai_configured": true}
+```
+
+Green deploy, working API, and every account gone at the next restart. Only
+the `persistence` and `environment` fields say so. Both must read
+`"postgresql"` and `"production"`, and `environment: production` is the one
+that proves the startup guard ran at all — with it set, a missing or
+`sslmode=disable` URL refuses the boot instead of falling back.
+
+**Environment groups.** In that incident `NVIDIA_API_KEY` reached the process
+and `QUINTEK_ENV`, `QUINTEK_DATABASE_URL` and `PYTHON_VERSION` did not. The
+build log dates it exactly: `Using Python version 3.11.16 via environment
+variable PYTHON_VERSION` on one deploy and `Using Python version 3.14.3
+(default)` on the next. A whole block of variables stopping at once is a group
+that is not applied to the service, not four separate mistakes.
+
+### The blueprint and the running service do not match
+
+`render.yaml` is in the repository and describes `plan: starter` with
+`healthCheckPath: /health`. The live service was created by hand in the
+dashboard instead, and runs on `plan: free` with no health check path. Neither
+is wrong; they are simply not the same thing, and `render.yaml` is therefore a
+description of an intended service rather than a record of the running one.
+Applying it as a blueprint would change the plan.
 
 ## Status
 
-**Not deployed.** Everything above is verified against a local PostgreSQL 16
-and two built APKs; no Render service exists, no Supabase project exists, and
-no APK has been installed on a device. See ADR-025 for the exact list of what
-remains unverified and why.
+**DEPLOYED and verified, 2026-09-17.** `https://quintek-demo.onrender.com`
+
+| Checked | How |
+|---|---|
+| Serving on PostgreSQL in production mode | `/health` returns `"persistence": "postgresql"`, `"environment": "production"` |
+| Generation still refuses | `/health` returns `"generation": "no_qualified_model"` — correct, and must stay that way until a model qualifies |
+| Data is really in PostgreSQL | a registered account read back with `SELECT` against the Render database, independent of the API's own response |
+| The schema initialised | 25 tables in `quintek_student` |
+| Rate limiting is live | 5 registrations accepted, the 6th and 7th answered `429` |
+
+Still unverified, and not verifiable from here: **no APK has been installed on
+a device.** See ADR-025.
+
+**The database expires 2026-10-16.** `quintek-db` is on Render's free plan,
+which deletes the instance 30 days after creation. It is adequate for proving
+the migration and is not a home for real accounts.
+
+**Erasure is broken for any account that has answered a question.** See
+ADR-029 — one half fixed, one half an open policy decision. A beta tester
+must not be told they can delete their data until it is resolved.

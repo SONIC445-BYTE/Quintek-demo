@@ -156,6 +156,100 @@ export async function me() {
   return call('GET', '/me');
 }
 
+/**
+ * `/progress`'s `activity` laid out as a fixed grid of days, oldest first.
+ *
+ * WHY THIS IS A FUNCTION AND NOT A `.map()` AT THE CALL SITE
+ * ---------------------------------------------------------
+ * `activity` is SPARSE and ordered NEWEST FIRST: the server groups attempts by
+ * day and returns only the days that have any. A learner who studied on three
+ * days gets three rows, newest first.
+ *
+ * Laying those out positionally -- `activity.map(...)` into 84 cells -- paints
+ * three consecutive squares at one end of the grid and presents the result as
+ * twelve weeks of history. It is wrong in both directions at once: it invents
+ * consecutive study days that did not happen, and it puts them at the wrong
+ * end, because the list starts with the most recent. The grid reads as a
+ * record of what someone did, which is exactly why it must not be guessed at.
+ *
+ * So every cell is placed at its own date's offset from `today`. A day with no
+ * row is genuinely zero -- that is a measurement, not a gap in the data.
+ *
+ * UTC throughout. `created_at` is written as UTC and sliced to ten characters
+ * server-side, so building the grid in local time would shift every cell by
+ * the viewer's offset and, east of UTC, place today's attempts on a date that
+ * has not arrived yet.
+ *
+ * @param {Array<{d: string, n: number}>} activity  rows from `/progress`
+ * @param {{days?: number, today?: Date}} opts
+ * @returns {Array<{date: string, n: number}>} oldest first, length `days`
+ */
+export function activityGrid(activity, opts) {
+  const options = opts || {};
+  const days = options.days || 84;
+  const end = options.today instanceof Date ? options.today : new Date();
+
+  const byDay = Object.create(null);
+  (Array.isArray(activity) ? activity : []).forEach((row) => {
+    if (!row || !row.d) return;
+    const key = String(row.d).slice(0, 10);
+    /* Summed rather than assigned. The server groups by day so a repeat is not
+     * expected, but dropping one silently if it ever happened would understate
+     * a learner's work, and overwriting is not more correct than adding. */
+    byDay[key] = (byDay[key] || 0) + (Number(row.n) || 0);
+  });
+
+  const start = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())
+                - (days - 1) * 86400000;
+  const out = [];
+  for (let i = 0; i < days; i += 1) {
+    const date = new Date(start + i * 86400000).toISOString().slice(0, 10);
+    out.push({ date, n: byDay[date] || 0 });
+  }
+  return out;
+}
+
+/**
+ * How often this learner has been right about a concept, or `null`.
+ *
+ * `null`, NOT zero, when nothing has been attempted. `correct / (correct +
+ * wrong)` divides by zero there, and the `0` that falls out of the usual
+ * `|| 0` guard is a measurement: it tells a learner they get this wrong every
+ * single time, when the truth is that nobody has ever asked them.
+ *
+ * The caller decides how to render `null`. The screen shows an em dash.
+ */
+export function masteryPercent(correct, wrong) {
+  const right = Number(correct) || 0;
+  const missed = Number(wrong) || 0;
+  const seen = right + missed;
+  if (seen <= 0) return null;
+  return Math.round((right / seen) * 100);
+}
+
+/**
+ * Consecutive days ending today, or ending yesterday.
+ *
+ * Yesterday counts as the end of a live streak: a learner who has not studied
+ * yet today has not broken one. Returns 0 when the most recent study day is
+ * older than that, and 0 for an empty history -- never a "0-day streak", which
+ * is not a thing anyone has.
+ */
+export function studyStreak(activity, opts) {
+  const options = opts || {};
+  const end = options.today instanceof Date ? options.today : new Date();
+  const days = Object.create(null);
+  (Array.isArray(activity) ? activity : []).forEach((row) => {
+    if (row && row.d && (Number(row.n) || 0) > 0) days[String(row.d).slice(0, 10)] = true;
+  });
+  const key = (ms) => new Date(ms).toISOString().slice(0, 10);
+  let cursor = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  if (!days[key(cursor)]) cursor -= 86400000;
+  let n = 0;
+  while (days[key(cursor)]) { n += 1; cursor -= 86400000; }
+  return n;
+}
+
 export async function progress() {
   return call('GET', '/progress');
 }
@@ -301,6 +395,22 @@ export async function notificationPrefs() {
 
 export async function setNotificationPrefs(prefs) {
   return call('PUT', '/settings/notifications', prefs || {});
+}
+
+/* Fire one reminder now, through the same path the schedule uses.
+ *
+ * The "Send test" button used to set a flag in memory and relabel itself
+ * "Sent". Nothing was delivered and nothing recorded it, so the one control
+ * whose entire purpose is to prove delivery works was the control least
+ * connected to delivery. This posts to the route that actually fires, and
+ * `notificationHistory` reads back what it wrote. */
+export async function testNotification() {
+  return call('POST', '/settings/notifications/test', {});
+}
+
+export async function notificationHistory() {
+  const res = await call('GET', '/settings/notifications/history');
+  return (res && res.history) || [];
 }
 
 /* What this deployment is actually running, for the screen that discloses it. */

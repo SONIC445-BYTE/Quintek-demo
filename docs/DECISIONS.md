@@ -633,3 +633,215 @@ scope for implementation work.**
 Until those labels are ruled on, `NO MODEL QUALIFIED / INSUFFICIENT EVIDENCE`
 is not merely the current state — it is the only state the evidence supports.
 
+
+## ADR-027 — The student app shipped a SyntaxError, and nothing was in a position to notice
+
+**Date/phase:** 2026-09-17 · **Status:** CLOSED — fixed, and the gap that hid
+it is closed with a test
+
+`frontend/PG Revision.dc.html` declared `const live` twice in one function
+scope: once at the top of `renderVals()` for the object `learnerView()`
+returns, and again 113 lines later for `!!s.liveQuestionId`. A `const`
+redeclared in one scope is a **parse** error, not a runtime one, so the
+component class was never constructed and **every screen in the student app
+rendered blank.**
+
+It shipped. Into `frontend/dist/pg-revision.html`, into
+`android/app/src/main/assets/`, and into `app-debug.apk`. It was introduced by
+the revision-loop commit and survived the four-screens commit on top of it.
+
+### Why nothing caught it
+
+This is the part worth keeping, because the gap was structural rather than bad
+luck. At the time there were two kinds of frontend test:
+
+* `tests/frontend/*.test.mjs` imported `quintek-student-api.js`, a real ES
+  module. A syntax error there fails on import, immediately and loudly.
+* Python tests read the built bundles **as text** and asserted on substrings.
+  A file that does not parse satisfies a substring assertion exactly as well
+  as one that does.
+
+Between them, **no JavaScript engine was ever asked to look at the component.**
+Every claim about the screens — including three manual-test rows marked
+"auto-verified" — rested on tests that exercised the client module and the
+server. Both of those were fine. The thing between them and the learner was
+not.
+
+The caveat written into `docs/ANDROID_MANUAL_TEST.md` was exactly right and
+still understated it: "the test drives client and server, not a phone, so a
+ticked row can still fail through a WebView difference". It was not a WebView
+difference. The file was not JavaScript.
+
+### What now prevents it
+
+`tests/frontend/component_parses.test.mjs` hands every `.dc.html` design
+source, every built bundle in `frontend/dist/`, and every bundle in the
+android assets to `vm.Script`, which runs V8's parser without executing a
+statement. Reintroducing the redeclaration fails all three, which was verified
+by doing it.
+
+All three surfaces are checked deliberately. `dist/` and the android assets
+are written by the same build but written **separately**, and a rebuild that
+updates one and not the other is the "did the emulator pick up my change?"
+failure the build stamp already exists for. Checking `dist/` alone would let a
+stale, broken asset ship behind a green test.
+
+### The general lesson, stated so it can be applied elsewhere
+
+**A test that reads an artefact as text cannot tell you the artefact works.**
+It can only tell you the text is present. Where the artefact has a parser — a
+bundle, a schema, a config file, a migration — the cheapest real test is to
+run that parser over it. This repository has two other places that read built
+or generated artefacts as text; they are not known to be wrong, and they are
+also not known to be right.
+
+## ADR-028 — The operator surface is enumerable by any logged-in learner
+
+**Date/phase:** 2026-09-17 · **Status:** OPEN — FOUND, REPORTED, NOT FIXED
+
+Held unfixed under the standing stop condition: a new disclosure route is
+shown to the owner before it is closed.
+
+### The finding
+
+`_require_admin` raises `404 "no such route"` rather than 403, and its
+docstring gives the reason: "a 403 confirms the route exists and that the
+caller is merely the wrong person, which is a fact worth not handing out."
+
+The status code hands nothing out. **The body does.** A learner's token gets a
+different 404 *message* for an operator route than for a path that does not
+exist:
+
+| Request, with an ordinary learner's token | Body | What it tells the caller |
+|---|---|---|
+| `GET /ops/incidents` | `no such route` | **exists; wrong role** |
+| `GET /ops/alerts` | `no such route` | **exists** |
+| `GET /ops/spend` | `no such route` | **exists** |
+| `GET /ops/reports` | `no such route` | **exists** |
+| `GET /ops/reports/gold-candidates` | `no such route` | **exists** |
+| `POST /ops/reports/<id>` | `no such route` | **exists** |
+| `GET /admin/users/<id>` | `no such route` | **exists** |
+| `GET /ops/zzz` | `no such endpoint: GET /ops/zzz` | does not exist |
+| `GET /nope` | `no such endpoint: GET /nope` | does not exist |
+
+So the operator API can be mapped by anyone who can register an account and
+diff two strings. The control that was deliberately built to prevent exactly
+this was defeated one layer below where it was implemented.
+
+**An anonymous caller learns nothing.** `_user()` rejects a missing token
+before routing, so every path — real, operator-only or invented — answers
+`401` with the same body. That half holds.
+
+### Severity, stated plainly
+
+Low. It discloses the *shape* of the admin API to an authenticated learner and
+grants no access: `_require_admin` still refuses, and every ownership filter
+checked in the same sweep (`gap_evidence`, `resolve_gap`, `question_bank`,
+`notebooks`) correctly scopes by `user_id`. What it costs is the assumption
+that the operator surface is unadvertised, which some later decision may lean
+on without knowing it is false.
+
+### How it was found, which is the part worth keeping
+
+Not by reading the code. By writing `tests/test_ops_surface_live.py` to assert
+the *property* — an operator route is indistinguishable from a nonexistent one
+— rather than the *status code*. The first draft asserted `== 404`, failed on
+the anonymous case for an unrelated reason (401, from a layer that fires
+earlier), and chasing that wrong failure is what surfaced the real one.
+
+An assertion on the literal code would have passed. Both sides are 404.
+
+### The fix, when authorised
+
+Two lines: make `_require_admin` and the two `admin/users` fall-throughs raise
+the same `f"no such endpoint: {method} /{path}"` body the generic fallback
+uses. No behaviour changes for an operator; the only observable difference is
+that the surface stops being enumerable.
+
+`tests/test_ops_surface_live.py` carries the check as `xfail(strict=True)`, so
+it **fails the moment the fix lands** and cannot be quietly left behind.
+
+## ADR-029 — A learner who has used the app cannot delete their account
+
+**Date/phase:** 2026-09-17 · **Status:** PARTLY FIXED · one half OPEN for the owner
+
+Found by writing a test that inspects the DATABASE after `DELETE /account`
+rather than the response code. The existing coverage asserted
+`status == 200` over HTTP and checked rows only from a direct call to
+`accounts.erase()` — and the fixture behind that direct call created a user
+and a notebook and **no attempt**, so no test had ever erased an account that
+had actually been used.
+
+Three separate defects came out of one test. Two are fixed; the third is not
+mine to decide.
+
+### 1. FIXED — erasure was impossible on PostgreSQL, for every account
+
+`tables_holding_user_data()` enumerated the schema with `SELECT name FROM
+sqlite_master` and `PRAGMA table_info`. Both are SQLite-only. `erase()` calls
+it first, so on PostgreSQL the request died with `UndefinedTable: relation
+"sqlite_master" does not exist` before touching a row.
+
+**Production runs on PostgreSQL.** For as long as the Render service has been
+live, a learner asking to be forgotten would have received a 500.
+
+This is the **fifth** dialect incompatibility, and it is the first one that was
+not in `schema.sql`. ADR-020 translated the DDL and audited the DDL; this was
+runtime introspection in application code, which that audit was not looking at.
+The compatible helpers — `persistence.schema.table_names` and `.columns_of` —
+already existed and were already used by the migration path. This function
+simply never called them. It does now.
+
+### 2. FIXED — table names were quoted as string literals
+
+`DELETE FROM 'attempts'` — single quotes. SQLite tolerates that as an
+identifier; PostgreSQL reads it as a string and answers `syntax error at or
+near "'attempts'"`. Four sites, now double-quoted, which is the SQL standard
+and correct on both.
+
+Worth noting as its own class: the first defect hid the second. Fixing
+`sqlite_master` is what let the query run far enough to hit the quoting.
+
+### 3. OPEN — the immutability trigger refuses the erasure
+
+With both of the above fixed, an account with **no attempts** now erases
+correctly on PostgreSQL, verified row by row. An account **with** an attempt
+still fails, on both backends, with:
+
+```
+attempts are immutable: they are the evidence base for every colour and priority
+```
+
+That is `attempts_are_immutable_delete` doing exactly its job
+(`student/schema.sql:269-282`). Both backends refuse identically — SQLite via
+`RAISE(ABORT)`, PostgreSQL via the translated `RAISE EXCEPTION` — which is a
+small confirmation that the ADR-020 trigger translation is faithful. **The
+conflict is in the design, not in the dialect.**
+
+Two deliberate invariants collide:
+
+* An attempt is evidence, and evidence that can be edited or removed is not
+  evidence. Every colour, priority and gap in the system derives from
+  attempts. Both UPDATE and DELETE are blocked, so the rows cannot even be
+  anonymised in place the way `incidents` and `spend_log` are.
+* A learner may ask to be erased, and `docs/BETA_TESTER_BRIEF.md` tells a
+  tester they can.
+
+**This is not a bug to pick a side of.** It is a policy question about medical
+evidence retention against a data-protection promise, and it belongs to the
+owner. The options, stated without a recommendation:
+
+1. **Anonymise attempts.** Add `attempts` to `RETAINED_ANONYMISED` and relax
+   the trigger to permit clearing `user_id` and nothing else. Keeps every
+   derived figure intact; means "erased" does not mean "no row survives".
+2. **Delete attempts.** Drop the DELETE half of the trigger, keep the UPDATE
+   half. Erasure becomes literal; an erased learner's attempts stop backing
+   any aggregate computed from them.
+3. **Tell the truth instead.** Leave both as they are and change the brief to
+   say attempts are retained, with the reason. Honest, and the weakest of the
+   three for anyone who asked to be forgotten.
+
+Until it is decided: **`DELETE /account` returns 500 to any learner who has
+answered a question.** `tests/test_erasure_over_http.py` carries three
+`xfail(strict=True)` tests, so whichever option is taken, they fail the moment
+it lands and cannot be left behind.

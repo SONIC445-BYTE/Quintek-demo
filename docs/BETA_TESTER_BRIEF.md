@@ -17,9 +17,22 @@ The server states its own scope at `GET /scope`, and the app shows it:
 > guideline or a clinician. This is not a clinical reference and must not be
 > used to make a decision about a patient.
 
+## Where it is
+
+`https://quintek-demo.onrender.com` — live, running on managed PostgreSQL.
+
+Two things to expect that are not faults:
+
+* **The first request after a quiet period takes about 50 seconds.** The
+  service is on a free plan and spins down when idle. It is waking up, not
+  broken.
+* **The database is on a free plan that expires 2026-10-16.** Anything you put
+  in before then goes away with it. This is a beta on purpose.
+
 ## Getting started
 
 1. **Register.** Email and a password. No invitation code, no approval step.
+   Registration is rate-limited to 5 in a window; a 6th returns `429`.
 2. **Make a notebook.** One per subject or per exam.
 3. **Add a source.** A PDF, or pasted text. PDFs with a real text layer work;
    scans need OCR, which is not configured, and the app will tell you so
@@ -59,9 +72,22 @@ found by whoever it misleads. Better that they get reported than believed.
 
 * **Export it** any time: `GET /account/export` returns everything held about
   you, as JSON. It excludes your password hash.
-* **Delete it** any time: `DELETE /account`. Irreversible, immediate, and it
-  removes your uploaded files too. The operation verifies that nothing is left
-  and fails loudly rather than reporting a deletion it did not complete.
+* **Delete it** — **CURRENTLY BROKEN, and you should know before you start.**
+  `DELETE /account` works for an account that has not yet answered a question.
+  Once you have recorded a single attempt it returns a 500 and deletes
+  nothing. The cause is a deliberate rule that attempts cannot be removed
+  (they are the evidence every colour and priority is derived from) colliding
+  with this promise, and resolving it is a decision about what "delete my
+  data" should mean here rather than a bug with an obvious fix. It is written
+  up as ADR-029.
+
+  Until it is resolved: **assume anything you put in cannot be taken out.**
+  Do not upload a source you would mind leaving behind, and if you want your
+  account removed, ask — it can be done directly against the database.
+
+  What the operation does when it succeeds: it removes your uploaded files
+  too, verifies that nothing is left, and fails loudly rather than reporting a
+  deletion it did not complete. That verification is what caught this.
 * Two things survive, with your id removed rather than the row: incident
   records (evidence that the system failed — a fault should not disappear
   because the person who hit it left) and any question reports you filed (a

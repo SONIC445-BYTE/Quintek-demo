@@ -130,25 +130,71 @@ all set state that changes what is displayed, and none of them reach a model.
 `requestAnimationFrame` — real repulsion, spring and centring forces. The nodes
 and edges it lays out are hardcoded. Tapping a node re-centres for real.
 
-### 2.6 Revision queue and scheduling — FIXTURE
+### 2.6 Revision queue and scheduling — REAL
 
-The dashboard shows R/O/G counts, a recommended question count and a selection
-strategy. The counts are constants. `setStrategy`, `setCount`, `clampQ` and the
-custom-count field all set state, and the chosen count is threaded into the
-session for real (`sessionCount`, from all three entry points). No SM-2, no
-`revision_state`, no due dates computed from anything.
+**Was FIXTURE. Wired 2026-09-17.**
 
-### 2.7 Weak / gaps / progress — FIXTURE
+The dashboard's R/O/G counts, open-gap count and recommended question count
+come from `/revision/dashboard`. `setCount`, `clampQ` and the custom-count
+field set state, and the chosen count is threaded into the session
+(`sessionCount`, from all three entry points).
 
-Gap lists, per-concept recall strength, mastery split and the 12-week heatmap
-all render from constants. Filtering (`setWeakFilter`, `toggleFilter`) is real
-and operates on those constants.
+The selection strategy is now real, and was the more interesting half. It
+offered `WEAKNESS_FIRST`, `WEAK_PLUS_SECTION` and `COVERAGE`. The server's
+`RevisionEngine.STRATEGIES` is `adaptive/red/orange/green/due/unseen` and
+rejects anything else with 422 — and `startRevision` passed the literal
+`'adaptive'` whatever was picked. So the control set state that nothing read,
+against names that do not exist. It now offers the six real ones, describes
+what each does in the server's own order of preference, and passes the
+learner's choice through.
 
-### 2.8 Notifications — ABSENT
+Still not built: SM-2 intervals are computed server-side in `revision_state`,
+but nothing on this screen explains or exposes the interval itself.
 
-`setTrigger`, `openCustomTime`, `toggleChannel` and `sendTest` set state and
-flip a "tested" flag. Nothing is scheduled, no notification is posted, no
-permission is requested. The trigger time is a value in memory.
+### 2.7 Weak / gaps / progress — REAL
+
+**Gap lists were wired earlier. The progress screen was wired 2026-09-17.**
+
+Gap lists and the weak filter read `/gaps` through `learnerView()`. The mastery
+split reads `colour_counts` and `due_count` from `/progress`; per-concept
+recall strength reads `/concepts`; the 12-week heatmap reads `/progress`
+`activity`.
+
+Three specifics worth keeping, because each replaced something that looked
+right:
+
+* **The heatmap is keyed by DATE.** `activity` is sparse and newest-first, so
+  a positional layout paints three real study days as three adjacent squares
+  at the wrong end of the grid and presents that as twelve weeks of history.
+  `activityGrid` in `quintek-student-api.js` does the placement and is
+  mutation-tested against exactly that implementation.
+* **A concept with no attempts has no percentage.** Not 0%. `masteryPercent`
+  returns `null` and the screen renders an em dash. A genuine 0-of-4 still
+  shows 0%.
+* **The streak is counted, not asserted.** It was the string "41-day streak".
+  One day is not a streak, so `studyStreak` returning 0 or 1 falls back to the
+  attempt count, which is a fact either way.
+
+### 2.8 Notifications — PARTIALLY REAL
+
+**Was ABSENT. Settings and log wired 2026-09-17; DELIVERY IS STILL NOT BUILT.**
+
+The trigger time, timezone, push/email toggles and note text are stored
+server-side in `notification_prefs` and read back from it — every control
+writes through, and a save that fails says so rather than leaving the toggle
+flipped. `next_scheduled_at` is the server's, so the "next reminder" line is
+the real schedule.
+
+**No notification is delivered.** `NotificationService` takes an injected
+`sender`, `student/api.py` constructs it without one, and `fire()` therefore
+returns `ok: false` with `"no notification sender is configured"`. "Send test"
+posts to `/settings/notifications/test`, shows that reason, and reads the
+failed row back out of `notification_log`.
+
+That is the honest state and it is deliberately visible. The button previously
+set `tested: true` and relabelled itself "Sent" — the one control whose
+entire purpose is to prove delivery works was the control least connected to
+delivery. No OS notification is posted and no permission is requested.
 
 ### 2.9 Reliability / trust screen — REAL, and the only live path
 

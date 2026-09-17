@@ -151,7 +151,7 @@ class TestErasure:
             if table in accounts.RETAINED_ANONYMISED:
                 continue
             left = world.db.query_one(
-                f"SELECT COUNT(*) n FROM '{table}' WHERE {column}=?", (world.uid,))
+                f'SELECT COUNT(*) n FROM "{table}" WHERE {column}=?', (world.uid,))
             assert left["n"] == 0, f"{table} still holds rows for the erased user"
 
     def test_it_raises_rather_than_reporting_an_incomplete_erasure(self, world, monkeypatch):
@@ -175,7 +175,10 @@ class TestErasure:
         real = world.db.execute
 
         def skip_orphans(sql, params=()):
-            if "DELETE FROM 'orphan_notes'" in sql:
+            # Double quotes: `erase()` quotes identifiers the SQL-standard
+            # way now. Single quotes made PostgreSQL read the table name as a
+            # string literal, so `DELETE FROM 'attempts'` was a syntax error.
+            if 'DELETE FROM "orphan_notes"' in sql:
                 class R:
                     rowcount = 0
                 return R()
