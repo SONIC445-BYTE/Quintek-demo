@@ -284,6 +284,11 @@ COVERAGE: dict[str, dict] = {
     # checked in the database afterwards, by
     # test_reminders_refuse_another_learner_on_every_method below.
     "/reminders/<id>":                    dict(kind="reminder", method="GET", expect=REFUSED),
+    # Naming a gap on an answer is a WRITE: without the owner clause B could
+    # attach gaps to A's attempt and they would appear on A's weak list.
+    # Checked in the database by test_gaps_cannot_be_named_on_another_learners_attempt.
+    "/attempts/<id>/gaps":                dict(kind="attempt", method="POST", expect=REFUSED,
+                                               body={"gaps": ["B wrote this"]}),
     "/revision/sessions/<id>/complete":   dict(kind="session", method="POST", expect=REFUSED,
                                                body={}),
     "/concepts/<id>":                     dict(kind="concept", method="GET", expect=SCOPED,
@@ -359,10 +364,10 @@ def world(tmp_path_factory):
     _, bank = api.handle("GET", f"/notebooks/{nb_a['id']}/questions", {}, {}, a_token)
     _, ses_a = api.handle("POST", "/revision/sessions", {}, {"count": 2}, a_token)
     _, served = api.handle("GET", "/revision/next", {"session": ses_a["session_id"]}, {}, a_token)
-    api.handle("POST", "/attempts", {},
-               {"question_id": served["question"]["question_id"], "user_answer": 1,
-                "user_colour": "RED", "session_id": ses_a["session_id"],
-                "gaps": ["FeNa interpretation"]}, a_token)
+    _, att_a = api.handle("POST", "/attempts", {},
+                          {"question_id": served["question"]["question_id"], "user_answer": 1,
+                           "user_colour": "RED", "session_id": ses_a["session_id"],
+                           "gaps": ["FeNa interpretation"]}, a_token)
     _, gaps_a = api.handle("GET", "/gaps", {}, {}, a_token)
     _, cons_a = api.handle("GET", "/concepts", {}, {}, a_token)
     _, demo_a = api.handle("POST", "/demos", {},
@@ -385,7 +390,7 @@ def world(tmp_path_factory):
                 "question": bank["questions"][0]["id"],
                 "session": ses_a["session_id"], "gap": gaps_a["gaps"][0]["id"],
                 "concept": cons_a["concepts"][0]["concept_id"], "demo": demo_a["id"],
-                "reminder": rem_a["id"]},
+                "reminder": rem_a["id"], "attempt": att_a["attempt_id"]},
         "b_notebook": nb_b["id"],
     }
 
@@ -697,3 +702,17 @@ def test_the_audit_tool_is_quiet_on_a_clean_database(world, tmp_path):
     report = json.loads(out.stdout)
     assert report["leaked_questions"] == [] and report["leaked_attempts"] == []
     assert out.returncode == 0
+
+
+def test_gaps_cannot_be_named_on_another_learners_attempt(world):
+    """The route answers 404 AND nothing is written. A 404 alone could sit on
+    top of a write that already happened."""
+    api, db, att = world["api"], world["db"], world["ids"]["attempt"]
+    before = db.query_one("SELECT COUNT(*) n FROM gap_links WHERE attempt_id = ?", (att,))["n"]
+    for body in ({"gaps": ["B wrote this"]}, {"gaps": []}, {"gaps": "not a list"}):
+        status, _ = api.handle("POST", f"/attempts/{att}/gaps", {}, body, world["b"])
+        assert status == 404, (body, status)
+    assert db.query_one("SELECT COUNT(*) n FROM gap_links WHERE attempt_id = ?",
+                        (att,))["n"] == before
+    assert db.query_one("SELECT COUNT(*) n FROM knowledge_gaps WHERE label = ?",
+                        ("B wrote this",))["n"] == 0

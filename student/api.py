@@ -470,6 +470,19 @@ class StudentAPI:
         if seg == ["attempts"] and method == "POST":
             return 201, self.record_attempt(uid, body)
 
+        # Naming what was missing, after the reveal. The attempt is owner-
+        # scoped in the same WHERE clause; another learner's attempt id is
+        # "no such attempt" before the body is looked at.
+        if (len(seg) == 3 and seg[0] == "attempts" and seg[2] == "gaps"
+                and method == "POST"):
+            try:
+                got = self.knowledge.tag_gaps(uid, seg[1], body.get("gaps"))
+            except ValueError as exc:
+                raise ApiError(400, str(exc))
+            if got is None:
+                raise ApiError(404, "no such attempt")
+            return 201, {"gaps": got}
+
         # --- progress ---
         if seg == ["progress"] and method == "GET":
             return 200, self.progress(uid)

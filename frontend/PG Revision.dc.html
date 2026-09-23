@@ -1420,7 +1420,16 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
           <sc-if value="{{ needGap }}" hint-placeholder-val="{{ true }}">
             <div style="display:flex;flex-direction:column;gap:10px;padding:15px;background:#fff;border:1px solid {{ gapBd }};border-radius:6px;animation:pgfade .25s ease both">
               <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:{{ gapFg }}">Which part failed?</span>
-              <span style="font-size:12px;line-height:1.5;color:#6f7679;text-wrap:pretty">Pick what you actually did not know. This is stored as a knowledge gap against the concept, not "anaemia weak".</span>
+              <span style="font-size:12px;line-height:1.5;color:#6f7679;text-wrap:pretty">{{ gapPrompt }}</span>
+              <sc-if value="{{ gapLive }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;gap:8px">
+                  <input value="{{ gapDraft }}" onChange="{{ setGapDraft }}" maxlength="120" placeholder="e.g. FeNa interpretation" style="flex:1;min-width:0;min-height:42px;padding:0 11px;background:#fff;border:1px solid #E0DDD4;border-radius:5px;outline:none;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:13px;color:#16191A" />
+                  <button onClick="{{ addGap }}" style="flex:none;min-height:42px;padding:0 14px;background:#FAFAF8;border:1px solid #E0DDD4;border-radius:5px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;font-weight:600;color:#8a5f13">{{ addGapLabel }}</button>
+                </div>
+                <sc-if value="{{ gapError }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size:11.5px;line-height:1.5;color:#BC4C43">{{ gapError }}</span>
+                </sc-if>
+              </sc-if>
               <div style="display:flex;flex-wrap:wrap;gap:6px">
                 <sc-for list="{{ gapOptions }}" as="g" hint-placeholder-count="4">
                   <button onClick="{{ g.toggle }}" style="padding:9px 11px;min-height:38px;border-radius:18px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12px;background:{{ g.bg }};border:1px solid {{ g.bd }};color:{{ g.fg }}">{{ g.label }}</button>
@@ -1827,10 +1836,18 @@ const QMETA = [
     gaps: ['Obesity effect on NP levels', 'NP cut-offs', 'Renal effect on NP', 'Rule-out reasoning'] },
 ];
 
+/* [value, colour, note, label]. The VALUE is what `POST /attempts` stores and
+ * must be exactly one of the server's `COLOURS` -- the server refuses anything
+ * else rather than guess, which is right. Until 2026-09-23 the value WAS the
+ * label ('Red'), so every answer given through these buttons against a live
+ * server was refused with a 400, and `needGap` (which compares 'RED') never
+ * opened the gap panel in any mode. Tests fed colours straight to the API, so
+ * none of them pressed a button. `tests/frontend/answer_buttons_live.test.mjs`
+ * now does. */
 const JUDGEMENTS = [
-  ['Red', '#BC4C43', 'Forgot it'],
-  ['Orange', '#B5812B', 'Half sure'],
-  ['Green', '#1E7A57', 'Knew it'],
+  ['RED', '#BC4C43', 'Forgot it', 'Red'],
+  ['ORANGE', '#B5812B', 'Half sure', 'Orange'],
+  ['GREEN', '#1E7A57', 'Knew it', 'Green'],
 ];
 
 const SOURCES_BASE = [
@@ -3434,13 +3451,15 @@ class Component extends DCLogic {
    * would silently disagree with what they remember doing. */
   judge = (colour) => () => {
     const st = this.state;
-    this.setState({ judgement: colour, gaps: [] });
+    this.setState({ judgement: colour, gaps: [], liveAttemptId: null, gapDraft: '',
+                    gapError: '', gapBusy: false });
     const api = st.studentApi;
     if (!api || !api.recordAttempt || !st.liveQuestionId) return;
     this.setState({ attemptState: 'saving', attemptError: '' });
     api.recordAttempt(st.liveQuestionId, st.picked, colour, { sessionId: st.liveSessionId })
       .then((res) => this.setState({
         attemptState: 'ready', liveReveal: (res && res.reveal) || null,
+        liveAttemptId: (res && res.attempt_id) || null,
       }))
       .catch((err) => this.setState({
         attemptState: 'error', liveReveal: null,
@@ -3448,6 +3467,37 @@ class Component extends DCLogic {
       }));
   };
   toggleGap = (g) => () => this.setState((st) => ({ gaps: st.gaps.indexOf(g) >= 0 ? st.gaps.filter((x) => x !== g) : st.gaps.concat([g]) }));
+
+  /* Name a gap in a live session, in the learner's own words, and save it now.
+   *
+   * The fixture offered chips from a per-question list. A live question has no
+   * such list, and building one from its concepts would be the app deciding
+   * what the learner did not know. So the learner types it. It is saved at
+   * once -- not on "Next" -- because a gap held only in this screen's state is
+   * lost the moment the session moves on, and the weak list is built from
+   * nothing else. The chip appears only after the server has stored it. */
+  addGap = () => {
+    const st = this.state;
+    const api = st.studentApi;
+    const label = String(st.gapDraft || '');
+    if (!label.trim()) { this.setState({ gapError: 'Type what you did not know first.' }); return null; }
+    if (!api || !api.tagGaps) return null;
+    if (!st.liveAttemptId) {
+      this.setState({ gapError: st.attemptState === 'error'
+        ? 'This answer was not recorded, so a gap cannot be attached to it.'
+        : 'Your answer is still being saved — try again in a moment.' });
+      return null;
+    }
+    this.setState({ gapBusy: true, gapError: '' });
+    return api.tagGaps(st.liveAttemptId, [label])
+      .then(() => this.setState((s2) => ({
+        gapBusy: false, gapDraft: '',
+        gaps: s2.gaps.indexOf(label.trim()) >= 0 ? s2.gaps : s2.gaps.concat([label.trim()]),
+      })))
+      .catch((err) => this.setState({
+        gapBusy: false, gapError: (err && err.message) ? err.message : String(err),
+      }));
+  };
 
   /* Ask the server for the next question, or finish.
    *
@@ -5237,9 +5287,9 @@ class Component extends DCLogic {
       correctAnswer: (q.correct === null || q.correct === undefined)
         ? '' : (q.options[q.correct] || ''),
       qConcepts: meta.concepts.map(([name, subject]) => ({ name, color: SUBJ[subject].color })),
-      judgements: JUDGEMENTS.map(([label, colour, note]) => {
-        const on = s.judgement === label;
-        return { label, note, set: this.judge(label), dot: on ? '#fff' : colour,
+      judgements: JUDGEMENTS.map(([value, colour, note, label]) => {
+        const on = s.judgement === value;
+        return { label, note, set: this.judge(value), dot: on ? '#fff' : colour,
           fg: on ? '#fff' : colour,
           noteFg: on ? 'rgba(255,255,255,.82)' : '#6f7679',
           bg: on ? colour : '#fff',
@@ -5249,11 +5299,24 @@ class Component extends DCLogic {
       needGap: s.judgement === 'RED' || s.judgement === 'ORANGE',
       gapFg: jColour ? jColour[1] : '#B5812B',
       gapBd: jColour ? jColour[1] + '55' : '#E6E4DE',
-      gapOptions: meta.gaps.map((label) => ({ label, toggle: this.toggleGap(label),
+      gapLive: qLive,
+      gapPrompt: qLive
+        ? 'Name what you actually did not know, in your own words. Each one is saved to '
+          + 'your weak list against this answer — something specific, not "renal weak".'
+        : 'Pick what you actually did not know. This is stored as a knowledge gap against the concept, not "anaemia weak".',
+      gapDraft: s.gapDraft || '',
+      setGapDraft: (e) => this.setState({ gapDraft: e.target.value, gapError: '' }),
+      addGap: this.addGap, addGapLabel: s.gapBusy ? 'Saving…' : 'Add',
+      gapError: s.gapError || '',
+      /* Live: the gaps the SERVER has stored for this answer, shown as saved
+       * chips that do nothing on tap (un-naming one is not a route). */
+      gapOptions: qLive ? s.gaps.map((label) => ({ label: label + ' ✓', toggle: this.noopPick,
+        bg: 'rgba(181,129,43,.1)', bd: '#B5812B', fg: '#8a5f13' }))
+      : meta.gaps.map((label) => ({ label, toggle: this.toggleGap(label),
         bg: s.gaps.indexOf(label) >= 0 ? 'rgba(181,129,43,.1)' : '#FAFAF8',
         bd: s.gaps.indexOf(label) >= 0 ? '#B5812B' : '#E6E4DE',
         fg: s.gaps.indexOf(label) >= 0 ? '#8a5f13' : '#5d6467' })),
-      attemptLine: 'attempt ' + (this.attempts.length + 1) + ' · ' + (right ? 'correct' : 'incorrect') + ' · ' + (s.judgement || '—')
+      attemptLine: 'attempt ' + (this.attempts.length + 1) + ' · ' + (right ? 'correct' : 'incorrect') + ' · ' + (jColour ? jColour[3] : '—')
         + (s.gaps.length ? ' · ' + s.gaps.length + ' gap' + (s.gaps.length > 1 ? 's' : '') : ''),
 
       ...this.masteryView(),

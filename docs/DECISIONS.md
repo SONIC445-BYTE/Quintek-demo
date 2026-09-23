@@ -1055,3 +1055,63 @@ Choices were drop, migrate, or leave:
   no longer creates a row; `schema.sql` keeps the definitions under a RETIRED
   comment so existing and new databases agree; erasure still clears them
   because they carry `user_id`.
+
+## ADR-032 — No answer given through the live app's colour buttons was ever recorded
+
+**Date/phase:** 2026-09-23 · **Status:** FIXED the same day. Found while writing the dashboard how-to, not a disclosure route.
+
+### What was wrong
+
+Two defects, one behind the other:
+
+1. **The buttons sent the wrong value.** `JUDGEMENTS` used the display word as
+   the value, so pressing Red sent `user_colour: "Red"`. The server accepts
+   exactly `RED | ORANGE | GREEN` and refuses anything else rather than guess,
+   correctly. So **every answer given through the live app was refused with a
+   400**, and the screen showed the error. The same mismatch kept the "Which
+   part failed?" panel shut in every mode, because `needGap` compares `'RED'`.
+2. **Gaps had nowhere to go.** The attempt is written when the colour is
+   chosen, because that response carries the reveal and an attempt is
+   immutable. "Which part failed?" can only be answered after the reveal, so
+   it came too late to go into the attempt, and a live question offered no way
+   to answer it anyway (its chip list was empty). Nothing in the live app
+   could create a gap, and the weak list, which is built only from gaps, was
+   empty for every real learner.
+
+### Why nothing caught it
+
+Every colour test (A1–A3 included) sent colours to the API directly or set
+`judgement` in state. None pressed a button. The server's validation was right
+and was tested; the value the UI handed it was not.
+
+### Exposure
+
+None in production: the live database has never held a question, so no
+learner reached the buttons.
+
+### Fix
+
+* `JUDGEMENTS` rows are now `[value, colour, note, label]`; the value is the
+  server's canonical colour and the label is only displayed. The server stays
+  strict.
+* `POST /attempts/<id>/gaps` (`KnowledgeStore.tag_gaps`) attaches gaps the
+  learner names after the reveal. Owner-scoped in the same `WHERE` clause;
+  Red or Orange answers only; the whole batch is validated before anything is
+  written; the attempt row is not touched — `gap_links` is the record.
+  Declared in the cross-user meta-test, with the database checked after B's
+  refused writes.
+* In a live session the learner types the gap in their own words (the app
+  does not propose gaps from the question's concepts — that would be deciding
+  for them) and it is saved at once, not on "Next". The chip appears only
+  after the server stored it.
+
+`tests/frontend/answer_buttons_live.test.mjs` presses the real buttons
+against a running server. Twelve mutations, including reinstating the
+original values; all fail a test.
+
+### Not fixed, recorded
+
+`frontend/PG Revision standalone.dc.html` and `frontend/Quintek PG Revision.html`
+are offline design copies last touched 2026-08-19. They carry the old
+`JUDGEMENTS` but have no backend client, so the 400 cannot occur in them; they
+are not built from source and are left as they are.

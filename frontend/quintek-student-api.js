@@ -384,6 +384,13 @@ export async function recordAttempt(questionId, answerIndex, colour, opts) {
   });
 }
 
+/* Name what was missing on an answer already recorded. The attempt is written
+ * when the colour is chosen, before the learner has seen the answer, so the
+ * gaps -- which they can only name after it -- are attached afterwards. */
+export async function tagGaps(attemptId, gaps) {
+  return call('POST', '/attempts/' + encodeURIComponent(attemptId) + '/gaps', { gaps });
+}
+
 export async function completeSession(sessionId) {
   return call('POST', '/revision/sessions/' + encodeURIComponent(sessionId) +
               '/complete', {});

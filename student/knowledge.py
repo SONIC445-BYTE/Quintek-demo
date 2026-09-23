@@ -193,6 +193,59 @@ class KnowledgeStore:
              question["source_id"], question["chunk_id"]))
         return gap_id
 
+    #: A learner names a handful of things per answer, in a few words each.
+    GAP_LABEL_MAX, GAPS_PER_ATTEMPT = 120, 10
+
+    def tag_gaps(self, user_id: str, attempt_id: str, labels) -> list[str] | None:
+        """Name what was missing on an answer already recorded.
+
+        WHY THIS EXISTS. The app records an attempt the moment the learner
+        picks a colour -- the reveal comes back in that response, and an
+        attempt is immutable -- so "which part failed?", which the learner can
+        only answer AFTER seeing the answer, arrived too late to go in it. The
+        live app therefore never sent a gap, and the weak list it feeds was
+        empty for every real learner.
+
+        The attempt row is NOT touched (it cannot be: see the immutability
+        triggers). Each label becomes a `knowledge_gaps` row linked to this
+        attempt through `gap_links`, exactly as a gap sent with the attempt
+        would be. `attempts.knowledge_gaps_json` keeps what was sent AT THE
+        TIME, which for these is nothing -- the link table is the record.
+
+        Returns None when the attempt is not this learner's, so the caller
+        answers "no such attempt" whatever the reason.
+        """
+        attempt = self.db.query_one(
+            "SELECT * FROM attempts WHERE id = ? AND user_id = ?", (attempt_id, user_id))
+        if attempt is None:
+            return None
+        if attempt["user_colour"] not in (RED, ORANGE):
+            raise ValueError("a gap is named on a Red or Orange answer; this one is "
+                             f"{attempt['user_colour']}")
+        if not isinstance(labels, list) or not labels:
+            raise ValueError("name at least one thing you did not know")
+        if len(labels) > self.GAPS_PER_ATTEMPT:
+            raise ValueError(f"at most {self.GAPS_PER_ATTEMPT} gaps per answer")
+        clean = []
+        for label in labels:
+            if not isinstance(label, str) or not label.strip():
+                raise ValueError("a gap needs some text")
+            if len(label.strip()) > self.GAP_LABEL_MAX:
+                raise ValueError(f"a gap is at most {self.GAP_LABEL_MAX} characters")
+            if "\x00" in label:
+                raise ValueError("a gap contains a NUL character")
+            clean.append(label)
+        question = self.db.query_one(
+            "SELECT q.* FROM questions q"
+            " JOIN notebooks n ON n.id = q.primary_notebook_id AND n.owner_id = ?"
+            " WHERE q.id = ?", (user_id, attempt["question_id"]))
+        if question is None:
+            return None
+        concept_ids = json.loads(attempt["concepts_tested_json"] or "[]")
+        return [gid for label in clean
+                if (gid := self._record_gap(user_id, label, attempt_id, question,
+                                            concept_ids, attempt["user_colour"]))]
+
     def resolve_gap(self, user_id: str, gap_id: str) -> None:
         self.db.execute(
             "UPDATE knowledge_gaps SET resolved_at = ? WHERE id = ? AND user_id = ?",
