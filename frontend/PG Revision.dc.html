@@ -82,6 +82,33 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
 
     <sc-if value="{{ isToday }}" hint-placeholder-val="{{ true }}">
       <div style="display:flex;flex-direction:column;gap:14px;padding:0 16px 24px">
+        <!-- How Quintek works. A section, not a modal: it is on this screen for
+             good, open for a new account and one tap away afterwards, and More
+             links to it. Every sentence is written against what the code does;
+             see guideVals() and tests/frontend/guide_live.test.mjs. -->
+        <div style="display:flex;flex-direction:column;background:#fff;border:1px solid #E6E4DE;border-radius:7px;overflow:hidden">
+          <button onClick="{{ toggleGuide }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;padding:13px 14px;min-height:48px;background:#fff;border:none;cursor:pointer;text-align:left;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif">
+            <span style="display:flex;flex-direction:column;gap:3px">
+              <span style="font-size:14px;font-weight:600;color:#16191A">How Quintek works</span>
+              <span style="font-size:11.5px;color:#8a9093">{{ guideSub }}</span>
+            </span>
+            <span style="flex:none;font-size:12px;font-weight:600;color:#1E7A57">{{ guideToggleLabel }}</span>
+          </button>
+          <sc-if value="{{ guideOpen }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:1px;background:#EFEDE7;border-top:1px solid #E6E4DE">
+              <sc-for list="{{ guideItems }}" as="gi" hint-placeholder-count="6">
+                <div style="display:flex;flex-direction:column;gap:6px;padding:13px 14px;background:#fff">
+                  <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">{{ gi.title }}</span>
+                  <span style="font-size:12.5px;line-height:1.55;color:#33393b;text-wrap:pretty">{{ gi.body }}</span>
+                  <sc-if value="{{ gi.note }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-size:11.5px;line-height:1.5;color:#8a5f13;text-wrap:pretty">{{ gi.note }}</span>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+
         <div style="display:flex;flex-direction:column;gap:12px;padding:15px;background:#fff;border:1px solid #E6E4DE;border-top:2px solid #BC4C43;border-radius:0 0 7px 7px">
           <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">Do this next</span>
           <span style="font-family:'Source Serif 4',Georgia,'Times New Roman',serif;font-size:19px;line-height:1.35;color:#16191A;text-wrap:pretty">{{ todayHeadline }}</span>
@@ -129,10 +156,12 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
           </sc-for>
         </div>
 
-        <div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:#F5F3EC;border-radius:5px">
-          <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11px;font-weight:600;letter-spacing:.01em;color:#8a5f13;flex:none">Demo data</span>
-          <span style="font-size:11.5px;line-height:1.5;color:#6f7679;text-wrap:pretty">Counts and history on this screen are prototype values, not a live knowledge state.</span>
-        </div>
+        <sc-if value="{{ todayDemo }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:#F5F3EC;border-radius:5px">
+            <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11px;font-weight:600;letter-spacing:.01em;color:#8a5f13;flex:none">Demo data</span>
+            <span style="font-size:11.5px;line-height:1.5;color:#6f7679;text-wrap:pretty">Counts and history on this screen are prototype values, not a live knowledge state.</span>
+          </div>
+        </sc-if>
       </div>
     </sc-if>
 
@@ -2079,6 +2108,7 @@ class Component extends DCLogic {
     liveReminders: null, remState: 'off', remError: '', remDelivery: false,
     remLabel: '', remDate: '', remTime: '', remEditing: null, remBusy: '',
     remFormError: '',
+    guideOpen: null,
     demosState: 'off', demosError: '',
     weakFilter: 'All', query: '', cptFrom: 'weak', qCount: 10, strategy: 'adaptive',
     studio: {}, studioOut: false, studioAct: null, bankFilter: 'All',
@@ -2250,10 +2280,15 @@ class Component extends DCLogic {
     };
     const ready = s.learnerState === 'ready';
     if (!ready) {
-      const blank = s.learnerState === 'error';
+      /* With a backend configured, the design file's numbers are never the
+       * answer -- not even while the real ones are loading. They used to show
+       * during every load ("4 red gaps are unresolved, start with ferritin
+       * interpretation"), as this learner's own. */
+      const blank = s.learnerState === 'error' || !!s.studentApi;
       return {
         ready: false,
-        headline: blank ? '' : '4 red gaps are unresolved, start with ferritin interpretation.',
+        headline: blank ? (s.learnerState === 'loading' ? 'Loading your day…' : '')
+          : '4 red gaps are unresolved, start with ferritin interpretation.',
         why: blank ? '' : 'Two questions in two different notebooks failed on the same gap, and you graded both red. The queue leads with it, then covers the surrounding iron-studies section.',
         colourCounts: blank ? [] : [
           { n: 4, label: 'Red', color: '#BC4C43', go: this.go('weak') },
@@ -2287,7 +2322,12 @@ class Component extends DCLogic {
       return (hit && hit.subject) || '';
     };
     const unresolved = gaps.filter((g) => (g.colour || '').toUpperCase() !== 'GREEN');
-    const due = (s.liveDashboard && s.liveDashboard.recommended_question_count) || 0;
+    /* `due_count`, not `recommended_question_count`. The recommendation is a
+     * session size with a floor of 10 (`RevisionEngine.dashboard`), so the
+     * headline used to tell a brand-new account with no questions at all that
+     * "10 questions are due". Found 2026-09-23 by opening the app in a browser
+     * as a new account. */
+    const due = (s.liveDashboard && s.liveDashboard.due_count) || 0;
     const lead = unresolved[0];
     return {
       ready: true,
@@ -2362,7 +2402,9 @@ class Component extends DCLogic {
       [n <= 0 ? 0 : n < 3 ? 1 : n < 8 ? 2 : 3];
 
     if (s.learnerState !== 'ready') {
-      if (s.learnerState === 'error') return [];
+      /* With a backend, nothing until the learner's own activity arrives --
+       * the design pattern read as their history while it loaded. */
+      if (s.learnerState === 'error' || s.studentApi) return [];
       /* The design file's pattern, unchanged, for the disconnected file. */
       return Array.from({ length: 84 }, (_, i) => ({
         bg: ['#EDEBE4', 'rgba(30,122,87,.25)', 'rgba(30,122,87,.55)', '#1E7A57']
@@ -2396,7 +2438,7 @@ class Component extends DCLogic {
   masteryView = () => {
     const s = this.state;
     if (s.learnerState !== 'ready') {
-      if (s.learnerState === 'error') return { masteryStats: [], conceptMastery: [] };
+      if (s.learnerState === 'error' || s.studentApi) return { masteryStats: [], conceptMastery: [] };
       return {
         masteryStats: [{ n: 96, label: 'Mastered', color: '#1E7A57' },
           { n: 62, label: 'Due', color: '#B5812B' },
@@ -2482,7 +2524,7 @@ class Component extends DCLogic {
   streakLabel = () => {
     const s = this.state;
     if (s.learnerState !== 'ready') {
-      if (s.learnerState === 'error') return '';
+      if (s.learnerState === 'error' || s.studentApi) return '';
       return (this.props.showStreak ?? true) ? '41-day streak' : '84 sessions logged';
     }
     const api = s.studentApi;
@@ -2494,6 +2536,74 @@ class Component extends DCLogic {
      * to the count of attempts, which is a fact either way. */
     return total + (total === 1 ? ' attempt logged' : ' attempts logged');
   };
+
+  /* "How Quintek works" -- the permanent section on Today.
+   *
+   * OPEN for a new account (the server says it has no attempts), CLOSED once
+   * it has some, and the learner's own tap overrides either. Closed until the
+   * learner state is known, so an account with data never flashes it open.
+   * Design mode (no backend) starts closed: there is no account to be new.
+   *
+   * Each item is a statement about behaviour, checked against the code it
+   * describes when it was written (2026-09-23) and pinned by
+   * tests/frontend/guide_live.test.mjs. Where the app does NOT do something a
+   * learner would expect -- deliver a reminder, resolve a gap -- it says so. */
+  guideVals = () => {
+    const s = this.state;
+    const ready = s.learnerState === 'ready' && !!s.liveProgress;
+    const fresh = ready && (s.liveProgress.attempts_total || 0) === 0;
+    const open = s.guideOpen === null || s.guideOpen === undefined ? fresh : !!s.guideOpen;
+    const delivery = !s.studentApi ? ''
+      : s.remState !== 'ready' ? 'Settings shows whether reminder delivery is switched on.'
+      : s.remDelivery ? ''
+      : 'Delivery is not switched on for this server yet, so for now a reminder whose '
+        + 'time comes is marked “Not sent” on your list instead of reaching you.';
+    return {
+      guideOpen: open,
+      toggleGuide: () => this.setState({ guideOpen: !open }),
+      guideToggleLabel: open ? 'Hide' : 'Show',
+      guideSub: 'Colours, your weak list, reminders and reporting',
+      guideItems: [
+        { title: 'Only checked questions',
+          body: 'You are only shown a question after the validator has passed it. One '
+            + 'still being checked appears in your question bank as “Awaiting '
+            + 'validation”, with its text hidden until it passes.' },
+        { title: 'You choose the colour',
+          body: 'After each answer, pick how it went: Red — forgot it, Orange — half '
+            + 'sure, Green — knew it. Quintek never picks it for you. Whether the '
+            + 'answer was right is recorded separately and never changes your colour.' },
+        { title: 'How a concept gets its colour',
+          body: 'From your last five colours on questions about it. Two Reds among '
+            + 'them make it Red. It is Green when your two most recent are Green and '
+            + 'none of the five is Red. Anything else is Orange. On Progress, a '
+            + 'concept you have not graded yet counts as “Not yet graded”, not as a '
+            + 'colour.' },
+        { title: 'Your weak list',
+          body: 'After a Red or Orange answer, name what you did not know, in your own '
+            + 'words — “FeNa interpretation”, not “renal”. Forgotten / weak lists '
+            + 'those and nothing else: a Red answer with nothing named does not '
+            + 'appear there.',
+          note: 'There is no button in the app yet to mark a gap resolved, so a named '
+            + 'gap stays on the list.' },
+        { title: 'Reminders',
+          body: 'In Settings, write anything — “revise patho” — and pick a date and a '
+            + 'time. Add as many as you like. At that time Quintek hands your words '
+            + 'back exactly as you wrote them. A reminder is not linked to any '
+            + 'question or concept.',
+          note: delivery },
+        { title: 'Report a question',
+          body: 'If a question looks wrong, tap “Report a problem with this question” '
+            + 'after answering it or in the question bank, and say what is wrong: '
+            + 'the content, the marked answer, not in your source, more than one '
+            + 'answer fits, unsafe or offensive, or something else. The report is '
+            + 'recorded against that question; it does not remove the question by '
+            + 'itself.' },
+      ],
+    };
+  };
+
+  /* Open the how-to from anywhere: Today, with the section open. */
+  openGuide = () => this.setState({ route: 'today', guideOpen: true });
 
   /* The reminder screen (ADR-031).
    *
@@ -2577,7 +2687,7 @@ class Component extends DCLogic {
   notebookRows = () => {
     const s = this.state;
     if (s.nbsState !== 'ready') {
-      if (s.nbsState === 'error') return [];
+      if (s.nbsState === 'error' || s.studentApi) return [];
       return NOTEBOOKS.map((n) => ({
         id: n.id, title: n.title, subject: n.subject,
         sourceCount: n.sources, conceptCount: n.concepts, questionCount: n.questions,
@@ -2610,7 +2720,7 @@ class Component extends DCLogic {
     const s = this.state;
     const wanted = String(s.bankFilter || 'All').toLowerCase();
     if (s.bankState !== 'ready') {
-      if (s.bankState === 'error') return [];
+      if (s.bankState === 'error' || s.studentApi) return [];
       return BANK.filter((b) => wanted === 'all' || b[2].toLowerCase() === wanted)
         .map(([id, stem, validation, family, notebook, concepts, attempts, provenance]) => ({
           id, stem, validation, family, notebook, attempts, provenance,
@@ -3085,6 +3195,9 @@ class Component extends DCLogic {
         this.loadDemos(api);
         this.loadLearnerState(api);
         this.loadNotebooks(api);
+        /* For the how-to on Today: whether reminder delivery is switched on
+         * is a server fact, and the section states it rather than assuming. */
+        this.loadReminders(api);
         return api.capabilities()
           .then((caps) => this.setState({ sourceCaps: caps.sources || {} }))
           /* A capability lookup that fails leaves every kind offered. Hiding
@@ -4500,7 +4613,7 @@ class Component extends DCLogic {
          * demonstration, so nothing is claimed about it. */
         usage: '',
       }))
-      : s.demosState === 'error' ? []
+      : (s.demosState === 'error' || s.studentApi) ? []
       : DEMOS.map(([id, title, created, question, spec, usage]) => ({
         id, title, created, question, usage, spec: spec.map(([k, v]) => ({ k, v })) }));
 
@@ -4509,7 +4622,7 @@ class Component extends DCLogic {
     const graphNote = (s.graphState === 'ready' && s.liveGraph)
       ? ((s.liveGraph.nodes || []).length + ' concepts, '
          + (s.liveGraph.edges || []).filter((e) => e.cross_subject).length + ' crossing subjects')
-      : (s.graphState === 'off' ? '14 concepts, 7 crossing subjects'
+      : ((s.graphState === 'off' && !s.studentApi) ? '14 concepts, 7 crossing subjects'
                                 : 'Concepts and how they connect');
 
     /* The notebook whose screen is open.
@@ -4542,13 +4655,18 @@ class Component extends DCLogic {
     const gapCount = learnerReady
       ? (s.liveGaps || []).filter((g) => String(g.colour || '').toUpperCase() !== 'GREEN').length
       : null;
+    /* A subtitle while the real value is on its way. With a backend
+     * configured, the design file's figure is never the placeholder: it read
+     * as this learner's own ("9 open gaps", "188 concepts tracked") for as
+     * long as each load took. */
+    const pending = (fixture) => (s.studentApi ? 'Loading…' : fixture);
     const heads = {
       today: ['Today', learnerReady
         ? 'Your queue and your open gaps'
         : s.learnerState === 'error' ? 'Could not load your day'
-        : 'Thursday 15 August · your queue and your open gaps', false],
+        : pending('Thursday 15 August · your queue and your open gaps'), false],
       weak: ['Forgotten / weak', gapCount === null
-        ? (s.learnerState === 'error' ? 'Could not load your gaps' : '9 open gaps, graded by you')
+        ? (s.learnerState === 'error' ? 'Could not load your gaps' : pending('9 open gaps, graded by you'))
         : n_of(gapCount, 'open gap') + ', graded by you', false],
       more: ['More', 'Search, library and settings', false],
       dashboard: ['Revision', dashLive
@@ -4565,7 +4683,7 @@ class Component extends DCLogic {
       demos: ['Demonstrations', s.demosState === 'ready'
         ? 'Framing library · ' + n_of(demoRows.length, 'demonstration')
         : s.demosState === 'error' ? 'Framing library · could not load'
-        : 'Framing library · 3 demonstrations', true, 'more', '← More'],
+        : pending('Framing library · 3 demonstrations'), true, 'more', '← More'],
       bank: ['Question bank', 'Provenance and validation state', true, 'more', '← More'],
       /* "188 concepts tracked · demo data" said the quiet part out loud and
        * was still wrong: the number was not 188 and nothing was tracked. */
@@ -4573,19 +4691,19 @@ class Component extends DCLogic {
         ? n_of((s.liveConcepts || []).length, 'concept') + ' \u00b7 '
           + n_of((s.liveProgress && s.liveProgress.due_count) || 0, 'question') + ' due'
         : s.learnerState === 'error' ? 'Could not load your progress'
-        : '188 concepts tracked · demo data', true, 'more', '← More'],
+        : pending('188 concepts tracked · demo data'), true, 'more', '← More'],
       home: ['Notebooks', s.nbsState === 'ready'
         ? n_of(notebookRows.length, 'notebook') + ' · '
           + notebookRows.reduce((t, x) => t + (x.due || 0), 0) + ' due'
         : s.nbsState === 'error' ? 'Could not load your notebooks'
-        : 'Thursday 15 August · 30 due', true, 'more', '← More'],
+        : pending('Thursday 15 August · 30 due'), true, 'more', '← More'],
       notebook: [nb.title, nb.sourceCount + ' sources · ' + nb.conceptCount + ' concepts', true, 'home', '← Notebooks'],
       graph: ['Concept graph', (s.graphState === 'ready' && s.liveGraph)
         ? n_of((s.liveGraph.nodes || []).length, 'concept') + ' · '
           + n_of((s.liveGraph.edges || []).length, 'link') + ' · '
           + (s.liveGraph.edges || []).filter((e) => e.cross_subject).length + ' cross subjects'
         : s.graphState === 'error' ? 'Could not load the graph'
-        : '14 concepts · 18 links · 7 cross subjects', false],
+        : pending('14 concepts · 18 links · 7 cross subjects'), false],
       revise: ['Revision', 'Mixed queue · spaced repetition', false],
       onboard: ['', '', false],
       /* `(SUBJ[x] || null)`, not `SUBJ[x].label`. A live concept's subject is
@@ -4888,6 +5006,8 @@ class Component extends DCLogic {
       generate: this.generate, generateLabel: s.generated ? 'Questions generated' : 'Write questions from this passage',
 
       ...this.remVals(),
+      ...this.guideVals(),
+      todayDemo: !s.studentApi,
       settingsNotebooks: notebookRows.map((n) => ({ title: n.title, open: this.openNotebook(n.id),
         meta: n.sourceCount + ' sources · ' + n.conceptCount + ' concepts · '
               + n.questionCount + ' questions' })),
@@ -5126,6 +5246,7 @@ class Component extends DCLogic {
         { label: 'Question bank', note: 'Every question and its provenance', go: this.go('bank') },
         { label: 'Demonstrations', note: 'Framing library the AI writes to', go: this.go('demos') },
         { label: 'Progress', note: 'Mastery, intervals, history', go: this.go('progress') },
+        { label: 'How Quintek works', note: 'Colours, weak list, reminders, reporting', go: this.openGuide },
         { label: 'Settings', note: 'Reminders, sources, account', go: this.go('settings') },
         { label: 'Billing', note: 'Plan, usage and payment', go: this.go('billing') },
       ],

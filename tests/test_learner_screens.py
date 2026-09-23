@@ -60,8 +60,9 @@ def backend(tmp_path_factory):
     server.server_close()
 
 
-def open_app(browser, backend=None):
-    """Load the shipped bundle, optionally pointed at a live backend."""
+def open_app(browser, backend=None, token=None):
+    """Load the shipped bundle, optionally pointed at a live backend and signed
+    in as a learner (the APK injects the token the same way)."""
     if not BUNDLE.exists():
         pytest.skip("no build present; run tools_build_standalone.py")
     page = browser.new_page(viewport={"width": 390, "height": 780})
@@ -69,10 +70,41 @@ def open_app(browser, backend=None):
         # Exactly what WebScreenActivity.kt injects ahead of the document.
         page.add_init_script(
             f"window.__QUINTEK_API__ = {json.dumps(backend)};"
-            f"window.__QUINTEK_STUDENT_API__ = {json.dumps(backend)};")
+            f"window.__QUINTEK_STUDENT_API__ = {json.dumps(backend)};"
+            + (f"window.__QUINTEK_STUDENT_TOKEN__ = {json.dumps(token)};" if token else ""))
     page.goto(f"file://{BUNDLE}")
     page.wait_for_selector("button", timeout=20_000)
     return page
+
+
+def _post(url, path, body, token=None):
+    import urllib.request
+    req = urllib.request.Request(
+        url + path, method="POST", data=json.dumps(body).encode(),
+        headers={"content-type": "application/json",
+                 **({"authorization": "Bearer " + token} if token else {})})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read() or b"{}")
+
+
+_learners = iter(range(10_000))
+
+
+@pytest.fixture
+def learner(backend):
+    """A signed-in learner who owns a notebook called "Renal Physiology".
+
+    The capability tests below used to tap that name off the design file's
+    FIXTURE notebook list while pointed at a live backend. Once the notebook
+    list was wired to the server (2026-09-23) a live backend showed the
+    learner's own notebooks -- none, unauthenticated -- and the tests could not
+    find it. Nobody noticed because this file skipped: Playwright was not
+    installed. They now use a real notebook."""
+    email = f"screens{next(_learners)}@example.com"
+    token = _post(backend, "/auth/register",
+                  {"email": email, "password": "correct-horse"})["token"]
+    _post(backend, "/notebooks", {"title": "Renal Physiology", "subject": "renal"}, token)
+    return token
 
 
 def tap(page, text, timeout=8_000):
@@ -266,14 +298,14 @@ def test_the_optional_section_never_blocks_continuing(browser) -> None:
 
 # --------------------------------------------------------------- capabilities
 
-def test_the_picker_marks_kinds_this_build_cannot_read(browser, backend) -> None:
+def test_the_picker_marks_kinds_this_build_cannot_read(browser, backend, learner) -> None:
     """
     Three of the five source kinds raise ExtractionUnavailable the moment they
     are tried. Offering five doors and opening two is the same defect as a
     "Choose file" button that shows a text box: the learner finds out after
     committing, not before choosing.
     """
-    page = open_app(browser, backend)
+    page = open_app(browser, backend, learner)
     tap(page, "More")
     tap(page, "Notebooks")
     page.wait_for_timeout(300)
@@ -285,8 +317,8 @@ def test_the_picker_marks_kinds_this_build_cannot_read(browser, backend) -> None
     page.close()
 
 
-def test_an_unavailable_kind_says_why_and_what_to_do_instead(browser, backend) -> None:
-    page = open_app(browser, backend)
+def test_an_unavailable_kind_says_why_and_what_to_do_instead(browser, backend, learner) -> None:
+    page = open_app(browser, backend, learner)
     tap(page, "More")
     tap(page, "Notebooks")
     page.wait_for_timeout(300)
@@ -302,9 +334,9 @@ def test_an_unavailable_kind_says_why_and_what_to_do_instead(browser, backend) -
     page.close()
 
 
-def test_the_working_kinds_are_still_offered(browser, backend) -> None:
+def test_the_working_kinds_are_still_offered(browser, backend, learner) -> None:
     """A capability check that hid everything would be worse than the bug."""
-    page = open_app(browser, backend)
+    page = open_app(browser, backend, learner)
     tap(page, "More")
     tap(page, "Notebooks")
     page.wait_for_timeout(300)
@@ -476,4 +508,54 @@ def test_with_no_backend_the_app_says_so_rather_than_looking_broken(browser) -> 
     page.get_by_text("Settings", exact=True).first.click(timeout=8_000)
     page.wait_for_timeout(600)
     assert "none configured" in page.inner_text("body")
+    page.close()
+
+
+# ------------------------------------------------ the how-to and reminders
+
+def test_a_new_account_sees_how_quintek_works_on_today(browser, backend, learner) -> None:
+    page = open_app(browser, backend, learner)
+    page.wait_for_selector("text=How Quintek works", timeout=15_000)
+    page.wait_for_selector("text=You choose the colour", timeout=15_000)
+    body = page.inner_text("body")
+    for heading in ("Only checked questions", "How a concept gets its colour",
+                    "Your weak list", "Reminders", "Report a question"):
+        assert heading in body, f"the how-to is missing {heading!r}"
+    assert "Demo data" not in body, "a live account is told its counts are prototype values"
+    assert "questions are due" not in body, (
+        "a new account with no questions is told questions are due")
+    assert "Nothing is due and no gaps are open." in body
+    page.close()
+
+
+def nav(page, label, timeout=8_000):
+    """Exact-text tap. `tap` matches substrings, case-insensitively, and the
+    open how-to on a new account's Today contains "more than one answer fits"
+    and "In Settings" -- so `tap(page, "More")` pressed the how-to's text."""
+    page.get_by_text(label, exact=True).first.click(timeout=timeout)
+
+
+def test_the_how_to_is_reachable_from_more(browser, backend) -> None:
+    page = open_app(browser)
+    nav(page, "More")
+    nav(page, "How Quintek works")
+    page.wait_for_selector("text=You choose the colour", timeout=10_000)
+    page.close()
+
+
+def test_a_reminder_shows_the_learners_words_as_typed(browser, backend, learner) -> None:
+    label = "revise patho\n  then micro"
+    _post(backend, "/reminders", {"label": label, "local_date": "2099-01-10",
+                                  "local_time": "20:00", "timezone": "Asia/Kolkata"}, learner)
+    page = open_app(browser, backend, learner)
+    nav(page, "More")
+    nav(page, "Settings")
+    page.wait_for_selector("text=Delivery is not switched on", timeout=15_000)
+    # innerText of a pre-wrap span keeps the newline and the leading spaces; a
+    # span without pre-wrap would collapse them and fail this.
+    rendered = page.evaluate(
+        "() => [...document.querySelectorAll('span')].map((e) => e.innerText)"
+        ".filter((t) => t.startsWith('revise patho'))")
+    assert label in rendered, rendered
+    assert "2099-01-10 · 20:00 · Asia/Kolkata" in page.inner_text("body")
     page.close()
