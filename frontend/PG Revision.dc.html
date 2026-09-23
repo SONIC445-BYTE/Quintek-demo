@@ -2289,6 +2289,14 @@ class Component extends DCLogic {
 
     const counts = (s.liveProgress && s.liveProgress.colour_counts) || {};
     const gaps = s.liveGaps || [];
+    /* A gap carries its concept's id but not its subject; the concept list
+     * carries both. Looked up rather than assumed -- every one of these used to
+     * pass the literal 'biochemistry', and passed no id at all, so the concept
+     * screen could never fetch the concept it was asked to show. */
+    const subjectOfConcept = (cid) => {
+      const hit = (s.liveConcepts || []).find((c) => c.concept_id === cid);
+      return (hit && hit.subject) || '';
+    };
     const unresolved = gaps.filter((g) => (g.colour || '').toUpperCase() !== 'GREEN');
     const due = (s.liveDashboard && s.liveDashboard.recommended_question_count) || 0;
     const lead = unresolved[0];
@@ -2313,7 +2321,8 @@ class Component extends DCLogic {
         meta: (g.concept_name || g.label) + ' · '
               + (g.evidence_count || 0)
               + ((g.evidence_count === 1) ? ' question' : ' questions'),
-        open: this.openConcept(g.concept_name || g.label, 'biochemistry', 'today') })),
+        open: this.openConcept(g.concept_name || g.label, subjectOfConcept(g.concept_id),
+                               'today', g.concept_id || null) })),
 
       /* The weak list is the same gaps under the screen's own filter. Filtered
        * here rather than server-side so switching tabs does not cost a request
@@ -2330,7 +2339,9 @@ class Component extends DCLogic {
           source: g.source_title || '',
           age: g.last_seen_at ? String(g.last_seen_at).slice(0, 10) : '',
           openSource: this.openSourceRef(g.source_title || '', g.label, 'weak'),
-          openConcept: this.openConcept(g.concept_name || g.label, 'biochemistry', 'weak'),
+          openConcept: this.openConcept(g.concept_name || g.label,
+                                        subjectOfConcept(g.concept_id), 'weak',
+                                        g.concept_id || null),
           /* Evidence is a second request per gap, so the list shows the count
            * it already has and the detail screen fetches the rest. A count
            * with no questions behind it would be a claim nothing backs. */
@@ -2340,7 +2351,7 @@ class Component extends DCLogic {
        * fixture, so a search that finds nothing found nothing. */
       searchable: (s.liveConcepts || [])
         .map((c) => ({ name: c.canonical_name || c.concept_id, kind: 'Concept',
-                       meta: c.subject || '', subject: c.subject || 'biochemistry' }))
+                       meta: c.subject || '', subject: c.subject || '', id: c.concept_id }))
         .concat(gaps.map((g) => ({ name: g.label, kind: 'Gap',
                                    meta: g.concept_name || '', subject: 'biochemistry' }))),
     };
@@ -3549,6 +3560,21 @@ class Component extends DCLogic {
   };
 
   conceptVals(name, subject) {
+    /* WITH A BACKEND, THE FIXTURE BRANCH BELOW IS UNREACHABLE.
+     *
+     * This method used to look the concept up in `CONCEPT_DATA` and `GAPS` BY
+     * NAME, whatever mode the app was in. Two defects followed from that one
+     * line. The colour came from the fixture, so a concept the learner had
+     * graded RED three times rendered Green. And a live concept whose name
+     * happened to match a fixture key -- "Heart failure" -- rendered the
+     * fixture's source, passage, question count and priority: another
+     * document entirely, presented as the learner's own.
+     *
+     * The fix is structural rather than a guard on the lookup: in live mode
+     * the fixture tables are not consulted at all, so no name can collide
+     * with them. `liveConceptVals` reads the fetched concept and nothing else,
+     * and says so plainly where the payload has no answer. */
+    if (this.state.studentApi) return this.liveConceptVals();
     const d = CONCEPT_DATA[name];
     const gaps = GAPS.filter((g) => g[3] === name);
     const worst = gaps.find((g) => g[1] === 'Red') || gaps.find((g) => g[1] === 'Orange') || gaps[0];
@@ -3588,6 +3614,181 @@ class Component extends DCLogic {
         questions: qs.map(([id, family, last]) => ({ id, family, last: last.charAt(0) + last.slice(1).toLowerCase(), fg: CFG[last] })) })) : [],
     };
   }
+
+  /* See the comment at the call site in `renderVals`. */
+  summaryVals = () => {
+    const s = this.state;
+    const colourOf = (c) => ({ RED: '#BC4C43', ORANGE: '#B5812B', GREEN: '#1E7A57' }
+                              [String(c || '').toUpperCase()] || '#8a9093');
+    const titleCase = (c) => {
+      const up = String(c || '').toUpperCase();
+      return up ? up.charAt(0) + up.slice(1).toLowerCase() : '';
+    };
+    if (s.liveSessionId || s.liveSummary || s.studentApi) {
+      const sm = s.liveSummary;
+      if (!sm) {
+        /* A live session whose summary did not load. Nothing is shown rather
+         * than the design file's numbers: the attempts are recorded either
+         * way, and the progress screen has them. */
+        return { analysis: [], movement: [], readList: [] };
+      }
+      const n = Number(sm.questions) || 0;
+      const right = Number(sm.correct) || 0;
+      const col = sm.colours || {};
+      return {
+        analysis: [
+          { n: n ? Math.round((right / n) * 100) + '%' : '\u2014', label: 'Accuracy', color: '#16191A' },
+          { n: String(right), label: 'Correct', color: '#1E7A57' },
+          { n: String(Number(sm.incorrect) || 0), label: 'Incorrect', color: '#B5812B' },
+          { n: String(col.RED || 0), label: 'Red', color: '#BC4C43' },
+          { n: String(col.ORANGE || 0), label: 'Orange', color: '#B5812B' },
+          { n: String(col.GREEN || 0), label: 'Green', color: '#1E7A57' },
+        ],
+        /* NOT "movement". The server does not record what a concept's colour
+         * was before the session, so a before -> after transition cannot be
+         * shown without inventing the "before". What it does return is each
+         * concept this session touched that is still red or orange -- stated
+         * as that, in the learner's own grade. */
+        movement: (sm.weak_concepts || []).map((w) => ({
+          name: w.name, change: 'still ' + titleCase(w.colour), color: colourOf(w.colour) })),
+        readList: (sm.read_list || []).map((r, i) => ({
+          n: String(r.order || i + 1).padStart(2, '0'),
+          name: r.label,
+          source: [r.notebook_title, r.locator && r.locator.page ? 'p.' + r.locator.page : '']
+            .filter(Boolean).join(', ') || 'no source recorded',
+          open: this.go('weak') })),
+      };
+    }
+    return {
+        analysis: [
+        { n: '62%', label: 'Accuracy', color: '#16191A' }, { n: '5', label: 'Correct', color: '#1E7A57' }, { n: '3', label: 'Incorrect', color: '#B5812B' },
+        { n: '2', label: 'Red', color: '#BC4C43' }, { n: '3', label: 'Orange', color: '#B5812B' }, { n: '3', label: 'Green', color: '#1E7A57' },
+      ],
+      movement: [
+        { name: 'Ferroportin handling', change: 'Orange → Green', color: '#1E7A57' },
+        { name: 'Ferritin interpretation', change: 'Red · unresolved 3rd time', color: '#BC4C43' },
+        { name: 'BNP interpretation', change: 'Green → Orange', color: '#B5812B' },
+      ],
+      readList: [
+        { n: '01', name: 'Ferritin interpretation', source: 'Iron handling.pdf p.3, storage vs serum iron', open: this.openConcept('Iron metabolism', 'biochemistry', 'revise') },
+        { n: '02', name: 'Transferrin saturation', source: 'Iron handling.pdf p.4, calculating TSAT', open: this.openConcept('Iron metabolism', 'biochemistry', 'revise') },
+        { n: '03', name: 'Iron absorption', source: 'Iron handling.pdf p.2, duodenal uptake', open: this.openConcept('Iron metabolism', 'biochemistry', 'revise') },
+        { n: '04', name: 'IDA vs ACD differentiation', source: 'Valvular disease notes.pdf p.11, anaemia in HF', open: this.openConcept('Anaemia of chronic disease', 'biochemistry', 'revise') },
+      ]
+    };
+  };
+
+  /* The concept screen, from `GET /concepts/<id>` and nothing else.
+   *
+   * Every key the template binds is returned here, including the ones the
+   * payload cannot answer -- those say so rather than being left to a
+   * fixture further up `renderVals` to fill in. */
+  liveConceptVals = () => {
+    const s = this.state;
+    const GREY = '#8a9093';
+    const colourOf = (c) => ({ RED: '#BC4C43', ORANGE: '#B5812B', GREEN: '#1E7A57' }
+                              [String(c || '').toUpperCase()] || GREY);
+    const titleCase = (c) => {
+      const up = String(c || '').toUpperCase();
+      return up ? up.charAt(0) + up.slice(1).toLowerCase() : '';
+    };
+    const blank = {
+      cptQuestions: [], cptEmpty: true, cptLinks: [], cptGaps: [], cptNoGaps: true,
+      cptAttempts: [], cptByNotebook: [], cptDue: '—', cptInterval: '',
+      cptPriority: '', cptSource: '', cptPassage: '', openCptSource: () => {},
+      cptQCount: '', cptStateColor: GREY,
+    };
+
+    if (!s.cpt || !s.cpt.id) {
+      /* Nothing to fetch. A gap the learner tagged without a concept, or an
+       * entry point that did not pass an id. Stated, not papered over with
+       * whatever the design file happens to hold under the same name. */
+      return { ...blank, cptState: 'Not linked',
+        cptWhy: [{ k: 'why nothing is shown',
+                   v: 'This item is not linked to a concept in your material.' }] };
+    }
+    if (s.cptState === 'error') {
+      return { ...blank, cptState: 'Unavailable',
+        cptWhy: [{ k: 'could not load', v: s.cptError || 'the server did not answer' }] };
+    }
+    const c = s.liveConcept;
+    if (s.cptState !== 'ready' || !c) {
+      return { ...blank, cptState: 'Loading…',
+        cptWhy: [{ k: 'status', v: 'Loading this concept…' }] };
+    }
+
+    const right = Number(c.correct_count) || 0;
+    const wrong = Number(c.wrong_count) || 0;
+    /* NO ATTEMPTS MEANS NO GRADE, not the server's default.
+     *
+     * `/concepts/<id>` reports `colour: 'ORANGE'` for a concept nobody has
+     * answered -- `concept_detail` falls back to ORANGE when there is no
+     * `concept_state` row. That is a scheduling default, not a judgement the
+     * learner made, and showing it as their grade would be the system picking
+     * their colour, which the spec forbids. */
+    const graded = (right + wrong) > 0;
+    const colour = graded ? String(c.colour || '').toUpperCase() : '';
+    const questions = Array.isArray(c.questions) ? c.questions : [];
+    const gaps = (Array.isArray(c.gaps) ? c.gaps : []).filter((g) => !g.resolved_at);
+    const row = (s.liveConcepts || []).find((x) => x.concept_id === c.id) || {};
+    const families = {};
+    questions.forEach((q) => { const f = q.family || 'other'; families[f] = (families[f] || 0) + 1; });
+    const notebooks = Array.isArray(c.notebooks) ? c.notebooks : [];
+    const subj = (x) => SUBJ[x] || { label: String(x || 'other').toUpperCase(), color: GREY };
+
+    return {
+      cptState: graded ? titleCase(colour) : 'Not yet graded',
+      cptStateColor: graded ? colourOf(colour) : GREY,
+      cptPriority: c.priority_rank
+        ? '#' + c.priority_rank + ((s.liveConcepts || []).length
+          ? ' of ' + (s.liveConcepts || []).length : '')
+        : 'Not ranked',
+      cptWhy: [
+        { k: 'your colour', v: graded ? titleCase(colour) + ', the grade you gave'
+                                      : 'not yet graded — answer a question on it' },
+        { k: 'answered', v: graded ? right + ' right of ' + (right + wrong) : 'no attempts' },
+        { k: 'unresolved gaps', v: String(gaps.length) },
+        { k: 'last seen', v: row.last_seen_at ? String(row.last_seen_at).slice(0, 10) : 'never' },
+        { k: 'questions', v: String(questions.length) },
+      ],
+      /* The concept payload carries no passage. Each QUESTION has one, shown
+       * on the reveal; quoting some passage here would be choosing one for
+       * the learner and presenting it as the concept's source. */
+      cptSource: notebooks.length
+        ? 'From ' + notebooks.map((n) => n.title).join(', ') : 'No notebook recorded',
+      cptPassage: 'Open a question on this concept to see the passage it was written from.',
+      openCptSource: () => {},
+      cptQCount: questions.length + (questions.length === 1 ? ' QUESTION' : ' QUESTIONS')
+        + (Object.keys(families).length
+          ? ' ACROSS ' + Object.keys(families).length
+            + (Object.keys(families).length === 1 ? ' FAMILY' : ' FAMILIES') : ''),
+      cptQuestions: Object.keys(families).map((family) => ({
+        family, n: families[family] + ' Q', fg: '#16191A' })),
+      cptEmpty: questions.length === 0,
+      cptDue: row.next_due ? String(row.next_due).slice(0, 10) : 'nothing scheduled',
+      cptInterval: row.next_due ? 'intervals are per question' : '',
+      cptGaps: gaps.map((g) => ({ name: g.label, state: titleCase(g.colour),
+                                  color: colourOf(g.colour) })),
+      cptNoGaps: gaps.length === 0,
+      /* Per-attempt history is not in this payload. Empty, not invented. */
+      cptAttempts: [],
+      cptByNotebook: notebooks.map((n) => ({
+        notebook: n.title, color: subj(n.subject).color,
+        questions: questions.filter((q) => q.primary_notebook_id === n.id).map((q) => ({
+          id: q.id, family: q.family || '',
+          last: q.last_colour ? titleCase(q.last_colour) : 'Unseen',
+          fg: q.last_colour ? colourOf(q.last_colour) : GREY })) })),
+      cptLinks: (Array.isArray(c.related) ? c.related : []).slice(0, 4).map((r) => {
+        const cross = (r.subject || '') !== (c.subject || '');
+        return { name: r.canonical_name || r.id, color: subj(r.subject).color,
+          select: this.openConcept(r.canonical_name || r.id, r.subject || '', 'concept', r.id),
+          tag: cross ? 'Crosses subject' : subj(r.subject).label,
+          tagFg: cross ? '#8a5f13' : '#6f7679',
+          tagBg: cross ? 'rgba(181,129,43,.12)' : '#F1EFE8' };
+      }),
+      cptColor: subj(c.subject).color,
+    };
+  };
 
   evalVals() {
     const s = this.state, api = s.evalApi, st = s.evalState;
@@ -4297,7 +4498,16 @@ class Component extends DCLogic {
         : '14 concepts · 18 links · 7 cross subjects', false],
       revise: ['Revision', 'Mixed queue · spaced repetition', false],
       onboard: ['', '', false],
-      concept: [(s.cpt && s.cpt.name) || 'Concept', 'Concept in ' + ((s.cpt && SUBJ[s.cpt.subject].label.charAt(0) + SUBJ[s.cpt.subject].label.slice(1).toLowerCase()) || ''), true, s.cptFrom || 'weak', '← Back'],
+      /* `(SUBJ[x] || null)`, not `SUBJ[x].label`. A live concept's subject is
+       * whatever the source said -- 'renal', 'microbiology' -- and indexing the
+       * four-colour palette with it threw on `.label` of undefined, which takes
+       * the whole screen down rather than just the subtitle. */
+      concept: [(s.cpt && s.cpt.name) || 'Concept',
+        (() => {
+          const subj = s.cpt && (SUBJ[s.cpt.subject] || null);
+          if (subj) return 'Concept in ' + subj.label.charAt(0) + subj.label.slice(1).toLowerCase();
+          return (s.cpt && s.cpt.subject) ? 'Concept in ' + s.cpt.subject : 'Concept';
+        })(), true, s.cptFrom || 'weak', '← Back'],
       settings: ['Settings', 'Notifications, sources and account', true, 'more', '← More'],
       billing: ['Billing', 'Your plan and usage', true, 'more', '← More'],
       plans: ['Choose your plan', 'Monthly or annual', true, 'billing', '← Billing'],
@@ -4576,7 +4786,7 @@ class Component extends DCLogic {
       nothingDue: nb.due === 0 && nb.sourceCount > 0,
       isConcept: r === 'concept', isSettings: r === 'settings',
       showGear: r === 'home' || r === 'progress', goSettings: this.go('settings'), noop: () => {},
-      cptColor: SUBJ[cptSubject].color,
+      cptColor: (SUBJ[cptSubject] || { color: '#8a9093' }).color,
       cptPassage: '“' + cptName + ', in the passage this concept was taken from, the finding is described alongside its usual accompanying signs and the reasoning that separates it from its closest mimic.”',
       cptSource: cptKnown ? 'Valvular disease notes.pdf p.11' : 'Aortic stenosis lecture.pdf p.6',
       openCptSource: this.openSourceRef(
@@ -4714,21 +4924,15 @@ class Component extends DCLogic {
         : 'Above the recommendation, the extra questions come from unseen items in the same section.',
       startSession: this.startQueued,
       goWeak: this.go('weak'),
-      analysis: [
-        { n: '62%', label: 'Accuracy', color: '#16191A' }, { n: '5', label: 'Correct', color: '#1E7A57' }, { n: '3', label: 'Incorrect', color: '#B5812B' },
-        { n: '2', label: 'Red', color: '#BC4C43' }, { n: '3', label: 'Orange', color: '#B5812B' }, { n: '3', label: 'Green', color: '#1E7A57' },
-      ],
-      movement: [
-        { name: 'Ferroportin handling', change: 'Orange → Green', color: '#1E7A57' },
-        { name: 'Ferritin interpretation', change: 'Red · unresolved 3rd time', color: '#BC4C43' },
-        { name: 'BNP interpretation', change: 'Green → Orange', color: '#B5812B' },
-      ],
-      readList: [
-        { n: '01', name: 'Ferritin interpretation', source: 'Iron handling.pdf p.3, storage vs serum iron', open: this.openConcept('Iron metabolism', 'biochemistry', 'revise') },
-        { n: '02', name: 'Transferrin saturation', source: 'Iron handling.pdf p.4, calculating TSAT', open: this.openConcept('Iron metabolism', 'biochemistry', 'revise') },
-        { n: '03', name: 'Iron absorption', source: 'Iron handling.pdf p.2, duodenal uptake', open: this.openConcept('Iron metabolism', 'biochemistry', 'revise') },
-        { n: '04', name: 'IDA vs ACD differentiation', source: 'Valvular disease notes.pdf p.11, anaemia in HF', open: this.openConcept('Anaemia of chronic disease', 'biochemistry', 'revise') },
-      ],
+      /* THE END-OF-SESSION SUMMARY: the server's, after a live session.
+       *
+       * All three lists were constants -- "62% accuracy", "5 correct", "2
+       * red", "Ferritin interpretation: Red, unresolved 3rd time" -- and they
+       * rendered after a REAL session, over the top of the summary the server
+       * had just returned. A learner finishing a session was shown someone
+       * else's results. `summaryVals` reads `liveSummary`; the design file's
+       * constants are used only when no session was run against a backend. */
+      ...this.summaryVals(),
       isStudio: r === 'studio', isDemos: r === 'demos', isBank: r === 'bank',
       ...this.evalVals(),
       studioFields: [
@@ -4854,7 +5058,7 @@ class Component extends DCLogic {
                     || x.meta.toLowerCase().indexOf(s.query.toLowerCase()) >= 0)
         .map((x) => ({ name: x.name, kind: x.kind, meta: x.meta,
           open: x.kind === 'Concept'
-            ? this.openConcept(x.name, x.subject || 'biochemistry', 'more')
+            ? this.openConcept(x.name, x.subject || '', 'more', x.id || null)
             : this.go('weak') })),
       searchFailed: s.learnerState === 'error',
       /* Counted off the SAME list the rows are rendered from.

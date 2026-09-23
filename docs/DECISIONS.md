@@ -845,3 +845,75 @@ Until it is decided: **`DELETE /account` returns 500 to any learner who has
 answered a question.** `tests/test_erasure_over_http.py` carries three
 `xfail(strict=True)` tests, so whichever option is taken, they fail the moment
 it lands and cannot be left behind.
+
+## ADR-030 — Revision sessions serve other learners' questions
+
+**Date/phase:** 2026-09-23 · **Status:** OPEN — FOUND, REPORTED, NOT FIXED
+
+Held under the standing stop condition: a disclosure route is shown to the
+owner before it is closed. Forward work on the colour/reminder/onboarding pass
+stopped at the point this was found.
+
+### The defect
+
+`RevisionEngine._questions_for_concepts` has no owner scope:
+
+```sql
+FROM questions q JOIN question_concepts qc ON qc.question_id = q.id
+WHERE qc.concept_id IN (...)
+  AND q.validation_status IN ('approved', 'pending')
+```
+
+Concepts are **global** rows (`normalized_name` is UNIQUE), so two learners
+whose material yields the same concept share its id. `adaptive` — the default
+strategy — and `red` / `orange` / `green` all select through this function, so
+a learner's session is built partly from other learners' questions, and
+`GET /revision/next` returns the stem and options.
+
+Measured by execution, two learners sharing one concept:
+
+| Path | Result |
+|---|---|
+| `adaptive` session | **serves Bob's questions to Alice** |
+| `orange` session (and `red`/`green` when the learner has that colour) | **serves Bob's questions** |
+| `due`, `unseen` | owner-scoped — correct |
+| `GET /gaps/<id>/questions`, concept question list, `/graph` | owner-scoped — correct |
+| `GET /concepts/<id>` → `related` | **names a concept that exists only in Bob's material** |
+
+Two further consequences of the same query:
+
+* **An unvalidated question can be served.** `'pending'` is in the filter, so
+  a question the validator has not passed reaches a session — its author's and
+  other learners'. That is the hard gate, reached from the side.
+* **The learner gets stuck.** `record_attempt` *is* owner-scoped, so answering
+  a foreign question is refused with `no such question`, and the session
+  cannot advance past it.
+
+### Exposure
+
+**None in production.** Checked against the Render database: 0 questions,
+0 concepts, 0 relationships, 0 sessions — generation has never been allowed to
+run, so nothing has existed to leak. It becomes live the day generation does.
+
+### Why nothing caught it
+
+`tests/test_cross_user_access.py` runs sessions across two users, but its
+fixture never gives both users the same concept. The concept-driven selection
+steps therefore never had a foreign question to find, and the coverage was
+vacuous. It dates from `a770d4c` (2026-08-19). Found by a render test that
+gave three learners one shared concept on purpose.
+
+### Proposed fix — for the owner's decision
+
+1. Scope `_questions_for_concepts` to the learner's own notebooks (join
+   `notebooks` on `owner_id = ?`), the way every other selection step is.
+2. Scope `related` to concepts present in the learner's own notebooks.
+3. **Decide whether `pending` should be servable at all.** Removing it is the
+   conservative reading of the hard gate. It may have been deliberate — for
+   example, to let an author revise their own material before validation — so
+   it is a question, not an assumption.
+4. Add a shared-concept case to the cross-user meta-test fixture, so the
+   coverage stops being vacuous.
+
+`tests/test_session_isolation.py` holds five `xfail(strict=True)` tests plus a
+positive control proving the fixture really shares a concept.

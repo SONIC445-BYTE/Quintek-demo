@@ -886,17 +886,32 @@ class StudentAPI:
                     JOIN notebooks n ON n.id = q.primary_notebook_id AND n.owner_id = ?
                LEFT JOIN source_chunks ch ON ch.id = q.chunk_id"""]
         params: list = [uid, uid, uid]
+        # THE FILTERS GO IN A WHERE CLAUSE, never onto a join's ON.
+        #
+        # They used to be appended as bare `AND ...` fragments, which attached
+        # them to whatever join happened to come last. While that was the
+        # INNER join to `notebooks` it filtered correctly, by accident. The
+        # LEFT JOIN to `source_chunks` above was added after it, and from then
+        # on every filter landed on a LEFT join's ON clause -- where a false
+        # condition does not remove the row, it only nulls the chunk columns.
+        # `status`, `notebook_id` and `concept_id` all silently stopped
+        # filtering: a notebook's question list showed every notebook's, and a
+        # concept's showed every question the learner owned. Ownership held
+        # only because it lives in the INNER join, not in these fragments.
+        where: list[str] = []
         if notebook_id:
             self._owned_notebook(uid, notebook_id)
-            sql.append(" AND q.primary_notebook_id = ?")
+            where.append("q.primary_notebook_id = ?")
             params.append(notebook_id)
         if concept_id:
-            sql.append(" AND EXISTS (SELECT 1 FROM question_concepts qc"
-                       " WHERE qc.question_id = q.id AND qc.concept_id = ?)")
+            where.append("EXISTS (SELECT 1 FROM question_concepts qc"
+                         " WHERE qc.question_id = q.id AND qc.concept_id = ?)")
             params.append(concept_id)
         if status:
-            sql.append(" AND q.validation_status = ?")
+            where.append("q.validation_status = ?")
             params.append(status)
+        if where:
+            sql.append(" WHERE " + " AND ".join(where))
         sql.append(" ORDER BY q.generated_at DESC")
         rows = []
         for r in self.db.query("".join(sql), tuple(params)):
