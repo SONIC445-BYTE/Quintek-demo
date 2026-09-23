@@ -625,7 +625,7 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
               </sc-for>
             </div>
             <div style="display:flex;justify-content:space-between;gap:10px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;color:#8a9093">
-              <span>{{ b.family }} · {{ b.notebook }}</span><span>{{ b.attempts }}</span>
+              <span>{{ b.family }} · {{ b.notebook }}</span><span style="display:flex;align-items:center;gap:5px"><span style="width:6px;height:6px;border-radius:50%;background:{{ b.lastColourFg }}"></span>{{ b.lastColourLabel }}</span>
             </div>
             <div style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9px;line-height:1.6;color:#9aa0a2">{{ b.provenance }}</div>
             <sc-if value="{{ b.needsReview }}" hint-placeholder-val="{{ true }}">
@@ -2429,20 +2429,51 @@ class Component extends DCLogic {
         : ((right + wrong) > 0 ? Math.round((right / (right + wrong)) * 100) : null);
       return p === null ? '—' : p + '%';
     };
+    /* ONE LIST, AND THE HEADLINE IS COUNTED FROM IT.
+     *
+     * The headline was `Mastered / Due / Struggling` from `colour_counts`:
+     * GREEN, the due count, RED. ORANGE was not in it at all, so a learner
+     * whose concepts were all orange saw three zeroes above a list that was
+     * not empty. And the list showed never-answered concepts as Orange -- the
+     * server's default -- while `colour_counts` does not count them, which
+     * was a second disagreement between the two halves of one screen.
+     *
+     * Decided (see the commit that introduced this): four states, each
+     * concept counted exactly once, computed from the SAME rows the list
+     * renders so the numbers always add up to the list's length.
+     *
+     *   Mastered        GREEN -- your two most recent grades were green, no red
+     *   Unsettled       ORANGE -- mixed, or not enough evidence yet
+     *   Struggling      RED -- at least two red grades among your last five
+     *   Not yet graded  no attempt at all
+     *
+     * ORANGE is not folded into a neighbour. Under `derive_concept_colour`
+     * it means "the evidence is mixed or thin"; calling that struggling
+     * overstates failure and calling it mastered overstates success, and
+     * either one would be the screen deciding something the learner's own
+     * grades do not say. "Due" counts QUESTIONS, not concepts, so it moved to
+     * the subtitle rather than sit in a row that sums concepts. */
+    const rows = (s.liveConcepts || []).map((c) => {
+      const right = Number(c.correct_count) || 0;
+      const wrong = Number(c.wrong_count) || 0;
+      const seen = right + wrong;
+      const colour = seen ? String(c.colour || '').toUpperCase() : '';
+      return { c, right, wrong, seen, colour };
+    });
+    const tally = (col) => rows.filter((r) => r.colour === col).length;
     return {
       masteryStats: [
-        { n: counts.GREEN || 0, label: 'Mastered', color: '#1E7A57' },
-        { n: (s.liveProgress && s.liveProgress.due_count) || 0, label: 'Due', color: '#B5812B' },
-        { n: counts.RED || 0, label: 'Struggling', color: '#BC4C43' }],
-      conceptMastery: (s.liveConcepts || []).map((c) => {
-        const right = Number(c.correct_count) || 0;
-        const wrong = Number(c.wrong_count) || 0;
-        const seen = right + wrong;
-        const colour = String(c.colour || '').toUpperCase();
+        { n: tally('GREEN'), label: 'Mastered', color: '#1E7A57' },
+        { n: tally('ORANGE'), label: 'Unsettled', color: '#B5812B' },
+        { n: tally('RED'), label: 'Struggling', color: '#BC4C43' },
+        { n: rows.filter((r) => !r.seen).length, label: 'Not yet graded', color: '#8a9093' }],
+      conceptMastery: rows.map(({ c, right, wrong, seen, colour }) => {
         return {
           name: c.canonical_name || c.concept_id,
-          state: colour ? colour.charAt(0) + colour.slice(1).toLowerCase() : 'Unseen',
-          color: colourOf(colour),
+          /* No attempts, no grade -- not the server's ORANGE default. Same
+           * rule as the concept screen. */
+          state: colour ? colour.charAt(0) + colour.slice(1).toLowerCase() : 'Not yet graded',
+          color: colour ? colourOf(colour) : '#8a9093',
           /* A concept with no attempts has NO percentage, not a percentage of
            * zero. "0%" is a measurement, and it would be read as "you get this
            * wrong every time" by a learner who has simply never been asked. */
@@ -2566,6 +2597,7 @@ class Component extends DCLogic {
            * report button quietly disappears. */
           needsReview: false, reviewNote: '',
           canReport: false, report: this.noopPick,
+          lastColour: null, lastColourLabel: attempts, lastColourFg: '#C9C5BA',
         }));
     }
     const title = (v) => {
@@ -2577,11 +2609,25 @@ class Component extends DCLogic {
       .filter((q) => wanted === 'all' || String(q.validation_status || '').toLowerCase() === wanted)
       .map((q) => ({
         id: q.id,
-        stem: q.stem || '',
+        /* Withheld content is SAID to be withheld. A blank row would read as a
+         * question with no text; this says why there is none. ADR-030. */
+        stem: q.withheld
+          ? 'Awaiting validation \u2014 the question is not shown until it passes.'
+          : (q.stem || ''),
         validation: title(q.validation_status),
         family: q.family || '',
         notebook: q.notebook_title || '',
         attempts: Number(q.attempt_count) || 0,
+        /* The learner's own colour from their LAST attempt, exactly as stored.
+         * The server has always sent `last_colour`; this row never showed it.
+         * Mapped with the same vocabulary as every other colour on screen. */
+        lastColour: q.last_colour || null,
+        lastColourLabel: q.last_colour
+          ? 'Last: ' + title(q.last_colour) + ' \u00b7 '
+            + (Number(q.attempt_count) || 0) + ((Number(q.attempt_count) || 0) === 1 ? ' attempt' : ' attempts')
+          : 'Not attempted yet',
+        lastColourFg: ({ RED: '#BC4C43', ORANGE: '#B5812B', GREEN: '#1E7A57' })
+          [String(q.last_colour || '').toUpperCase()] || '#C9C5BA',
         /* No passage is quoted in a list row -- that is the concept screen's
          * job and it does fetch it. What DOES travel with the list is the
          * ingestion gate's verdict on the chunk behind the question. */
@@ -3744,8 +3790,14 @@ class Component extends DCLogic {
           ? ' of ' + (s.liveConcepts || []).length : '')
         : 'Not ranked',
       cptWhy: [
-        { k: 'your colour', v: graded ? titleCase(colour) + ', the grade you gave'
-                                      : 'not yet graded — answer a question on it' },
+        /* The concept's colour is derived from the learner's own last five
+         * grades on it (`derive_concept_colour`), not copied from the last
+         * one: a single red grade makes a concept Orange, and it turns Red
+         * only after two. Said here so "I graded it red and it says orange"
+         * has an answer on the screen where it is asked. */
+        { k: 'your colour', v: graded
+            ? titleCase(colour) + ', from your last grades on it'
+            : 'not yet graded \u2014 answer a question on it' },
         { k: 'answered', v: graded ? right + ' right of ' + (right + wrong) : 'no attempts' },
         { k: 'unresolved gaps', v: String(gaps.length) },
         { k: 'last seen', v: row.last_seen_at ? String(row.last_seen_at).slice(0, 10) : 'never' },
@@ -4481,7 +4533,8 @@ class Component extends DCLogic {
       /* "188 concepts tracked · demo data" said the quiet part out loud and
        * was still wrong: the number was not 188 and nothing was tracked. */
       progress: ['Progress', learnerReady
-        ? n_of((s.liveProgress && s.liveProgress.concepts_tracked) || 0, 'concept') + ' tracked'
+        ? n_of((s.liveConcepts || []).length, 'concept') + ' \u00b7 '
+          + n_of((s.liveProgress && s.liveProgress.due_count) || 0, 'question') + ' due'
         : s.learnerState === 'error' ? 'Could not load your progress'
         : '188 concepts tracked · demo data', true, 'more', '← More'],
       home: ['Notebooks', s.nbsState === 'ready'

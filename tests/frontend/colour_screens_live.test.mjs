@@ -353,3 +353,96 @@ test('a live session whose summary failed shows nothing rather than the sample',
   const v = inst.renderVals();
   assert.deepEqual(plain([v.analysis, v.movement, v.readList]), [[], [], []]);
 });
+
+// ---------------------------------------------------------------------------
+// A2 -- the question bank shows the colour of the last attempt
+// ---------------------------------------------------------------------------
+
+for (const [colour, label, hex] of [['RED', 'Red', '#BC4C43'],
+                                    ['ORANGE', 'Orange', '#B5812B'],
+                                    ['GREEN', 'Green', '#1E7A57']]) {
+  test(`the bank row for a question graded ${colour} shows ${label}`, () => {
+    const L = learners[colour];
+    const q = 'q-' + colour.toLowerCase();
+    assert.equal(L.bank.find((r) => r.id === q).last_colour, colour,
+      'the server did not send last_colour; the render assertion would be vacuous');
+    const row = mountFor(colour, { route: 'bank', bankFilter: 'All' })
+      .renderVals().bank.find((r) => r.id === q);
+    assert.ok(row, `${q} is missing from the rendered bank`);
+    assert.equal(row.lastColourLabel, `Last: ${label} · 3 attempts`);
+    assert.equal(row.lastColourFg, hex);
+  });
+}
+
+test('an unattempted question says so, in no colour', () => {
+  const row = mountFor('RED', { route: 'bank', bankFilter: 'All' })
+    .renderVals().bank.find((r) => r.id === 'q-rta');
+  assert.equal(row.lastColourLabel, 'Not attempted yet');
+  assert.ok(!['#BC4C43', '#B5812B', '#1E7A57'].includes(row.lastColourFg));
+});
+
+test('a withheld bank row says it is awaiting validation instead of rendering blank', () => {
+  const inst = mountFor('RED', { route: 'bank', bankFilter: 'All',
+    liveBank: [{ id: 'q-p', stem: null, withheld: true, validation_status: 'pending',
+                 family: 'mcq', notebook_title: 'N', attempt_count: 0, last_colour: null }] });
+  const row = inst.renderVals().bank[0];
+  assert.match(row.stem, /Awaiting validation/);
+  assert.equal(row.validation, 'Pending');
+});
+
+// ---------------------------------------------------------------------------
+// A3 -- the progress headline never contradicts the list below it
+// ---------------------------------------------------------------------------
+
+function progressView(colour, extra = {}) {
+  const v = mountFor(colour, { route: 'progress', ...extra }).renderVals();
+  return { stats: plain(v.masteryStats), list: plain(v.conceptMastery), sub: v.headerSub };
+}
+
+const STATE_OF = { Mastered: 'Green', Unsettled: 'Orange', Struggling: 'Red',
+                   'Not yet graded': 'Not yet graded' };
+
+function assertAgrees({ stats, list }, who) {
+  const total = stats.reduce((t, s) => t + s.n, 0);
+  assert.equal(total, list.length,
+    `${who}: the headline counts ${total} concepts and the list shows ${list.length}`);
+  for (const s of stats) {
+    const inList = list.filter((r) => r.state === STATE_OF[s.label]).length;
+    assert.equal(s.n, inList, `${who}: headline "${s.label}" says ${s.n}, the list has ${inList}`);
+  }
+}
+
+for (const colour of ['RED', 'ORANGE', 'GREEN']) {
+  test(`the ${colour} learner's progress headline agrees with the list below it`, () => {
+    const view = progressView(colour);
+    assertAgrees(view, colour);
+    assert.ok(view.stats.some((s) => s.n > 0),
+      `${colour}: every headline number is zero above a list of ${view.list.length}`);
+  });
+}
+
+test('a learner whose only concept is ORANGE does not see three zeroes', () => {
+  const { stats } = progressView('ORANGE');
+  assert.equal(stats.find((s) => s.label === 'Unsettled').n, 1);
+});
+
+test('a never-answered concept is counted as "Not yet graded", not as Orange', () => {
+  const { stats, list } = progressView('RED');
+  assert.equal(list.find((r) => r.name === 'Renal tubular acidosis').state, 'Not yet graded');
+  assert.equal(stats.find((s) => s.label === 'Not yet graded').n, 1);
+  assert.equal(stats.find((s) => s.label === 'Unsettled').n, 0);
+});
+
+test('one red grade makes a concept Orange in the list AND the headline', () => {
+  // derive_concept_colour: RED needs two reds in the last five. A single red
+  // grade leaves the concept ORANGE; both halves of the screen must say so.
+  const concepts = [{ concept_id: 'c1', canonical_name: 'One red grade', colour: 'ORANGE',
+                      correct_count: 0, wrong_count: 1, subject: 'cardiology' }];
+  const view = progressView('RED', { liveConcepts: concepts });
+  assertAgrees(view, 'single-red');
+  assert.deepEqual(view.stats.map((s) => s.n), [0, 1, 0, 0]);
+});
+
+test('Due moved to the subtitle, counted in questions', () => {
+  assert.match(progressView('GREEN').sub, /^1 concept · \d+ questions? due$/);
+});
