@@ -28,8 +28,10 @@ phases of it, 388 tests — but the design file has not been rewired to call it.
 So the two statements to keep separate are:
 
 - *The engine is not built.* — **No longer true.** Accounts, ingestion, concept
-  resolution, generation, validation, attempts, gap tracking, spaced
-  repetition, and notifications are implemented and tested in `student/`.
+  resolution, generation, validation, attempts, gap tracking and spaced
+  repetition are implemented and tested in `student/`. Reminders are stored,
+  edited and fired up to the point of a sender; nothing delivers them and
+  nothing schedules them (§2.8).
 - *The screens the learner touches are still simulated.* — **Still true.** Every
   interaction in the sections below runs on in-file constants. Wiring the
   screens to `student/api.py` is real remaining work, not a configuration flag.
@@ -160,6 +162,14 @@ split reads `colour_counts` and `due_count` from `/progress`; per-concept
 recall strength reads `/concepts`; the 12-week heatmap reads `/progress`
 `activity`.
 
+**Where gaps come from.** Only from the learner: after a Red or Orange
+answer they type what they did not know, and it is saved against that answer
+with `POST /attempts/<id>/gaps`. A Red answer with nothing named does not
+appear on the weak list. Until 2026-09-23 the live app could not create a gap
+at all — and could not record an answer either, because the colour buttons
+sent a value the server refuses (ADR-032). There is still no control to
+resolve a gap (NOT_BUILT).
+
 Three specifics worth keeping, because each replaced something that looked
 right:
 
@@ -175,26 +185,58 @@ right:
   One day is not a streak, so `studyStreak` returning 0 or 1 falls back to the
   attempt count, which is a fact either way.
 
-### 2.8 Notifications — PARTIALLY REAL
+### 2.8 Reminders — REAL up to delivery; DELIVERY AND SCHEDULING NOT BUILT
 
-**Was ABSENT. Settings and log wired 2026-09-17; DELIVERY IS STILL NOT BUILT.**
+**Rewritten 2026-09-23 (ADR-031).** The single daily "trigger" setting this
+section used to describe is gone, not patched. It answered "when should the
+app nag me every day", which is not what a learner asked for.
 
-The trigger time, timezone, push/email toggles and note text are stored
-server-side in `notification_prefs` and read back from it — every control
-writes through, and a save that fails says so rather than leaving the toggle
-flipped. `next_scheduled_at` is the server's, so the "next reminder" line is
-the real schedule.
+**What a reminder is.** A learner writes a label in their own words — "revise
+patho", "revise micro" — and picks a date and a time. They can have any
+number; each is separate. At that moment the system hands the label back,
+exactly as written. A reminder is not linked to a concept, a colour, or
+anything being due, and it does not start a revision session.
 
-**No notification is delivered.** `NotificationService` takes an injected
-`sender`, `student/api.py` constructs it without one, and `fire()` therefore
-returns `ok: false` with `"no notification sender is configured"`. "Send test"
-posts to `/settings/notifications/test`, shows that reason, and reads the
-failed row back out of `notification_log`.
+**What the screen does** (Settings → Reminders, live against
+`GET/POST /reminders`, `GET/PUT/DELETE /reminders/<id>`):
 
-That is the honest state and it is deliberately visible. The button previously
-set `tested: true` and relabelled itself "Sent" — the one control whose
-entire purpose is to prove delivery works was the control least connected to
-delivery. No OS notification is posted and no permission is requested.
+* **Create** — label, date, time. The time is in the device's timezone, which
+  the form states ("Times are in Asia/Kolkata, this device's timezone") rather
+  than hides. Stored as the local date, time and IANA zone, plus the UTC
+  instant computed once.
+* **List** — the learner's own reminders in the order they fire, each with its
+  words (rendered with newlines and spaces kept), its date, time and zone, and
+  its state: *Scheduled*, *Sent*, *Not sent — reason*, or *Cancelled*.
+* **Edit** — text, date or time, while it is still scheduled. An edit keeps the
+  zone the reminder was set in, even if the device has moved.
+* **Cancel** — while scheduled. The row stays on the list marked cancelled.
+* **Refusals are shown with the server's reason** and the draft is kept: an
+  empty label, one over 200 characters, a time already past, and a local time
+  the clocks skip (spring forward) or repeat (fall back). The last two are
+  refused rather than resolved, because picking one of two instants would be
+  the app deciding when the learner meant.
+
+**What does not happen.** *Nothing is delivered and nothing is scheduled.*
+
+* `ReminderService.fire` claims a due reminder (so two runs cannot both send
+  it) and hands `{user_id, reminder_id, label, fire_at}` to an injected
+  sender. **No sender exists on any deployment**, so a reminder whose time
+  comes is recorded *failed* with "no notification sender is configured" and
+  shows as *Not sent* with that reason.
+* **Nothing runs the scheduler.** `python -m benchmark.cli notify` runs the due
+  reminders once and exits; no cron job or platform job calls it (Render's
+  free web service has none, and spins down when idle).
+* The screen says so **above the form**, before anyone relies on a reminder:
+  "Delivery is not switched on yet…". It reads that from the server
+  (`delivery_configured`), so the sentence goes away when a sender exists.
+* No OS notification is posted and no notification permission is requested.
+
+ADR-031 has the recommended channel and the scheduling options; each needs a
+credential or a plan change, which is why neither is built.
+
+**The retired tables.** `notification_prefs` and `notification_log` are kept
+in the schema, unread and unwritten. On production they held six rows, all
+defaults, and no log rows — nothing a learner wrote — so nothing was migrated.
 
 ### 2.9 Reliability / trust screen — REAL, and the only live path
 
@@ -396,7 +438,8 @@ configuration that warning is not a formality.
 | Reliability screen ← benchmark | Built, the one real link |
 | Source ingestion, extraction, concept resolution | **Built and tested** in `student/`; the UI still simulates it |
 | Question generation and validation | **Built and tested** in `student/`; never yet run against a live model |
-| Spaced repetition, persistence, notifications, accounts | **Built and tested** in `student/`; the UI still simulates it |
+| Spaced repetition, persistence, accounts | **Built and tested** in `student/`; the UI still simulates it |
+| Reminders | **Built and tested** up to the sender, and live on the settings screen; **delivery and scheduling not built** (§2.8, ADR-031) |
 | Learner-facing AI transparency (Quintek AI Benchmark) | **Built** — data layer, routes, and honest empty states |
 | Benchmark → production promotion | **Built** — the gate is code, refusals are explained |
 | The screens calling that backend | **Not done.** The `.dc.html` still runs on in-file constants |

@@ -102,6 +102,48 @@ Two failure modes matter more than the rest, so check for them everywhere:
    and `startRevision` passed the literal `'adaptive'` regardless, so choosing
    a strategy moved a highlight and changed nothing.
 
+**Found on the 2026-09-23 pass, fixed, and worth walking on the device:**
+
+3. **No answer given through the colour buttons was ever recorded** (ADR-032).
+   The buttons sent `"Red"`; the server accepts `RED` only. Every live answer
+   was a 400. On the device: answer a question, press each colour, and check
+   the reveal appears and Progress moves.
+4. **The live app could not create a gap**, so Forgotten / weak was always
+   empty. After a Red or Orange answer there is now a text box: type what you
+   did not know, tap Add, and check it appears on Forgotten / weak.
+5. **Fixture figures showed while real data loaded** — "4 red gaps are
+   unresolved, start with ferritin interpretation", "9 open gaps", "41-day
+   streak" — and Today said "10 questions are due" to an account with no
+   questions. On a slow connection, the first second of every screen is where
+   to look.
+
+| Screen | Now reads |
+|---|---|
+| Today — How Quintek works | open for a new account (`/progress` shows no attempts); one tap otherwise; linked from More |
+| Answering — which part failed? | the learner's own words, saved with `POST /attempts/<id>/gaps` |
+
+**Recorded, NOT fixed — a colour collision on the reveal.** The reveal draws
+correctness in the judgement palette:
+
+| Reveal element | Hex | The same hex means |
+|---|---|---|
+| The correct option (✓, border, "Correct answer" text) | `#1E7A57` | **Green — "Knew it"**, the learner's own judgement |
+| The option the learner picked, when wrong | `#B5812B` | **Orange — "Half sure"** |
+
+So a learner who pressed Red on an answer they got right sees their Red
+judgement next to a block of Green, and one who pressed Green on a wrong
+answer sees Orange — which reads as the app re-grading them, the one thing the
+colour model promises it never does ("Quintek records whether the answer was
+right separately and never overwrites your colour"). The server is not
+affected: attempts store the learner's colour and `is_correct` separately, and
+nothing derives one from the other. It is a visual collision only.
+
+Not fixed here because the fix is a palette decision — correctness needs
+marks that cannot be read as a judgement (a neutral ink with ✓ / ✗, or a
+distinct hue outside R/O/G) — and choosing brand colours is not an engineering
+call. On the device, check whether it actually reads as re-grading; that
+evidence should drive the choice.
+
 **What a device sweep is still for.** Everything above is verified by tests
 that drive the real client against a real server, and by `vm`-parsing the
 shipped bundles. None of it is a phone. A WebView difference, a layout that
