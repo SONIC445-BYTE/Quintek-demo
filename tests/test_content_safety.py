@@ -74,8 +74,16 @@ def world(tmp_path):
                " generated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                (qid, nid, "mcq", "What does a low FeNa indicate?",
                 json.dumps(["Pre-renal", "Intrinsic", "Post-renal", "Normal"]), 0,
-                "Because the passage says so.", sid, cid, "flagged",
+                "Because the passage says so.", sid, cid, "approved",
                 "cand-gen", "gen/0.1.0", now_iso()))
+    # APPROVED, not flagged. This fixture used a FLAGGED question and asserted
+    # the learner was shown "flagged" on the reveal -- the design at the time
+    # served flagged questions with a warning. The owner's decision recorded
+    # in ADR-030 replaced that: only validated questions are ever served, so a
+    # flagged question has no reveal to carry a warning on. The provenance
+    # guarantees below are unchanged and are now exercised on the only kind of
+    # question a learner can actually reach; the poor chunk (confidence 0.31,
+    # needs_review) is what they exist for, and it is still here.
 
     w = type("W", (), {})()
     w.db, w.api, w.a, w.b, w.uid_a, w.uid_b, w.qid, w.cid = db, api, a, b, uid_a, uid_b, qid, cid
@@ -145,8 +153,28 @@ def test_the_values_are_the_real_ones_not_defaults(world, path):
 
 
 def test_the_reveal_carries_the_validation_verdict(world):
-    """A learner should know the validator flagged this before trusting it."""
-    assert render_paths(world)["attempt_reveal"]["validation_status"] == "flagged"
+    """The reveal still states the verdict -- which, for anything a learner can
+    reach, is now always 'approved'."""
+    assert render_paths(world)["attempt_reveal"]["validation_status"] == "approved"
+
+
+@pytest.mark.parametrize("status", ["pending", "flagged", "rejected"])
+def test_a_question_without_a_passing_verdict_has_no_reveal_at_all(world, status):
+    """What replaced "show the flag on the reveal": there is no reveal. A
+    warning beside unvalidated medical content is still unvalidated medical
+    content in front of a learner."""
+    world.db.execute("UPDATE questions SET validation_status = ? WHERE id = ?",
+                     (status, world.qid))
+    try:
+        st, body = world.api.handle("GET", f"/questions/{world.qid}", {}, {}, world.a)
+        assert st == 403 and "What does a low FeNa" not in json.dumps(body)
+        st, body = world.api.handle("POST", "/attempts", {},
+                                    {"question_id": world.qid, "user_answer": 0,
+                                     "user_colour": "RED"}, world.a)
+        assert st == 403 and "Because the passage" not in json.dumps(body)
+    finally:
+        world.db.execute("UPDATE questions SET validation_status = 'approved' WHERE id = ?",
+                         (world.qid,))
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +281,7 @@ class TestTheGoldErrorRoute:
                       kind=safety.FACTUALLY_WRONG, note="the key is wrong")
         [candidate] = safety.gold_candidates(world.db)
         assert candidate["note"] == "the key is wrong"
-        assert candidate["provenance"]["validation_status"] == "flagged"
+        assert candidate["provenance"]["validation_status"] == "approved"
         assert candidate["provenance"]["generated_by_candidate_id"] == "cand-gen"
 
     def test_taste_complaints_are_not_adjudication_candidates(self, world):

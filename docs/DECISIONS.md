@@ -848,7 +848,7 @@ it lands and cannot be left behind.
 
 ## ADR-030 — Revision sessions serve other learners' questions
 
-**Date/phase:** 2026-09-23 · **Status:** OPEN — FOUND, REPORTED, NOT FIXED
+**Date/phase:** 2026-09-23 · **Status:** CLOSED 2026-09-23 on the owner's instruction — see *Resolution* at the end of this entry
 
 Held under the standing stop condition: a disclosure route is shown to the
 owner before it is closed. Forward work on the colour/reminder/onboarding pass
@@ -917,3 +917,44 @@ gave three learners one shared concept on purpose.
 
 `tests/test_session_isolation.py` holds five `xfail(strict=True)` tests plus a
 positive control proving the fixture really shares a concept.
+
+### Resolution (2026-09-23)
+
+**The owner's decision on `pending`:** no. Only validated questions may ever
+be served to a learner, with no exception — including an author reviewing
+their own material. If that workflow is wanted it is a separate, explicit
+feature, not a gap in a filter.
+
+Implemented as one rule stated once, `SERVABLE_STATUS = "approved"` in
+`student/api.py`, applied at every point a question's content can leave the
+server:
+
+| Path | Before | After |
+|---|---|---|
+| Concept-driven session steps | any learner's, approved or pending | own notebooks, approved only |
+| `unseen` step and adaptive step 8 | own, **any status at all** | own, approved only |
+| `due` and previously-incorrect steps | re-served a question after it was rejected | approved at build time |
+| `/revision/next` | served whatever the session held | re-checks at serve time |
+| `GET /questions/<id>` | stem, options, answer for any status | 403 unless approved |
+| `POST /attempts` reveal | answer, rationale, passage for any status | 403 unless approved, before any row is written |
+| Bank, notebook, concept and gap lists | stems for any status | row listed, stem withheld |
+| `/concepts/<id>` `related` | global | concepts in the learner's own notebooks |
+
+The last five rows were found while fixing the first: all owner-scoped, so not
+a second disclosure route, but each one a side door past the hard gate.
+
+Eligibility is enforced twice for sessions — in the query and at the one
+choke point every selection step passes through — so each layer is tested on
+its own. Seven mutations, one per layer; one survived at first (re-allowing
+`pending` in the query) because the only pending question in the fixture
+belonged to the other learner. The fixture now includes the learner's own
+pending question, and the mutation fails.
+
+`tests/test_cross_user_access.py` now starts a session as the learner who
+shares concepts with the other, with a positive control that fails if the two
+ever stop sharing one — the fixture blind spot that let this through.
+
+`tests/test_content_safety.py` previously asserted that a **flagged** question
+was served with "flagged" on its reveal. That was the design this decision
+replaced; the test now asserts a flagged, pending or rejected question has no
+reveal at all.

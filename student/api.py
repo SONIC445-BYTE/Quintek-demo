@@ -47,6 +47,35 @@ def _provenance_of(chunk) -> dict:
     }
 
 
+#: The only validation status whose CONTENT may reach a learner.
+#:
+#: The owner's decision (ADR-030): only validated questions are ever served,
+#: with no exception -- including an author looking at their own material.
+#: A question that is pending, flagged or rejected still EXISTS for its owner
+#: (its row, status and notebook are listed, so a learner can see that their
+#: material produced something awaiting validation), but its stem, options,
+#: answer and rationale do not leave the server.
+SERVABLE_STATUS = "approved"
+
+UNVALIDATED_MESSAGE = ("this question has not passed validation, so its content is "
+                       "not shown")
+
+
+def _withhold_unvalidated(row: dict) -> dict:
+    """Blank the content of a question that has not passed validation.
+
+    Applied to every list that carries a stem. The row survives so the count
+    and the status are honest -- a bank that silently dropped unvalidated
+    questions would tell a learner their material produced less than it did.
+    """
+    if row.get("validation_status") != SERVABLE_STATUS:
+        row["stem"] = None
+        row["withheld"] = True
+    else:
+        row["withheld"] = False
+    return row
+
+
 class ApiError(Exception):
     def __init__(self, status: int, message: str, **extra):
         super().__init__(message)
@@ -922,7 +951,7 @@ class StudentAPI:
             # given, and the screen has no way to tell the difference back.
             flag = row.get("chunk_needs_review")
             row["chunk_needs_review"] = None if flag is None else bool(flag)
-            rows.append(row)
+            rows.append(_withhold_unvalidated(row))
         return rows
 
     def get_question(self, uid: str, qid: str) -> dict:
@@ -932,6 +961,12 @@ class StudentAPI:
             " WHERE q.id = ?", (uid, qid))
         if row is None:
             raise ApiError(404, "no such question")
+        if row["validation_status"] != SERVABLE_STATUS:
+            # 403, not 404: the question is this learner's own and they know it
+            # exists (the bank lists it), so pretending otherwise would be the
+            # less honest answer. Nothing about it is returned.
+            raise ApiError(403, UNVALIDATED_MESSAGE,
+                           validation_status=row["validation_status"])
         q = dict(row)
         q["options"] = json.loads(q.pop("options_json"))
         q["demo_ids"] = json.loads(q.pop("demo_ids_json"))
@@ -1047,10 +1082,20 @@ class StudentAPI:
             "priority_score": ranked["priority_score"],
             "why": ranked["why"],
             "notebooks": self.concepts.notebooks_for(concept_id, uid),
-            "related": self.concepts.neighbours(concept_id),
+            # Scoped to concepts in THIS learner's notebooks. Concepts and
+            # their relationships are global rows, so an unscoped neighbour
+            # list named concepts that exist only in another learner's
+            # material. ADR-030.
+            "related": self._owned_neighbours(uid, concept_id),
             "gaps": [g for g in self.knowledge.gaps(uid) if g["concept_id"] == concept_id],
             "questions": self.question_bank(uid, concept_id=concept_id),
         }
+
+    def _owned_neighbours(self, uid: str, concept_id: str) -> list[dict]:
+        owned = {r["concept_id"] for r in self.db.query(
+            "SELECT DISTINCT nc.concept_id FROM notebook_concepts nc"
+            " JOIN notebooks n ON n.id = nc.notebook_id AND n.owner_id = ?", (uid,))}
+        return [r for r in self.concepts.neighbours(concept_id) if r["id"] in owned]
 
     # ---------- gaps ----------
 
@@ -1068,8 +1113,9 @@ class StudentAPI:
             if not ids:
                 return []
             marks = ",".join("?" for _ in ids)
-            return [dict(r) for r in self.db.query(
-                f"SELECT id, stem, family FROM questions WHERE id IN ({marks})", tuple(ids))]
+            return [_withhold_unvalidated(dict(r)) for r in self.db.query(
+                f"SELECT id, stem, family, validation_status FROM questions"
+                f" WHERE id IN ({marks})", tuple(ids))]
         return self.question_bank(uid, concept_id=gap["concept_id"])
 
     # ---------- revision ----------
@@ -1103,6 +1149,13 @@ class StudentAPI:
         # Before the write, not after: an attempt against a question this
         # learner does not own must leave no row behind.
         question = self._owned_question(uid, question_id)
+        # The reveal is the richest payload a question has -- correct answer,
+        # rationale, source passage -- and this route would hand it over for a
+        # pending or rejected question to anyone who POSTed its id. Refused
+        # before the write, so a refused attempt leaves no evidence row.
+        if question["validation_status"] != SERVABLE_STATUS:
+            raise ApiError(403, UNVALIDATED_MESSAGE,
+                           validation_status=question["validation_status"])
 
         try:
             result = self.knowledge.record_attempt(

@@ -478,6 +478,41 @@ def test_revision_next_refuses_another_learners_session(world):
     assert status != 200, "B must not be served a question from A's session"
 
 
+def test_the_two_learners_really_share_a_concept(world):
+    """Positive control for the test below, and the reason it exists.
+
+    B studies the same topic as A, so concept extraction yields the SAME
+    global concept ids for both. This fixture always had that property and no
+    test used it: sessions were only ever started by A, so the concept-driven
+    selection steps never had another learner's question within reach. That
+    blind spot is how ADR-030 -- sessions serving other learners' questions --
+    survived a cross-user sweep. If this control ever fails, the test below
+    is vacuous again and says nothing.
+    """
+    api = world["api"]
+    a = {c["concept_id"] for c in api.handle("GET", "/concepts", {}, {}, world["a"])[1]["concepts"]}
+    b = {c["concept_id"] for c in api.handle("GET", "/concepts", {}, {}, world["b"])[1]["concepts"]}
+    assert a & b, "A and B share no concept; the shared-concept test below proves nothing"
+
+
+@pytest.mark.parametrize("strategy", ["adaptive", "red", "orange", "green", "due", "unseen"])
+def test_a_session_on_a_shared_concept_serves_nothing_of_another_learner(world, strategy):
+    """ADR-030. B holds concepts A also holds, and A has questions on them.
+    Every strategy B can pick must build its session from B's own material
+    only -- here, nothing, because B has generated no questions."""
+    api = world["api"]
+    a_questions = {r["id"] for r in world["db"].query(
+        "SELECT q.id FROM questions q JOIN notebooks n ON n.id = q.primary_notebook_id"
+        " JOIN users u ON u.id = n.owner_id WHERE u.email = 'a@example.com'")}
+    assert a_questions, "A has no questions, so this test proves nothing"
+    status, session = api.handle("POST", "/revision/sessions", {},
+                                 {"count": 20, "strategy": strategy}, world["b"])
+    served = set(session.get("question_ids") or [])
+    assert not (served & a_questions), (
+        f"B's {strategy} session was built from A's questions: {sorted(served & a_questions)}")
+    assert not _leaks(session)
+
+
 def test_attempts_refuses_another_learners_question(world):
     """The original defect: the id was in the body, and the reveal carried A's
     passage, the key and the rationale."""

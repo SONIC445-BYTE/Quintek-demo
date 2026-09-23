@@ -95,6 +95,10 @@ def world(tmp_path):
         {"kind": "pdf", "filename": "a.pdf",
          "content_base64": base64.b64encode(one_page_pdf(SECRET)).decode()}, a)
     assert status < 300, out
+    # The upload is processed by the engine's background worker. Waited for
+    # here so no test races it -- see the traversal test for what that race
+    # used to do.
+    assert engine.wait_idle(60), "the ingestion worker never went idle"
     world.a_source = out["source_id"]
     world.a_key = db.query_one("SELECT storage_key FROM sources WHERE id = ?",
                                (world.a_source,))["storage_key"]
@@ -193,8 +197,19 @@ class TestContainmentIsDepthOnly:
         # queue -- so the contract to assert is the recorded failure, not a
         # traceback. Asserting `pytest.raises` here passed nothing and proved
         # nothing; it failed honestly instead, which is how this was noticed.
-        world.db.execute("UPDATE sources SET storage_key = ? WHERE id = ?",
-                         (key, world.a_source))
+        # Clear what the LEGITIMATE upload produced first, so the assertion
+        # below measures only what the bad key produced.
+        #
+        # It used to assert "nothing was chunked" on a source whose legitimate
+        # upload the background worker was chunking at the same time. That
+        # passed only when the test beat the worker, so it was measuring
+        # timing, not containment: it failed once in a full-suite run on
+        # 2026-09-23 when the worker won, and failed every time once the
+        # fixture was made to wait for the worker. A containment check that
+        # silently regressed would have passed it whenever the test was fast.
+        world.db.execute("DELETE FROM source_chunks WHERE source_id = ?", (world.a_source,))
+        world.db.execute("UPDATE sources SET status = 'uploaded', error = NULL,"
+                         " storage_key = ? WHERE id = ?", (key, world.a_source))
         world.engine.process_source(world.a_source)
 
         row = world.db.query_one("SELECT status, error FROM sources WHERE id = ?",

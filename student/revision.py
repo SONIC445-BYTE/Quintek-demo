@@ -231,16 +231,40 @@ class RevisionEngine:
         if not concept_ids:
             return []
         marks = ",".join("?" for _ in concept_ids)
+        # OWNER-SCOPED, AND APPROVED ONLY. ADR-030.
+        #
+        # This selected every question tagged with the concept from ANYONE'S
+        # notebook, and concepts are global rows, so two learners whose
+        # material yielded the same concept were served each other's
+        # questions by the default session. It also allowed 'pending': a
+        # question the validator had not passed could be served. Neither is
+        # possible now -- the join pins the notebook to this learner, and only
+        # 'approved' is servable, by the owner's decision, with no exception
+        # for an author reviewing their own material.
         rows = self.db.query(
             f"""SELECT q.id,
                        (SELECT COUNT(*) FROM attempts a
                          WHERE a.question_id = q.id AND a.user_id = ?) AS seen
-                  FROM questions q JOIN question_concepts qc ON qc.question_id = q.id
+                  FROM questions q
+                  JOIN question_concepts qc ON qc.question_id = q.id
+                  JOIN notebooks n ON n.id = q.primary_notebook_id AND n.owner_id = ?
                  WHERE qc.concept_id IN ({marks})
-                   AND q.validation_status IN ('approved', 'pending')
+                   AND q.validation_status = 'approved'
                  GROUP BY q.id ORDER BY seen ASC, q.generated_at DESC""",
-            (user_id, *concept_ids))
+            (user_id, user_id, *concept_ids))
         return [r["id"] for r in rows if r["id"] not in exclude]
+
+    def servable_question_ids(self, user_id: str) -> set[str]:
+        """Every question this learner may be served: their own, and approved.
+
+        'approved' is the only servable status. 'pending', 'flagged' and
+        'rejected' never reach a session -- see ADR-030 and the owner's
+        decision recorded there.
+        """
+        return {r["id"] for r in self.db.query(
+            "SELECT q.id FROM questions q"
+            " JOIN notebooks n ON n.id = q.primary_notebook_id AND n.owner_id = ?"
+            " WHERE q.validation_status = 'approved'", (user_id,))}
 
     def select_questions(self, user_id: str, *, count: int = 20,
                          strategy: str = "adaptive") -> list[str]:
@@ -251,11 +275,22 @@ class RevisionEngine:
 
         chosen: list[str] = []
         seen: set[str] = set()
+        # THE ONE PLACE EVERY STEP PASSES THROUGH.
+        #
+        # Eight selection steps feed `take`, from five different queries. Two
+        # of them (`unseen`, and step 8) had no validation filter at all and
+        # would serve pending AND rejected questions; the `due` and
+        # previously-incorrect steps re-served a question even after it had
+        # been rejected. Rather than trust each query to remember, eligibility
+        # is decided once, here: approved, and in this learner's own notebooks.
+        eligible = self.servable_question_ids(user_id)
 
         def take(question_ids: list[str]) -> None:
             for qid in question_ids:
                 if len(chosen) >= count:
                     return
+                if qid not in eligible:
+                    continue
                 if qid not in seen:
                     chosen.append(qid)
                     seen.add(qid)
@@ -365,8 +400,15 @@ class RevisionEngine:
             raise ValueError("no such session")
         answered = {r["question_id"] for r in self.db.query(
             "SELECT question_id FROM attempts WHERE session_id = ?", (session_id,))}
+        # Re-checked at SERVE time, not only when the session was built. A
+        # question can be flagged or rejected between the two -- a report is
+        # exactly how that happens -- and a session built an hour ago must not
+        # hand it over now.
+        eligible = self.servable_question_ids(user_id)
         for qid in json.loads(row["selected_question_ids_json"]):
             if qid not in answered:
+                if qid not in eligible:
+                    continue
                 q = self.db.query_one("SELECT * FROM questions WHERE id = ?", (qid,))
                 if q is None:
                     continue
