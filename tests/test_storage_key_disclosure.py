@@ -265,6 +265,16 @@ class TestContainmentAloneIsNotEnough:
              "content_base64": base64.b64encode(one_page_pdf("B's own file")).decode()},
             world.b)
         assert status < 300, out
+        # The upload queued B's source for the background worker. If the worker
+        # reached it before the patched UPDATE above landed, it chunked B's own
+        # file and this run measured a race, not containment -- the same timing
+        # dependence found in the traversal test above, surfaced here by a
+        # full-suite run on 2026-09-23. Let the worker finish, clear what it
+        # produced, and process once more against the stored key.
+        assert world.engine.wait_idle(60), "the ingestion worker never went idle"
+        world.db.execute("DELETE FROM source_chunks WHERE source_id = ?", (out["source_id"],))
+        world.db.execute("UPDATE sources SET status = 'uploaded', error = NULL WHERE id = ?",
+                         (out["source_id"],))
         world.engine.process_source(out["source_id"])
 
         leaked = [t for t in chunks_owned_by(world.db, world.nb) if SECRET in t]

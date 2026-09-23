@@ -32,13 +32,13 @@ const check = (name, cond) => {
 const SERVED = new Set([
   'GET /me', 'GET /progress', 'GET /gaps', 'GET /concepts', 'GET /graph',
   'GET /revision/dashboard', 'GET /revision/next', 'POST /revision/sessions',
-  'POST /attempts', 'GET /settings/notifications', 'PUT /settings/notifications',
+  'POST /attempts', 'GET /reminders', 'POST /reminders',
   'GET /reports', 'GET /scope',
 ]);
 const SERVED_PREFIXES = [
   'GET /gaps/', 'POST /gaps/', 'GET /concepts/', 'GET /questions/',
   'POST /revision/sessions/', 'GET /notebooks/', 'GET /sources/',
-  'POST /questions/',
+  'POST /questions/', 'PUT /reminders/', 'DELETE /reminders/',
 ];
 
 const load = async (setup) => {
@@ -95,8 +95,11 @@ const ok = (payload) => ({
   await api.nextQuestion('ses_1');
   await api.recordAttempt('q_1', 2, 'RED', { sessionId: 'ses_1', gaps: ['x'] });
   await api.completeSession('ses_1');
-  await api.notificationPrefs();
-  await api.setNotificationPrefs({ trigger_time: '19:00' });
+  await api.listReminders();
+  await api.createReminder({ label: 'revise patho', localDate: '2099-01-01',
+                             localTime: '19:00', timezone: 'Asia/Kolkata' });
+  await api.updateReminder('rem_1', { localTime: '19:30' });
+  await api.cancelReminder('rem_1');
 
   const unserved = seen.filter((call) => {
     const bare = call.split('?')[0];

@@ -95,7 +95,13 @@ class StudentAPI:
         self.ai = ai
         self.generator = generator
         self.validator = validator
-        self._notifier = notifier
+        # `notifier` is kept as the injection point for a SENDER, under its old
+        # name so existing wiring does not break: anything with a `sender`
+        # attribute, or a bare callable, is used as the reminder sender.
+        self._reminder_sender = (getattr(notifier, "sender", None)
+                                 if notifier is not None and not callable(notifier)
+                                 else notifier)
+        self._reminders = None
         # The AI-transparency surface. Absent on an install with no benchmark
         # archive, in which case /ai/* answers with what is missing rather
         # than with sample figures -- see student/transparency.py.
@@ -136,11 +142,11 @@ class StudentAPI:
         return self._transparency
 
     @property
-    def notifier(self):
-        if self._notifier is None:
-            from .notifications import NotificationService
-            self._notifier = NotificationService(self.db)
-        return self._notifier
+    def reminders(self):
+        if self._reminders is None:
+            from .reminders import ReminderService
+            self._reminders = ReminderService(self.db, sender=self._reminder_sender)
+        return self._reminders
 
     # ---------- request plumbing ----------
 
@@ -468,25 +474,49 @@ class StudentAPI:
         if seg == ["progress"] and method == "GET":
             return 200, self.progress(uid)
 
-        # --- notifications ---
-        if seg == ["settings", "notifications"]:
+        # --- reminders (ADR-031) ---
+        # Every route below passes the caller's id into a query that names the
+        # owner in the same WHERE clause. Another learner's reminder is "no
+        # such reminder", exactly like every other id in this API.
+        if seg == ["reminders"]:
+            from .reminders import ReminderError
             if method == "GET":
-                return 200, self.notifier.get_prefs(uid)
-            if method == "PUT":
-                from .notifications import NotificationError
+                # `delivery_configured` is what lets the screen tell the truth:
+                # with no sender, a reminder whose time comes is recorded as
+                # not sent, and the learner is told that BEFORE they rely on
+                # one rather than after one silently fails to arrive.
+                return 200, {"reminders": self.reminders.list(uid),
+                             "delivery_configured": self._reminder_sender is not None}
+            if method == "POST":
                 try:
-                    return 200, self.notifier.set_prefs(
-                        uid, trigger_time=body.get("trigger_time"), tz=body.get("timezone"),
-                        push=body.get("push_enabled"), email=body.get("email_enabled"),
-                        note=body.get("note_text"))
-                except NotificationError as exc:
+                    return 201, self.reminders.create(
+                        uid, label=body.get("label"), local_date=body.get("local_date"),
+                        local_time=body.get("local_time"), tz=body.get("timezone"))
+                except ReminderError as exc:
                     raise ApiError(400, str(exc))
 
-        if seg == ["settings", "notifications", "test"] and method == "POST":
-            return 200, self.notifier.fire(uid)
-
-        if seg == ["settings", "notifications", "history"] and method == "GET":
-            return 200, {"history": self.notifier.history(uid)}
+        if len(seg) == 2 and seg[0] == "reminders":
+            from .reminders import ReminderConflict, ReminderError
+            try:
+                if method == "GET":
+                    found = self.reminders.get(uid, seg[1])
+                elif method == "PUT":
+                    found = self.reminders.update(
+                        uid, seg[1], label=body.get("label"),
+                        local_date=body.get("local_date"),
+                        local_time=body.get("local_time"), tz=body.get("timezone"))
+                elif method == "DELETE":
+                    found = self.reminders.cancel(uid, seg[1])
+                else:
+                    found = False
+            except ReminderConflict as exc:
+                raise ApiError(409, str(exc))
+            except ReminderError as exc:
+                raise ApiError(400, str(exc))
+            if found is None:
+                raise ApiError(404, "no such reminder")
+            if found is not False:
+                return 200, found
 
         # --- AI transparency (the Quintek AI Benchmark screen) ---
         # Behind authentication like everything else here, but deliberately

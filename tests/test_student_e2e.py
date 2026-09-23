@@ -25,8 +25,6 @@ from student.db import Database, now_iso
 from student.generation import AIConceptExtractor, QuestionGenerator
 from student.ingestion import IngestionEngine
 from student.knowledge import GREEN, ORANGE, RED
-from student.notifications import (NotificationError, NotificationService,
-                                   next_occurrence, validate_time)
 from student.validation import QuestionValidator
 
 
@@ -54,93 +52,15 @@ def db(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Phase 10: the daily trigger
+# Phase 10: the daily trigger -- RETIRED (ADR-031)
 # ---------------------------------------------------------------------------
-
-def test_trigger_time_and_timezone_are_validated(db):
-    uid = db.create_user("l@example.com", "correct-horse")
-    svc = NotificationService(db)
-    for bad in ["25:00", "8:00", "20:60", "evening", ""]:
-        with pytest.raises(NotificationError):
-            svc.set_prefs(uid, trigger_time=bad)
-    with pytest.raises(NotificationError, match="unknown timezone"):
-        svc.set_prefs(uid, tz="Mars/Olympus")
-    assert svc.set_prefs(uid, trigger_time="20:00", tz="Asia/Kolkata")["trigger_time"] == "20:00"
-
-
-def test_the_next_occurrence_is_computed_in_the_learners_own_zone(db):
-    """A learner in IST who sets 20:00 means 20:00 where they are. Adding a
-    fixed offset to UTC is wrong for half the year anywhere with DST."""
-    ist = next_occurrence("20:00", "Asia/Kolkata")
-    from zoneinfo import ZoneInfo
-    local = ist.astimezone(ZoneInfo("Asia/Kolkata"))
-    assert (local.hour, local.minute) == (20, 0)
-
-    ny = next_occurrence("20:00", "America/New_York")
-    local_ny = ny.astimezone(ZoneInfo("America/New_York"))
-    assert (local_ny.hour, local_ny.minute) == (20, 0)
-    assert ist != ny
-
-
-def test_the_system_never_moves_the_time_the_learner_chose(db):
-    """Not on failure, not on a delayed send. A revision habit is built on a
-    fixed hour."""
-    uid = db.create_user("l@example.com", "correct-horse")
-    svc = NotificationService(db, sender=lambda p: False)   # every send fails
-    svc.set_prefs(uid, trigger_time="20:00", tz="UTC")
-
-    for _ in range(3):
-        db.execute("UPDATE notification_prefs SET next_scheduled_at = ? WHERE user_id = ?",
-                   ("2000-01-01T00:00:00Z", uid))
-        svc.fire(uid)
-    assert svc.get_prefs(uid)["trigger_time"] == "20:00"
-
-
-def test_a_firing_is_logged_whether_it_succeeded_or_not(db):
-    """A trigger that fails quietly is indistinguishable from a learner
-    ignoring it."""
-    uid = db.create_user("l@example.com", "correct-horse")
-    sent: list[dict] = []
-    svc = NotificationService(db, sender=lambda p: sent.append(p) or True)
-    svc.set_prefs(uid, trigger_time="20:00", tz="UTC", push=True)
-    svc.fire(uid)
-
-    failing = NotificationService(db, sender=lambda p: (_ for _ in ()).throw(RuntimeError("down")))
-    failing.fire(uid)
-
-    history = svc.history(uid)
-    assert {h["status"] for h in history} == {"sent", "failed"}
-    assert any("down" in h["detail"] for h in history)
-    assert len(sent) == 1
-
-
-def test_with_no_sender_configured_the_firing_is_recorded_as_failed(db):
-    uid = db.create_user("l@example.com", "correct-horse")
-    svc = NotificationService(db)
-    svc.set_prefs(uid, trigger_time="20:00", tz="UTC")
-    result = svc.fire(uid)
-    assert result["ok"] is False and "no notification sender" in result["detail"]
-
-
-def test_the_notification_announces_the_queue_and_does_not_start_it(db):
-    uid = db.create_user("l@example.com", "correct-horse")
-    svc = NotificationService(db, sender=lambda p: True)
-    svc.set_prefs(uid, trigger_time="20:00", tz="UTC")
-    payload = svc.fire(uid)
-    assert "ready" in payload["message"]
-    assert db.query_one("SELECT COUNT(*) c FROM revision_sessions")["c"] == 0
-
-
-def test_only_users_whose_time_has_arrived_are_fired(db):
-    early = db.create_user("early@example.com", "correct-horse")
-    later = db.create_user("later@example.com", "correct-horse")
-    svc = NotificationService(db, sender=lambda p: True)
-    svc.set_prefs(early, trigger_time="20:00", tz="UTC")
-    svc.set_prefs(later, trigger_time="20:00", tz="UTC")
-    db.execute("UPDATE notification_prefs SET next_scheduled_at='2000-01-01T00:00:00Z'"
-               " WHERE user_id=?", (early,))
-    assert svc.due_users() == [early]
-    assert svc.run_due() == {"fired": 1, "sent": 1, "failed": 0}
+#
+# The one-trigger-per-learner model and its seven tests were replaced by
+# multi-reminders. Every guarantee they held that still applies is re-tested
+# against the new model in tests/test_reminders.py: input is validated, the
+# instant is computed in the learner's own zone, every firing is recorded
+# whether it sent or not, no sender means "failed" with the reason, firing
+# never starts a revision session, and only what is due fires.
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +102,7 @@ def app(db, tmp_path):
     api = StudentAPI(db, engine=engine, ai=ai,
                      generator=QuestionGenerator(db, ai),
                      validator=QuestionValidator(db, validator_ai),
-                     notifier=NotificationService(db, sender=lambda p: True))
+                     notifier=lambda p: True)
     yield api, engine
     engine.stop()
 

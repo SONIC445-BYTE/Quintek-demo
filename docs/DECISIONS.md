@@ -958,3 +958,100 @@ ever stop sharing one — the fixture blind spot that let this through.
 was served with "flagged" on its reveal. That was the design this decision
 replaced; the test now asserts a flagged, pending or rejected question has no
 reveal at all.
+
+## ADR-031 — Reminders are rows the learner writes, not one setting per learner
+
+**Date/phase:** 2026-09-23 · **Status:** BUILT up to the sender; delivery and scheduling NOT BUILT (see *Delivery* and *Scheduling* below)
+
+### What changed
+
+The old model was one row per learner in `notification_prefs`: a daily trigger
+time, two channel toggles and an optional note. It answered "when should the
+app nag me every day", which is not what was asked for. The spec is: a learner
+writes a label — "revise patho", "revise micro" — and picks a date and a time,
+as many times as they like, and at that moment gets their own words back.
+
+`student/reminders.py` implements exactly that, and the old module
+(`student/notifications.py`) is deleted rather than extended:
+
+| Rule | How it is held |
+|---|---|
+| Any number, independent | One row per reminder in `reminders`; create/edit/cancel touch one id. |
+| The label is opaque | Stored and delivered verbatim — not trimmed, not rewritten, not linked to a concept. Checks are only what a database needs: non-empty, ≤ 200 characters, no NUL (PostgreSQL TEXT rejects one). |
+| It fires because its own time came | Selection is `status = 'pending' AND fire_at <= now`. No reference to `due_at`, colours or concepts, and firing starts no session. |
+| Time is the learner's wall clock | A local date, time and IANA timezone are stored with the UTC instant computed once at save. |
+| A wall-clock time that is not exactly one instant is refused | A time in a spring-forward gap does not exist; one in a fall-back hour happens twice. Both are refused with a message naming which, rather than resolved by the system choosing for the learner. |
+| Ownership | Every by-id query names the owner in the same `WHERE` clause. Another learner's reminder is "no such reminder" in every state and for every body — including a finished one (which would otherwise answer 409) and an invalid edit (which would otherwise answer 400). Both oracles are tested, because the `UPDATE`'s own owner clause hides the missing `SELECT` clause from a write check. |
+| Edit and cancel only while pending | A fired, failed or cancelled reminder is a record of what happened. Cancel keeps the row so the list shows it rather than silently shrinking. |
+
+Routes: `GET/POST /reminders`, `GET/PUT/DELETE /reminders/<id>`. The old
+`/settings/notifications*` routes are gone. `/reminders/<id>` is enumerated by
+the cross-user meta-test like every other id-bearing route.
+
+### Delivery — built up to the sender
+
+`ReminderService.fire` claims a due reminder with a conditional `UPDATE`
+(`pending` → `fired`, only if still `pending`), then hands the sender
+`{user_id, reminder_id, label, fire_at}` and nothing else. Two overlapping runs
+cannot both send one. The cost is at-most-once: a crash between claim and send
+loses that reminder rather than doubling it — visible on the learner's list,
+which is where a missed reminder should be noticed.
+
+**No sender is configured on any deployment.** A due reminder is therefore
+recorded `failed` with the reason `no notification sender is configured`, and
+`GET /reminders` returns `delivery_configured: false` so the screen says so
+above the form, before anyone relies on a reminder.
+
+**Recommended channel** (not built — each needs a credential):
+
+1. **Push to the Android app via Firebase Cloud Messaging.** The only client
+   that exists is the Android WebView build, so this reaches the learner where
+   they are. Needs a Firebase project and its server credential in the
+   platform's secret store, a device-token table, and the app registering for
+   notifications (it requests no permission today).
+2. **On-device scheduling instead of server delivery** — worth weighing before
+   committing to (1). The app would read the learner's pending reminders and
+   schedule them with Android's own alarm and notification APIs through a
+   WebView bridge. No push credential and no server scheduler; the trade-off is
+   that it fires only on a device that has synced, and "fired" becomes a device
+   report rather than a server fact.
+3. **Email — not recommended yet.** Registration does not verify addresses
+   (`NOT_BUILT.md`), so a reminder could deliver a learner's own words to
+   somebody else's inbox. Email verification comes first.
+
+### Scheduling — not built
+
+Something must call `python -m benchmark.cli notify` (which runs `run_due`
+once and exits). Nothing does. What exists on Render today: one **free-plan**
+web service and a **free-plan** Postgres; no cron job. A free web service
+spins down when idle, so an in-process timer would stop exactly when nobody is
+using the app — which is when reminders matter. Options:
+
+| Option | What it needs |
+|---|---|
+| A Render Cron Job running `notify` | A paid service type on Render, `QUINTEK_DATABASE_URL` set on it from the platform's secret store, and the same region as the database. The cron interval is the worst-case lateness of a reminder. |
+| A paid always-on web instance with an in-process scheduler | A plan change and code that does not exist (a scheduler thread). The CLI entry point was designed to avoid exactly this. |
+| An external scheduler calling an authenticated endpoint | An operator-only "run due reminders" endpoint (not built) and a shared secret. |
+| On-device scheduling (channel option 2) | Removes the server scheduler entirely. |
+
+**Do not schedule `notify` before a sender exists.** With no sender, every due
+reminder is marked `failed` — honest, but it spends the learner's reminders.
+
+### The retired tables — what they held and what was done
+
+Read from the production database (read-only query, 2026-09-23):
+`notification_prefs` — **6 rows, every one at its defaults** (created
+automatically at registration), none with a note, none scheduled;
+`notification_log` — **0 rows**.
+
+Choices were drop, migrate, or leave:
+
+* **Migrate — rejected.** There is no learner-authored data to carry over, and
+  turning a default "20:00 daily" into a reminder would create a reminder
+  nobody wrote.
+* **Drop — not done here.** Dropping a table from a live database is a
+  destructive migration and should be its own deliberate step.
+* **Leave, retired — done.** Nothing reads or writes either table; registration
+  no longer creates a row; `schema.sql` keeps the definitions under a RETIRED
+  comment so existing and new databases agree; erasure still clears them
+  because they carry `user_id`.

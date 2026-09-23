@@ -338,8 +338,44 @@ CREATE TABLE IF NOT EXISTS concept_state (
 );
 
 -- ---------------------------------------------------------------------------
--- Notifications
+-- Reminders (ADR-031)
 -- ---------------------------------------------------------------------------
+--
+-- Any number per learner, each a date, a time and the learner's own text.
+-- The local date, time and timezone are kept exactly as entered, so the screen
+-- shows back what the learner typed; `fire_at` is the one UTC instant they
+-- denote, computed once at save time, and is what the scheduler compares.
+-- A reminder is cancelled, never deleted, so a learner's list shows what
+-- happened to it; erasing the account removes it through `user_id`.
+
+CREATE TABLE IF NOT EXISTS reminders (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    label       TEXT NOT NULL,
+    local_date  TEXT NOT NULL,
+    local_time  TEXT NOT NULL,
+    timezone    TEXT NOT NULL,
+    fire_at     TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','fired','failed','cancelled')),
+    detail      TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    fired_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_reminders_due ON reminders(status, fire_at);
+CREATE INDEX IF NOT EXISTS ix_reminders_user ON reminders(user_id, fire_at);
+
+-- ---------------------------------------------------------------------------
+-- RETIRED: the one-trigger-per-learner model (ADR-031)
+-- ---------------------------------------------------------------------------
+--
+-- Nothing reads or writes these two tables any more. They are kept, not
+-- dropped, because they already exist in deployed databases and dropping a
+-- table is a migration to be done deliberately, not a side effect of editing
+-- this file. On the production database they held six auto-created rows, all
+-- still at their defaults, and no log rows -- no learner-authored data. Erasure
+-- still clears them, because they carry `user_id`.
 
 CREATE TABLE IF NOT EXISTS notification_prefs (
     user_id           TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

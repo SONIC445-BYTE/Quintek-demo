@@ -122,16 +122,16 @@ def cmd_serve_student(args) -> int:
 
 def cmd_notify(args) -> int:
     """
-    Fire every learner whose chosen time has arrived, then exit.
+    Fire every reminder whose time has arrived, then exit.
 
     Designed to be run from cron rather than to hold a scheduler open: a
-    process that must stay up to deliver a daily reminder is a process whose
-    restart silently drops a day.
+    process that must stay up to deliver reminders is a process whose restart
+    silently drops them. Nothing runs this in production yet (ADR-031).
     """
     from student.db import Database
-    from student.notifications import NotificationService
+    from student.reminders import ReminderService
 
-    result = NotificationService(Database(args.db)).run_due()
+    result = ReminderService(Database(args.db)).run_due()
     print(json.dumps(result, indent=2))
     return 0 if result["failed"] == 0 else 1
 
@@ -189,7 +189,7 @@ def main(argv=None) -> int:
                     help="benchmark archive the mounted console reads")
     ss.set_defaults(func=cmd_serve_student)
 
-    nt = sub.add_parser("notify", help="fire due daily revision triggers once, then exit")
+    nt = sub.add_parser("notify", help="fire every reminder whose time has come, once, then exit")
     nt.add_argument("--db", default="quintek.db")
     nt.set_defaults(func=cmd_notify)
 

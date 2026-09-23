@@ -113,7 +113,6 @@ def build_api(db_path: str | Path | None = None, *, with_ai: bool = True,
     from .ai import AIEngine
     from .generation import AIConceptExtractor, QuestionGenerator
     from .ingestion import IngestionEngine
-    from .notifications import NotificationService
     from .validation import QuestionValidator
 
     registry, archive = None, None
@@ -160,8 +159,10 @@ def build_api(db_path: str | Path | None = None, *, with_ai: bool = True,
     engine = IngestionEngine(db, concept_extractor=AIConceptExtractor(db, ai))
     return StudentAPI(db, engine=engine, ai=ai,
                       generator=QuestionGenerator(db, ai),
-                      validator=QuestionValidator(db, validator_ai),
-                      notifier=NotificationService(db))
+                      validator=QuestionValidator(db, validator_ai))
+    # No reminder sender is passed: none exists on any deployment. Reminders
+    # are stored and, when something runs `notify`, marked failed with that
+    # reason. See ADR-031 and NOT_BUILT.md.
 
 
 def make_handler(api: StudentAPI, billing=None, analytics=None):

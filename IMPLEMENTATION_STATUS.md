@@ -290,7 +290,7 @@ still never been observed against a live model.
 | `student/validation.py` | Eight named checks. The validator must be a different candidate than the generator, and never sees the generator's rationale. The verdict is derived from the checks, not read off the model's own summary line. | via generation/e2e |
 | `student/knowledge.py` | R/O/G colour derivation over a five-attempt window, gap recording, and SM-2 scheduling graded on the learner's own colour rather than on raw correctness. | via `test_student_revision.py` |
 | `student/revision.py` | Priority scoring with named weights and a reason list per concept, and the eight-step adaptive selection order. `next_question` never returns the answer key. | 21 |
-| `student/notifications.py` | One learner-chosen time, computed in the learner's own zone via `zoneinfo`. Nothing here reschedules or "optimises" that time. Every firing is logged so "did it actually send" is answerable. | via e2e |
+| `student/reminders.py` | Any number of reminders per learner, each the learner's own words at a local date and time converted once with `zoneinfo`; times the clocks skip or repeat are refused. Built up to the sender: none is configured, so a due reminder is recorded `failed` with the reason (ADR-031). | `tests/test_reminders.py`, both backends |
 | `student/api.py` | The learner API surface, transport-independent. | via e2e + server |
 | `student/server.py` | Stdlib HTTP transport. | 10 |
 | `student/transparency.py` | The learner-facing Quintek AI Benchmark screen's data layer. | 30 |

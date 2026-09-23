@@ -43,7 +43,6 @@ from student.api import StudentAPI
 from student.db import Database, now_iso
 from student.generation import AIConceptExtractor, QuestionGenerator
 from student.ingestion import IngestionEngine
-from student.notifications import NotificationService
 from student.validation import QuestionValidator
 
 from test_student_e2e import _Scripted, _reply_for
@@ -177,6 +176,12 @@ CONTENT_FIELDS = frozenset({
     # reporting a question: the learner's own words about what is wrong with
     # it. `kind` is above already; `note` is free text and names nothing.
     "note",
+    # a reminder: the learner's own words, and the local date and time they
+    # typed. `label` is opaque text delivered back verbatim; the date and time
+    # are converted to an instant and never used to look anything up. None of
+    # the three names a server-owned row -- the reminder is named in the PATH,
+    # and that id IS covered, as /reminders/<id>, on all three methods.
+    "label", "local_date", "local_time",
     # an administrator's stated reason for suspending an account. Their own
     # words, recorded so the suspended person can be told why.
     "reason",
@@ -274,6 +279,11 @@ COVERAGE: dict[str, dict] = {
     "/gaps/<id>/resolve":                 dict(kind="gap", method="POST", expect=SCOPED, body={},
                                                why="UPDATE ... WHERE id=? AND user_id=? matches"
                                                    " nothing; reports ok for a no-op"),
+    # A reminder carries the learner's own words. GET is declared here; PUT and
+    # DELETE -- the two that WRITE -- are exercised together, with the row
+    # checked in the database afterwards, by
+    # test_reminders_refuse_another_learner_on_every_method below.
+    "/reminders/<id>":                    dict(kind="reminder", method="GET", expect=REFUSED),
     "/revision/sessions/<id>/complete":   dict(kind="session", method="POST", expect=REFUSED,
                                                body={}),
     "/concepts/<id>":                     dict(kind="concept", method="GET", expect=SCOPED,
@@ -331,7 +341,7 @@ def world(tmp_path_factory):
                             development_candidate="cand-val")
     api = StudentAPI(db, engine=engine, ai=ai, generator=QuestionGenerator(db, ai),
                      validator=QuestionValidator(db, validator_ai),
-                     notifier=NotificationService(db, sender=lambda p: True))
+                     notifier=lambda p: True)
 
     def register(email):
         return api.handle("POST", "/auth/register", {},
@@ -357,6 +367,9 @@ def world(tmp_path_factory):
     _, cons_a = api.handle("GET", "/concepts", {}, {}, a_token)
     _, demo_a = api.handle("POST", "/demos", {},
                            {"title": "A demo", "question": f"{SENTINEL} demo stem?"}, a_token)
+    _, rem_a = api.handle("POST", "/reminders", {},
+                          {"label": f"{SENTINEL} revise patho", "local_date": "2099-01-01",
+                           "local_time": "20:00", "timezone": "Asia/Kolkata"}, a_token)
 
     _, nb_b = api.handle("POST", "/notebooks", {},
                          {"title": "B book", "subject": "Medicine"}, b_token)
@@ -371,7 +384,8 @@ def world(tmp_path_factory):
         "ids": {"notebook": nb_a["id"], "source": src_a["source_id"],
                 "question": bank["questions"][0]["id"],
                 "session": ses_a["session_id"], "gap": gaps_a["gaps"][0]["id"],
-                "concept": cons_a["concepts"][0]["concept_id"], "demo": demo_a["id"]},
+                "concept": cons_a["concepts"][0]["concept_id"], "demo": demo_a["id"],
+                "reminder": rem_a["id"]},
         "b_notebook": nb_b["id"],
     }
 
@@ -511,6 +525,34 @@ def test_a_session_on_a_shared_concept_serves_nothing_of_another_learner(world, 
     assert not (served & a_questions), (
         f"B's {strategy} session was built from A's questions: {sorted(served & a_questions)}")
     assert not _leaks(session)
+
+
+@pytest.mark.parametrize("method, body", [
+    ("GET", None),
+    ("PUT", {"label": "B was here", "local_date": "2099-06-01", "local_time": "09:00",
+             "timezone": "UTC"}),
+    ("DELETE", None),
+])
+def test_reminders_refuse_another_learner_on_every_method(world, method, body):
+    """B names A's reminder by id on each method, and A's row must be exactly
+    as it was afterwards. Checked in the DATABASE, because a write that
+    answered 404 but still changed the row would pass a status check."""
+    api, db, rid = world["api"], world["db"], world["ids"]["reminder"]
+    before = dict(db.query_one("SELECT * FROM reminders WHERE id = ?", (rid,)))
+    status, payload = api.handle(method, f"/reminders/{rid}", {}, body, world["b"])
+    assert status == 404, f"{method} on A's reminder answered {status} to B"
+    assert not _leaks(payload)
+    after = dict(db.query_one("SELECT * FROM reminders WHERE id = ?", (rid,)))
+    assert after == before, f"B's {method} changed A's reminder: {before} -> {after}"
+
+
+def test_reminder_list_is_the_callers_own(world):
+    api = world["api"]
+    status, body = api.handle("GET", "/reminders", {}, {}, world["b"])
+    assert status == 200 and body["reminders"] == []
+    assert not _leaks(body)
+    status, body = api.handle("GET", "/reminders", {}, {}, world["a"])
+    assert [r["id"] for r in body["reminders"]] == [world["ids"]["reminder"]]
 
 
 def test_attempts_refuses_another_learners_question(world):

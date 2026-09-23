@@ -146,7 +146,7 @@ def alerts(db: Database, *, threshold: int = DEFAULT_ALERT_THRESHOLD,
     Returned rather than delivered. Where an alert GOES is a deployment
     decision -- email, a webhook, a log line someone greps -- and a module that
     picked one would be wrong for every deployment that chose another.
-    `student/notifications.py` already owns delivery.
+    `student/reminders.py` owns the sender seam, and no sender exists yet.
     """
     report = since(db, hours=window_seconds / 3600.0)
     return [f for f in report["by_fault"] if f["count"] >= threshold]

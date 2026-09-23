@@ -89,7 +89,7 @@ says why it cannot:
 | Notebook list | `/notebooks` |
 | Question bank / studio | `/questions` |
 | Demonstrations | `/demos` |
-| Reminder settings | `/settings/notifications` + its delivery log |
+| Reminders | `/reminders` — list, create, edit, cancel (ADR-031; the single-trigger `/settings/notifications` it replaced is gone) |
 | Revision dashboard | `/revision/dashboard` |
 
 Three pieces of arithmetic moved into `quintek-student-api.js` so they could be

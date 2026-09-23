@@ -34,7 +34,6 @@ from student.api import StudentAPI
 from student.db import Database
 from student.generation import AIConceptExtractor, QuestionGenerator
 from student.ingestion import IngestionEngine
-from student.notifications import NotificationService
 from student.validation import QuestionValidator
 
 from test_student_e2e import _Scripted, _reply_for
@@ -53,7 +52,7 @@ def world(tmp_path):
     vai = AIEngine(db, provider_factory=lambda c: provider, development_candidate="cand-val")
     api = StudentAPI(db, engine=engine, ai=ai, generator=QuestionGenerator(db, ai),
                      validator=QuestionValidator(db, vai),
-                     notifier=NotificationService(db, sender=lambda p: True))
+                     notifier=lambda p: True)
 
     def register(email):
         return api.handle("POST", "/auth/register", {},

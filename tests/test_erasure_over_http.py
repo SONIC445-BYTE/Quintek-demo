@@ -103,9 +103,10 @@ def _populate(db, uid):
                "correct_answer,is_correct,user_colour,created_at)"
                " VALUES (?,?,?,?,?,?,?,?,?)",
                (new_id("att"), uid, qid, None, 1, 0, 0, "RED", now_iso()))
-    # `notification_prefs` is NOT inserted here: registration already created
-    # the row. Left alone deliberately -- it is a row the SERVER made rather
-    # than one this fixture made, and erasure has to reach those too.
+    # A reminder is NOT inserted here: the test creates one over HTTP, so the
+    # row is one the SERVER made rather than one this fixture made, and erasure
+    # has to reach those too. (This used to be the `notification_prefs` row
+    # registration created; that table is retired -- ADR-031.)
     return {"notebook": nid, "source": sid, "question": qid}
 
 
@@ -117,6 +118,10 @@ def test_the_request_that_returns_200_is_the_one_that_removes_the_rows(live):
     assert status in (200, 201), out
     token, uid = out["token"], out["user_id"]
     _populate(db, uid)
+    status, rem = request(live["origin"], "POST", "/reminders",
+                          {"label": "revise patho", "local_date": "2099-01-01",
+                           "local_time": "20:00", "timezone": "Asia/Kolkata"}, token=token)
+    assert status == 201, rem
 
     # The data is really there BEFORE the delete. Without this, an erasure
     # that removes nothing passes every assertion below.
@@ -131,9 +136,9 @@ def test_the_request_that_returns_200_is_the_one_that_removes_the_rows(live):
     assert before["notebooks"] == 1, before
     assert before["attempts"] == 1, before
     assert before["sessions_auth"] >= 1, before
-    assert before["notification_prefs"] == 1, (
-        "registration did not create the preferences row, so this test is no "
-        f"longer covering a server-created row: {before}")
+    assert before["reminders"] == 1, (
+        "the reminder created over HTTP is not in the table erasure reads, so "
+        f"this test is no longer covering a server-created row: {before}")
     assert sum(before.values()) >= 4, f"the fixture put almost nothing in: {before}"
     assert db.query_one("SELECT COUNT(*) n FROM users WHERE id=?", (uid,))["n"] == 1
 

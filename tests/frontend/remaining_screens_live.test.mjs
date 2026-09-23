@@ -313,48 +313,42 @@ test('the remaining screens read live data through the real client', async (t) =
     'the server accepted WEAKNESS_FIRST, so this test can no longer tell a '
     + 'real strategy name from an invented one');
 
-  // --- reminder settings ------------------------------------------------
-  const prefs = await api.notificationPrefs();
-  for (const field of ['trigger_time', 'timezone', 'push_enabled',
-                       'email_enabled', 'note_text']) {
-    assert.ok(field in prefs, `the reminder settings are missing ${field}`);
-  }
-  assert.equal(typeof prefs.push_enabled, 'boolean',
-    'the toggle binds a boolean; an integer would render as always-on');
+  // --- reminders (ADR-031) ----------------------------------------------
+  // The single daily "trigger" is retired. Reminders are rows the learner
+  // writes; the screen-level behaviour is in reminders_screen_live.test.mjs,
+  // and this checks the client against the served routes end to end.
+  const empty = await api.listReminders();
+  assert.deepEqual(empty.reminders, []);
+  assert.equal(empty.delivery_configured, false,
+    'a sender is configured now; the screen\'s "delivery is off" copy needs revisiting');
 
-  const saved = await api.setNotificationPrefs({
-    trigger_time: '07:30', push_enabled: false, email_enabled: true,
-    note_text: 'Iron studies before the ward round',
-  });
-  assert.equal(saved.trigger_time, '07:30');
-  assert.equal(saved.push_enabled, false);
-  assert.equal(saved.email_enabled, true);
+  const label = 'Iron studies before the ward round\n  (bring the ferritin chart)';
+  const one = await api.createReminder({ label, localDate: '2099-01-10',
+                                         localTime: '07:30', timezone: 'Asia/Kolkata' });
+  const two = await api.createReminder({ label: 'revise micro', localDate: '2099-01-11',
+                                         localTime: '20:00', timezone: 'Asia/Kolkata' });
+  assert.equal(one.label, label, 'the label came back changed');
+  assert.equal(one.fire_at, '2099-01-10T02:00:00Z');
 
   // It PERSISTED, rather than being echoed back.
-  const reread = await api.notificationPrefs();
-  assert.equal(reread.trigger_time, '07:30',
-    'the preference did not survive a re-read, so the control is still local');
-  assert.equal(reread.note_text, 'Iron studies before the ward round');
+  const listed = await api.listReminders();
+  assert.deepEqual(listed.reminders.map((r) => r.label), [label, 'revise micro']);
 
-  // --- the test send ----------------------------------------------------
-  // No sender is configured on any deployment, so this reports a failure with
-  // a reason. That is the honest answer and the screen must show it: the old
-  // button set a flag and relabelled itself "Sent".
-  const fired = await api.testNotification();
-  assert.equal(typeof fired.ok, 'boolean');
-  assert.equal(fired.ok, false,
-    'a sender is configured now; the screen\'s "not sent" copy needs revisiting');
-  assert.match(fired.detail, /no notification sender is configured/);
+  const edited = await api.updateReminder(one.id, { localTime: '08:00' });
+  assert.equal(edited.local_time, '08:00');
+  assert.equal(edited.label, label, 'an edit of the time rewrote the text');
 
-  // And it was RECORDED, which is what the screen reads back rather than
-  // trusting its own optimism.
-  const history = await api.notificationHistory();
-  assert.ok(history.length >= 1, 'the test send wrote no log row');
-  assert.equal(history[0].status, 'failed');
-  assert.match(history[0].detail, /no notification sender is configured/);
-  for (const field of ['scheduled_at', 'status', 'detail']) {
-    assert.ok(field in history[0], `the log row is missing ${field}`);
-  }
+  const cancelled = await api.cancelReminder(two.id);
+  assert.equal(cancelled.status, 'cancelled');
+  const after = await api.listReminders();
+  assert.equal(after.reminders.find((r) => r.id === one.id).status, 'pending',
+    'cancelling one reminder changed another');
+
+  // A refusal carries the server's reason through the client.
+  await assert.rejects(
+    api.createReminder({ label: 'x', localDate: '2099-10-25', localTime: '01:30',
+                         timezone: 'Europe/London' }),
+    /happens twice in Europe\/London/);
 
   delete globalThis.window;
 });

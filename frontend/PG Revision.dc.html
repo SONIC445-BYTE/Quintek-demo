@@ -1126,60 +1126,46 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
     <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ true }}">
       <div style="display:flex;flex-direction:column;gap:22px;padding:0 16px 26px">
         <div style="display:flex;flex-direction:column;gap:11px">
-          <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">Daily trigger</span>
-          <div style="display:flex;flex-direction:column;gap:8px;padding:13px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
-            <span style="font-size:12px;line-height:1.5;color:#6f7679;text-wrap:pretty">One time each day. Quintek rebuilds your revision queue then, and never changes this time on its own.</span>
-            <div style="display:flex;flex-wrap:wrap;gap:6px">
-              <sc-for list="{{ triggerTimes }}" as="t" hint-placeholder-count="6">
-                <button onClick="{{ t.set }}" style="flex:1;min-width:62px;min-height:44px;border-radius:5px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:13px;font-weight:500;background:{{ t.bg }};border:1px solid {{ t.bd }};color:{{ t.fg }}">{{ t.label }}</button>
-              </sc-for>
-            </div>
-            <sc-if value="{{ customTime }}" hint-placeholder-val="{{ true }}">
-              <div style="display:flex;align-items:center;gap:9px;padding:11px;background:#FAFAF8;border:1px solid #E0DDD4;border-radius:5px;animation:pgfade .25s ease both">
-                <span style="font-size:11.5px;font-weight:600;color:#8a9093;flex:none">Set a time</span>
-                <input value="{{ trigger }}" onChange="{{ setCustomTime }}" type="time" style="flex:1;min-width:0;height:42px;background:#fff;border:1px solid #E0DDD4;border-radius:5px;outline:none;padding:0 10px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:15px;color:#16191A" />
-              </div>
+          <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">Reminders</span>
+          <div style="display:flex;flex-direction:column;gap:10px;padding:13px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
+            <span style="font-size:12px;line-height:1.5;color:#6f7679;text-wrap:pretty">Write anything, pick a date and a time. At that moment Quintek hands your words back to you exactly as you wrote them. Add as many as you like; each one is separate.</span>
+            <sc-if value="{{ remDeliveryOff }}" hint-placeholder-val="{{ true }}">
+              <span style="font-size:11.5px;line-height:1.5;color:#8a5f13;padding:9px 10px;background:#F5F3EC;border-radius:5px;text-wrap:pretty">{{ remDeliveryNote }}</span>
             </sc-if>
-
-            <div style="display:flex;flex-direction:column;gap:8px;padding:12px;background:#F5F3EC;border-radius:5px">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-                <span style="font-size:11.5px;font-weight:600;color:#8a5f13">The note you will see at {{ trigger }}</span>
-                <sc-if value="{{ noteDirty }}" hint-placeholder-val="{{ true }}">
-                  <button onClick="{{ saveNote }}" style="flex:none;min-height:34px;padding:0 11px;background:#1E7A57;color:#fff;border:none;border-radius:4px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600">Save</button>
+            <input value="{{ remLabel }}" onChange="{{ setRemLabel }}" maxlength="200" placeholder="e.g. revise patho" style="min-height:44px;padding:0 11px;background:#fff;border:1px solid #E0DDD4;border-radius:5px;outline:none;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:13px;color:#16191A" />
+            <div style="display:flex;gap:8px">
+              <input value="{{ remDate }}" onChange="{{ setRemDate }}" type="date" style="flex:1;min-width:0;height:42px;background:#fff;border:1px solid #E0DDD4;border-radius:5px;outline:none;padding:0 10px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:13px;color:#16191A" />
+              <input value="{{ remTime }}" onChange="{{ setRemTime }}" type="time" style="flex:1;min-width:0;height:42px;background:#fff;border:1px solid #E0DDD4;border-radius:5px;outline:none;padding:0 10px;font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:13px;color:#16191A" />
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+              <span style="font-size:11px;line-height:1.4;color:#8a9093;min-width:0">{{ remTzNote }}</span>
+              <div style="display:flex;gap:6px;flex:none">
+                <sc-if value="{{ remEditing }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ remDiscard }}" style="min-height:40px;padding:0 12px;background:#FAFAF8;border:1px solid #E0DDD4;border-radius:5px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12px;font-weight:600;color:#5d6467">Discard</button>
                 </sc-if>
+                <button onClick="{{ remSubmit }}" style="min-height:40px;padding:0 14px;background:#1E7A57;color:#fff;border:none;border-radius:5px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;font-weight:600">{{ remSubmitLabel }}</button>
               </div>
-              <input value="{{ noteDraft }}" onChange="{{ setNote }}" placeholder="e.g. Iron studies before the ward round" style="min-height:44px;padding:0 11px;background:#fff;border:1px solid #E4DFD1;border-radius:5px;outline:none;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;color:#16191A" />
-              <span style="font-size:11px;line-height:1.5;color:#8a5f13;text-wrap:pretty">{{ noteHint }}</span>
             </div>
-
-            <div style="display:flex;justify-content:space-between;gap:10px;padding-top:2px;font-size:11.5px;color:#8a9093">
-              <span>{{ timezone }}</span><span>Next {{ nextTrigger }}</span>
+            <sc-if value="{{ remFormError }}" hint-placeholder-val="{{ false }}">
+              <span style="font-size:11.5px;line-height:1.5;color:#BC4C43;text-wrap:pretty">{{ remFormError }}</span>
+            </sc-if>
+          </div>
+          <span style="font-size:11.5px;line-height:1.5;color:{{ remListFg }}">{{ remListNote }}</span>
+          <sc-for list="{{ reminderRows }}" as="rm" hint-placeholder-count="2">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:12px;background:#fff;border:1px solid #E6E4DE;border-left:2px solid {{ rm.edge }};border-radius:0 5px 5px 0">
+              <span style="display:flex;flex-direction:column;gap:5px;min-width:0">
+                <span style="font-size:13px;line-height:1.45;color:#16191A;white-space:pre-wrap;overflow-wrap:anywhere">{{ rm.label }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;color:#8a9093">{{ rm.when }}</span>
+                <span style="font-size:11px;font-weight:600;color:{{ rm.statusFg }}">{{ rm.status }}</span>
+              </span>
+              <sc-if value="{{ rm.pending }}" hint-placeholder-val="{{ true }}">
+                <span style="display:flex;flex-direction:column;gap:6px;flex:none">
+                  <button onClick="{{ rm.edit }}" style="min-height:36px;padding:0 10px;background:transparent;border:1px solid #E0DDD4;border-radius:4px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11px;font-weight:600;color:#1E7A57">EDIT</button>
+                  <button onClick="{{ rm.cancel }}" style="min-height:36px;padding:0 10px;background:transparent;border:1px solid #E0DDD4;border-radius:4px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11px;font-weight:600;color:#BC4C43">CANCEL</button>
+                </span>
+              </sc-if>
             </div>
-          </div>
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:#8a9093">Channels</span>
-          <div style="display:flex;flex-direction:column;gap:1px;background:#E6E4DE;border:1px solid #E6E4DE;border-radius:5px;overflow:hidden">
-            <sc-for list="{{ channels }}" as="ch" hint-placeholder-count="2">
-              <button onClick="{{ ch.toggle }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;padding:13px 12px;min-height:48px;background:#fff;border:none;cursor:pointer;text-align:left;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif" style-hover="background:#FAFAF8">
-                <span style="display:flex;flex-direction:column;gap:4px">
-                  <span style="font-size:13px;color:#16191A">{{ ch.label }}</span>
-                  <span style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:9.5px;color:#8a9093">{{ ch.meta }}</span>
-                </span>
-                <span style="flex:none;width:38px;height:22px;border-radius:11px;background:{{ ch.trackBg }};position:relative;display:block">
-                  <span style="position:absolute;top:3px;left:{{ ch.knobX }};width:16px;height:16px;border-radius:50%;background:#fff"></span>
-                </span>
-              </button>
-            </sc-for>
-          </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;background:#fff;border:1px solid #E6E4DE;border-radius:5px">
-            <span style="display:flex;flex-direction:column;gap:4px">
-              <span style="font-size:12.5px;font-weight:600;color:{{ lastNotifFg }}">{{ lastNotif }}</span>
-              <span style="font-size:11px;color:#8a9093">Last notification status</span>
-            </span>
-            <button onClick="{{ testNotif }}" style="flex:none;min-height:40px;padding:0 14px;background:#FAFAF8;border:1px solid #E0DDD4;border-radius:5px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;font-weight:600;color:#1E7A57" style-hover="border-color:#1E7A57">{{ testLabel }}</button>
-          </div>
+          </sc-for>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:10px">
@@ -2073,15 +2059,15 @@ class Component extends DCLogic {
      * synthesised from `i % 12`. */
     liveBank: null, bankState: 'off', bankError: '',
     liveNotebooks: null, nbsState: 'off', nbsError: '',
-    liveNotifPrefs: null, notifState: 'off', notifError: '',
-    notifHistory: [], notifBusy: '', notifSaveError: '',
+    liveReminders: null, remState: 'off', remError: '', remDelivery: false,
+    remLabel: '', remDate: '', remTime: '', remEditing: null, remBusy: '',
+    remFormError: '',
     demosState: 'off', demosError: '',
     weakFilter: 'All', query: '', cptFrom: 'weak', qCount: 10, strategy: 'adaptive',
     studio: {}, studioOut: false, studioAct: null, bankFilter: 'All',
     evalApi: null, evalState: 'loading', howOpen: false, openTrack: null,
-    trigger: '20:00', channels: { push: true, email: false }, tested: false,
     category: 'ALL', openTask: null, modelId: null, cmpA: 0, cmpB: 1,
-    custom: false, customTime: false,
+    custom: false,
     srcType: null, srcValue: '', srcFileName: '', families: [], otherFamily: '',
     demoMode: 'upload', demoText: '', demoStamp: 0, demoIds: [], demoSaveError: '',
     sourceCaps: {}, ingestStage: '', ingestError: '', ingestStats: null,
@@ -2097,8 +2083,6 @@ class Component extends DCLogic {
     makeFams: ['Clinical vignette', 'Interpretation', 'Mechanism'],
     makeCustomOn: false, makeCustomVal: '', makeOther: '',
     obCount: 10, obCustomOn: false, obCustomVal: '', studioOther: {},
-    noteDraft: 'Iron studies and ferritin interpretation tonight.',
-    savedNote: 'Iron studies and ferritin interpretation tonight.',
     extracting: false, extractPage: 0, extraCount: 0,
     qi: 0, picked: null, done: false, step: 0, pos: null, tick: 0,
     cpt: null, cadence: 'Daily', generated: false,
@@ -2131,18 +2115,6 @@ class Component extends DCLogic {
   setCount = (n) => () => this.setState({ qCount: n, custom: false });
   openCustom = () => this.setState({ custom: true });
   setStrategy = (v) => () => this.setState({ strategy: v });
-  /* Every reminder control writes through to the server.
-   *
-   * The patch is passed EXPLICITLY rather than read back out of state after
-   * `setState`, because `setState` is not guaranteed to have applied by the
-   * time the next statement runs -- reading it back would save the previous
-   * value and leave the screen showing one time while the server held
-   * another. */
-  setTrigger = (t) => () => {
-    this.setState({ trigger: t, tested: false, customTime: false });
-    this.saveNotifPrefs({ trigger_time: t });
-  };
-  openCustomTime = () => this.setState({ customTime: true });
   /* Back to the start of the flow, not wherever it was left.
    *
    * `go('onboard')` alone keeps `step`, so someone who reached step 2 and
@@ -2487,13 +2459,6 @@ class Component extends DCLogic {
     };
   };
 
-  /* The delivery log, and what the last line of the reminder screen may claim.
-   *
-   * `lastNotif` was the string "Delivered 14 Aug at 20:00". With a backend
-   * there is a row in `notification_log` or there is not, and the difference
-   * matters: no sender is configured on any deployment today, so a test send
-   * records a FAILED row with the reason, and the screen has to say that
-   * rather than relabel its own button "Sent". */
   /* Consecutive days ending today or yesterday, from the activity the server
    * returned. Yesterday counts as the end of a live streak because a learner
    * who has not studied yet today has not broken one. */
@@ -2513,31 +2478,73 @@ class Component extends DCLogic {
     return total + (total === 1 ? ' attempt logged' : ' attempts logged');
   };
 
-  notifVals = () => {
+  /* The reminder screen (ADR-031).
+   *
+   * Replaces a single daily "trigger" with an editable note, two channel
+   * toggles and a test button -- one setting per learner. A reminder is now a
+   * row the learner wrote: their words, a date, a time. Any number of them,
+   * none linked to a concept or to anything being due.
+   *
+   * Three things this screen must not do:
+   *   * change the words. The label is rendered as stored (pre-wrap, so a
+   *     newline or a leading space the learner typed is still there);
+   *   * claim a delivery. With no sender configured, `delivery_configured` is
+   *     false and the screen says so ABOVE the form, before anyone relies on
+   *     a reminder, and a reminder whose time came reads "Not sent" with the
+   *     server's reason;
+   *   * show a fixture as the learner's list. Without a backend the rows are
+   *     labelled as an example. */
+  remVals = () => {
     const s = this.state;
-    const live = s.notifState === 'ready';
-    if (!live) {
-      const failed = s.notifState === 'error';
-      return {
-        lastNotif: failed ? 'Reminder settings could not be loaded.'
-                          : 'Delivered 14 Aug at ' + s.trigger,
-        lastNotifFg: failed ? '#BC4C43' : '#1E7A57',
-        testNotif: this.sendTest,
-        testLabel: failed ? 'Unavailable' : s.tested ? 'Sent' : 'Send test',
-      };
-    }
-    const last = (s.notifHistory || [])[0];
-    const busy = s.notifBusy === 'testing';
-    const problem = s.notifSaveError;
+    const live = !!s.studentApi;
+    const tz = this.deviceTimezone();
+    const rows = live ? (s.liveReminders || []) : [
+      { id: 'demo-1', label: 'revise patho', local_date: '2026-08-15', local_time: '20:00',
+        timezone: 'Asia/Kolkata', status: 'pending', detail: '' },
+      { id: 'demo-2', label: 'revise micro', local_date: '2026-08-16', local_time: '07:00',
+        timezone: 'Asia/Kolkata', status: 'pending', detail: '' },
+    ];
+    const STATUS = {
+      pending: ['Scheduled', '#5d6467', '#1E7A57'],
+      fired: ['Sent', '#1E7A57', '#1E7A57'],
+      failed: ['Not sent', '#BC4C43', '#BC4C43'],
+      cancelled: ['Cancelled', '#8a9093', '#DDD9CF'],
+    };
+    const listNote = !live ? 'Example reminders — sign in to see and set your own.'
+      : s.remState === 'loading' ? 'Loading your reminders…'
+      : s.remState === 'error' ? 'Your reminders could not be loaded — ' + s.remError
+      : rows.length === 0 ? 'You have no reminders yet.'
+      : rows.length + (rows.length === 1 ? ' reminder' : ' reminders');
+    const editing = s.remEditing;
     return {
-      lastNotif: problem ? 'Not sent — ' + problem
-        : !last ? 'No reminder has been sent to this account yet.'
-        : (last.status === 'sent' ? 'Delivered ' : 'Failed ')
-          + String(last.scheduled_at || '').slice(0, 16).replace('T', ' ')
-          + (last.detail && last.status !== 'sent' ? ' — ' + last.detail : ''),
-      lastNotifFg: (problem || (last && last.status !== 'sent')) ? '#BC4C43' : '#1E7A57',
-      testNotif: this.sendTest,
-      testLabel: busy ? 'Sending…' : s.tested ? 'Sent' : 'Send test',
+      remLabel: s.remLabel, remDate: s.remDate, remTime: s.remTime,
+      setRemLabel: (e) => this.setState({ remLabel: e.target.value, remFormError: '' }),
+      setRemDate: (e) => this.setState({ remDate: e.target.value, remFormError: '' }),
+      setRemTime: (e) => this.setState({ remTime: e.target.value, remFormError: '' }),
+      remTzNote: editing
+        ? 'Times are in ' + editing.timezone + ', the timezone this reminder was set in.'
+        : 'Times are in ' + tz + ', this device’s timezone.',
+      remEditing: !!editing, remDiscard: this.discardReminderEdit,
+      remSubmit: this.submitReminder,
+      remSubmitLabel: s.remBusy === 'saving' ? 'Saving…' : editing ? 'Save changes' : 'Add reminder',
+      remFormError: s.remFormError,
+      remDeliveryOff: live && s.remState === 'ready' && !s.remDelivery,
+      remDeliveryNote: 'Delivery is not switched on yet. No notification channel is '
+        + 'connected on this server, so when a reminder’s time comes it is marked '
+        + '“Not sent” on this list instead of reaching you. You can still set them now.',
+      remListNote: listNote,
+      remListFg: s.remState === 'error' ? '#BC4C43' : '#8a9093',
+      reminderRows: rows.map((r) => {
+        const [status, fg, edge] = STATUS[r.status] || [String(r.status), '#5d6467', '#DDD9CF'];
+        return {
+          id: r.id, label: r.label,
+          when: r.local_date + ' · ' + r.local_time + ' · ' + r.timezone,
+          status: r.status === 'failed' && r.detail ? status + ' — ' + r.detail : status,
+          statusFg: fg, edge,
+          pending: r.status === 'pending',
+          edit: this.editReminder(r), cancel: this.cancelReminder(r.id),
+        };
+      }),
     };
   };
 
@@ -2818,63 +2825,83 @@ class Component extends DCLogic {
       }));
   };
 
-  /* Reminder settings, and the delivery log behind them.
-   *
-   * Both together. The settings say what SHOULD happen and the history says
-   * what DID; showing the first while the second failed is how a screen ends
-   * up announcing "Delivered 14 Aug" with nothing behind it, which is what the
-   * constant did. */
-  loadNotifPrefs = (client) => {
+  /* The learner's reminders, and whether anything will deliver them. */
+  loadReminders = (client) => {
     const api = client || this.state.studentApi;
-    if (!api || !api.notificationPrefs) { this.setState({ notifState: 'off' }); return null; }
-    this.setState({ notifState: 'loading', notifError: '' });
-    return Promise.all([api.notificationPrefs(), api.notificationHistory()])
-      .then(([prefs, history]) => this.setState({
-        notifState: 'ready', liveNotifPrefs: prefs || null,
-        notifHistory: history || [],
-        /* The controls follow the server, not the other way round. Seeding
-         * them from the fixture defaults and then saving would write
-         * 20:00/push-on over whatever the learner had actually chosen. */
-        trigger: (prefs && prefs.trigger_time) || this.state.trigger,
-        channels: {
-          push: !!(prefs && prefs.push_enabled),
-          email: !!(prefs && prefs.email_enabled),
-        },
-        savedNote: (prefs && prefs.note_text) || '',
-        noteDraft: (prefs && prefs.note_text) || '',
+    if (!api || !api.listReminders) { this.setState({ remState: 'off' }); return null; }
+    this.setState({ remState: 'loading', remError: '' });
+    return api.listReminders()
+      .then((res) => this.setState({
+        remState: 'ready', liveReminders: (res && res.reminders) || [],
+        remDelivery: !!(res && res.delivery_configured),
       }))
       .catch((err) => this.setState({
-        notifState: 'error', liveNotifPrefs: null, notifHistory: [],
-        notifError: (err && err.message) ? err.message : String(err),
+        remState: 'error', liveReminders: null,
+        remError: (err && err.message) ? err.message : String(err),
       }));
   };
 
-  /* Persist a reminder preference.
-   *
-   * Every control on the screen routes through here, so there is one place
-   * where a save can fail and one place that says so. A toggle that flips in
-   * the UI and does not reach the server is the same lie as a fixture, just
-   * harder to spot. */
-  saveNotifPrefs = (patch) => {
-    const api = this.state.studentApi;
-    if (!api || !api.setNotificationPrefs) return null;
-    this.setState({ notifBusy: 'saving', notifSaveError: '' });
+  /* The device's IANA timezone, shown on the form so the learner can see which
+   * clock "20:00" means. It is the device setting, stated on screen -- not a
+   * guess about where the learner is -- and the server refuses a name it does
+   * not recognise rather than defaulting. */
+  deviceTimezone = () => {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; }
+    catch (e) { return 'UTC'; }
+  };
+
+  /* Create, or save an edit. The label goes to the server exactly as typed;
+   * the server's refusal (a past time, a time the clocks skip or repeat, empty
+   * text) is shown verbatim, because it already says what to change. */
+  submitReminder = () => {
     const s = this.state;
-    return api.setNotificationPrefs({
-      trigger_time: s.trigger, push_enabled: s.channels.push,
-      email_enabled: s.channels.email, note_text: s.savedNote,
-      ...(patch || {}),
-    })
-      .then((prefs) => this.setState({
-        notifBusy: '', notifSaveError: '', liveNotifPrefs: prefs || null,
-      }))
-      /* The control is NOT reverted on failure. The learner's intent is still
-       * on screen and the error says it was not saved; silently snapping the
-       * toggle back would look like the app disagreeing with them rather than
-       * like a request that failed. */
+    const api = s.studentApi;
+    if (!api || !api.createReminder) {
+      this.setState({ remFormError: 'Sign in to set reminders.' });
+      return null;
+    }
+    if (!String(s.remLabel || '').trim() || !s.remDate || !s.remTime) {
+      this.setState({ remFormError: 'A reminder needs some text, a date and a time.' });
+      return null;
+    }
+    const editing = s.remEditing;
+    this.setState({ remBusy: 'saving', remFormError: '' });
+    const req = editing
+      ? api.updateReminder(editing.id, { label: s.remLabel, localDate: s.remDate,
+                                        localTime: s.remTime })
+      : api.createReminder({ label: s.remLabel, localDate: s.remDate,
+                             localTime: s.remTime, timezone: this.deviceTimezone() });
+    return req
+      .then(() => {
+        this.setState({ remBusy: '', remLabel: '', remDate: '', remTime: '',
+                        remEditing: null });
+        /* Re-read rather than splice the response in: the list the server
+         * holds is the record, and it is ordered by when each one fires. */
+        return this.loadReminders();
+      })
+      /* The draft is KEPT on failure, so the learner fixes one field rather
+       * than retyping the reminder. */
       .catch((err) => this.setState({
-        notifBusy: '',
-        notifSaveError: (err && err.message) ? err.message : String(err),
+        remBusy: '', remFormError: (err && err.message) ? err.message : String(err),
+      }));
+  };
+
+  editReminder = (r) => () => this.setState({
+    remEditing: { id: r.id, timezone: r.timezone },
+    remLabel: r.label, remDate: r.local_date, remTime: r.local_time, remFormError: '',
+  });
+
+  discardReminderEdit = () => this.setState({
+    remEditing: null, remLabel: '', remDate: '', remTime: '', remFormError: '',
+  });
+
+  cancelReminder = (id) => () => {
+    const api = this.state.studentApi;
+    if (!api || !api.cancelReminder) return null;
+    return api.cancelReminder(id)
+      .then(() => this.loadReminders())
+      .catch((err) => this.setState({
+        remFormError: 'Could not cancel — ' + ((err && err.message) ? err.message : String(err)),
       }));
   };
 
@@ -2959,44 +2986,6 @@ class Component extends DCLogic {
     const cur = st.families || [];
     return { families: cur.indexOf(l) >= 0 ? cur.filter((x) => x !== l) : cur.concat([l]) };
   });
-  toggleChannel = (k) => () => {
-    const next = { ...this.state.channels, [k]: !this.state.channels[k] };
-    this.setState({ channels: next });
-    this.saveNotifPrefs({ push_enabled: !!next.push, email_enabled: !!next.email });
-  };
-
-  /* Send one reminder now, and report what actually happened.
-   *
-   * This button used to set `tested: true` and relabel itself "Sent". Nothing
-   * was delivered. The route it now posts to returns `ok: false` with a reason
-   * when no sender is configured -- which is the case on every deployment
-   * today -- and the screen says so rather than claiming a delivery. A button
-   * that reports success for an unsent notification is worse than one that
-   * does nothing, because it is the control a learner would use to satisfy
-   * themselves that reminders work. */
-  sendTest = () => {
-    const api = this.state.studentApi;
-    if (!api || !api.testNotification) { this.setState({ tested: true }); return null; }
-    this.setState({ notifBusy: 'testing', notifSaveError: '' });
-    return api.testNotification()
-      .then((res) => {
-        const ok = !!(res && res.ok);
-        this.setState({
-          notifBusy: '', tested: ok,
-          notifSaveError: ok ? '' : ((res && res.detail) || 'the notification was not sent'),
-        });
-        /* Re-read the log rather than appending what we just sent. The row the
-         * server wrote is the record; a row this screen invented would agree
-         * with itself even when the insert failed. */
-        return api.notificationHistory()
-          .then((history) => this.setState({ notifHistory: history || [] }))
-          .catch(() => {});
-      })
-      .catch((err) => this.setState({
-        notifBusy: '', tested: false,
-        notifSaveError: (err && err.message) ? err.message : String(err),
-      }));
-  };
   generate = () => this.setState({ generated: true });
 
   /* Closing the sheet CLEARS the target.
@@ -3166,7 +3155,7 @@ class Component extends DCLogic {
     if (route === 'bank') this.loadBank();
     if (route === 'demos' || route === 'studio') this.loadDemos();
     if (route === 'home') this.loadNotebooks();
-    if (route === 'settings') { this.loadNotifPrefs(); this.loadNotebooks(); }
+    if (route === 'settings') { this.loadReminders(); this.loadNotebooks(); }
     /* The dashboard's counts and recommendation come from the same payload
      * the home screen uses, and it is the screen most likely to be opened
      * after a session has changed them. */
@@ -4438,7 +4427,6 @@ class Component extends DCLogic {
      * learner's own concepts and announce a fixture's total. */
     const notebookRows = this.notebookRows();
     const bankRows = this.bankView();
-    const notifLive = s.notifState === 'ready' && !!s.liveNotifPrefs;
     const dashLive = s.learnerState === 'ready' && !!s.liveDashboard;
     const dashCounts = (dashLive && s.liveDashboard.colour_counts) || {};
 
@@ -4506,10 +4494,9 @@ class Component extends DCLogic {
       : null;
     const heads = {
       today: ['Today', learnerReady
-        ? (notifLive && s.liveNotifPrefs.trigger_time
-           ? 'Reminder at ' + s.liveNotifPrefs.trigger_time : 'Your queue and your open gaps')
+        ? 'Your queue and your open gaps'
         : s.learnerState === 'error' ? 'Could not load your day'
-        : 'Thursday 15 August · reminder at 20:00', false],
+        : 'Thursday 15 August · your queue and your open gaps', false],
       weak: ['Forgotten / weak', gapCount === null
         ? (s.learnerState === 'error' ? 'Could not load your gaps' : '9 open gaps, graded by you')
         : n_of(gapCount, 'open gap') + ', graded by you', false],
@@ -4517,7 +4504,7 @@ class Component extends DCLogic {
       dashboard: ['Revision', dashLive
         ? n_of(s.liveDashboard.recommended_question_count || 0, 'question') + ' recommended'
         : s.learnerState === 'error' ? 'Could not load your queue'
-        : 'Queue built at 20:00 today', false],
+        : 'Your recommended queue', false],
       make: ['Make questions', nb.title, true, 'notebook', '← Notebook'],
       srcview: ['In the source', 'Where this question came from', true, 'revise', '← Question'],
       trust: ['Quintek', 'How reliable your question engine is', true, 'more', '← More'],
@@ -4561,7 +4548,7 @@ class Component extends DCLogic {
           if (subj) return 'Concept in ' + subj.label.charAt(0) + subj.label.slice(1).toLowerCase();
           return (s.cpt && s.cpt.subject) ? 'Concept in ' + s.cpt.subject : 'Concept';
         })(), true, s.cptFrom || 'weak', '← Back'],
-      settings: ['Settings', 'Notifications, sources and account', true, 'more', '← More'],
+      settings: ['Settings', 'Reminders, sources and account', true, 'more', '← More'],
       billing: ['Billing', 'Your plan and usage', true, 'more', '← More'],
       plans: ['Choose your plan', 'Monthly or annual', true, 'billing', '← Billing'],
     };
@@ -4850,51 +4837,7 @@ class Component extends DCLogic {
       ...this.conceptVals(cptName, cptSubject),
       generate: this.generate, generateLabel: s.generated ? 'Questions generated' : 'Write questions from this passage',
 
-      triggerTimes: ['06:00', '07:00', '13:00', '18:00', '20:00', 'Custom'].map((label) => {
-        const on = label === 'Custom' ? s.customTime : (!s.customTime && s.trigger === label);
-        return { label, set: label === 'Custom' ? this.openCustomTime : this.setTrigger(label),
-          bg: on ? 'rgba(30,122,87,.08)' : '#FAFAF8', bd: on ? '#1E7A57' : '#E6E4DE', fg: on ? '#1E7A57' : '#5d6467' };
-      }),
-      customTime: s.customTime, trigger: s.trigger,
-      setCustomTime: (e) => {
-        const t = e.target.value || '20:00';
-        this.setState({ trigger: t });
-        this.saveNotifPrefs({ trigger_time: t });
-      },
-      noteDraft: s.noteDraft, setNote: (e) => this.setState({ noteDraft: e.target.value }),
-      noteDirty: s.noteDraft !== s.savedNote,
-      saveNote: () => {
-        const text = this.state.noteDraft;
-        this.setState({ savedNote: text });
-        this.saveNotifPrefs({ note_text: text });
-      },
-      noteHint: s.noteDraft !== s.savedNote
-        ? 'Unsaved. This text is what the reminder will say.'
-        : s.savedNote ? 'Saved. Quintek will show this wording instead of a generic reminder.'
-        : 'Leave it blank and the reminder just says how much is due.',
-      /* The server's timezone for this learner, not a constant. It decided
-       * when the reminder fires, so showing a different one would be showing
-       * the wrong schedule. */
-      timezone: notifLive ? (s.liveNotifPrefs.timezone || 'UTC') : 'Asia/Kolkata (IST)',
-      nextTrigger: notifLive
-        ? (s.liveNotifPrefs.next_scheduled_at
-           ? String(s.liveNotifPrefs.next_scheduled_at).replace('T', ' ').replace('Z', ' UTC')
-           : 'not scheduled yet')
-        : 'today ' + s.trigger,
-      channels: [
-        { key: 'push', label: 'Push notification', meta: 'Opens straight into the revision dashboard' },
-        /* The fixture named a real-looking NHS address. With a live account
-         * the only address the server could deliver to is the learner's
-         * own, and it does not hold a second one. */
-        { key: 'email', label: 'Email',
-          meta: notifLive ? 'To your account address · same queue, same time'
-                          : 'r.menon@nhs.net · same queue, same time' },
-      ].map((c) => ({ ...c, toggle: this.toggleChannel(c.key),
-        trackBg: s.channels[c.key] ? '#1E7A57' : '#DDD9CF', knobX: s.channels[c.key] ? '19px' : '3px' })),
-      /* What the delivery log actually holds. "Delivered 14 Aug" was a string;
-       * with a backend there is a row or there is not, and no row means no
-       * reminder has ever been sent to this learner. */
-      ...this.notifVals(),
+      ...this.remVals(),
       settingsNotebooks: notebookRows.map((n) => ({ title: n.title, open: this.openNotebook(n.id),
         meta: n.sourceCount + ' sources · ' + n.conceptCount + ' concepts · '
               + n.questionCount + ' questions' })),
@@ -5133,7 +5076,7 @@ class Component extends DCLogic {
         { label: 'Question bank', note: 'Every question and its provenance', go: this.go('bank') },
         { label: 'Demonstrations', note: 'Framing library the AI writes to', go: this.go('demos') },
         { label: 'Progress', note: 'Mastery, intervals, history', go: this.go('progress') },
-        { label: 'Settings', note: 'Trigger time, sources, account', go: this.go('settings') },
+        { label: 'Settings', note: 'Reminders, sources, account', go: this.go('settings') },
         { label: 'Billing', note: 'Plan, usage and payment', go: this.go('billing') },
       ],
 

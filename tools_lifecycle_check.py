@@ -28,7 +28,6 @@ from student.server import make_handler
 from student.ingestion import IngestionEngine
 from student.generation import AIConceptExtractor, QuestionGenerator
 from student.validation import QuestionValidator
-from student.notifications import NotificationService
 from benchmark.providers.base import GenerationResponse
 
 work = tempfile.mkdtemp()
@@ -68,7 +67,7 @@ api = StudentAPI(db,
                  ai=ai, generator=QuestionGenerator(db, ai),
                  validator=QuestionValidator(db, AIEngine(db, provider_factory=lambda c: ScriptedProvider(),
                                                           development_candidate="cand-validator")),
-                 notifier=NotificationService(db, sender=lambda p: True))
+                 notifier=lambda p: True)
 
 server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(api))
 port = server.server_address[1]
@@ -150,12 +149,13 @@ step(8, "concept priority engine", "top_priority" in dash and "colour_counts" in
 s, sess2 = call("POST", "/revision/sessions", {"strategy": "adaptive", "size": 5})
 step(9, "adaptive revision engine", s == 201 and sess2.get("session_id"))
 
-# 10 notifications
-s, prefs = call("PUT", "/settings/notifications", {"trigger_time": "20:00", "timezone": "Asia/Kolkata"})
-s2, fired = call("POST", "/settings/notifications/test")
-s3, hist = call("GET", "/settings/notifications/history")
-step(10, "daily notification", prefs["trigger_time"] == "20:00" and fired["ok"] and len(hist["history"]) > 0,
-     f"next at {prefs['next_scheduled_at']}")
+# 10 reminders (ADR-031): created, listed, and honestly NOT delivered
+s, rem = call("POST", "/reminders", {"label": "revise patho", "local_date": "2099-01-01",
+                                      "local_time": "20:00", "timezone": "Asia/Kolkata"})
+s2, listed = call("GET", "/reminders")
+step(10, "reminder stored", s == 201 and rem["label"] == "revise patho"
+     and any(r["id"] == rem["id"] for r in listed["reminders"]),
+     "created and listed; delivery is not built (no sender), which is reported, not faked")
 
 # 11 question bank / gap recall
 s, gaps = call("GET", "/gaps")

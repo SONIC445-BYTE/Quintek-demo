@@ -103,7 +103,7 @@ class TestIncidents:
         """
         Where an alert goes is a deployment decision. A module that picked one
         would be wrong for every deployment that chose another, and delivery
-        already belongs to student/notifications.py.
+        belongs to the sender seam in student/reminders.py.
         """
         import ast
         import pathlib

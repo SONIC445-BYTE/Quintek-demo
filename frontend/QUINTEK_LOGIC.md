@@ -138,8 +138,10 @@ revision_sessions(id, user_id, start_time, end_time, recommended_question_count,
                   selected_question_count, selection_strategy,
                   selected_question_ids_json, completion_status)
 
-notification_prefs(user_id, trigger_time, timezone, push_enabled, email_enabled,
-                   note_text, last_status, last_sent_at, next_scheduled_at)
+reminders(id, user_id, label, local_date, local_time, timezone, fire_at,
+          status pending|fired|failed|cancelled, detail, created_at, updated_at, fired_at)
+          -- any number per learner; label verbatim; ADR-031. notification_prefs
+          -- and notification_log are RETIRED (kept, unread, unwritten).
 
 candidate_manifests(id, provider, model_id, model_version, system_prompt_hash,
                     decoding_config, code_commit, manifest_hash UNIQUE)
@@ -334,7 +336,7 @@ POST   /attempts                           {question_id, session_id, answer, use
 POST   /revision/sessions/:id/complete      → analysis + read list
 GET    /progress
 GET    /search?q=                          notebooks, concepts, questions, gaps, sources, attempts, sessions
-GET    /settings/notifications  ·  PUT same  ·  POST /settings/notifications/test
+GET    /reminders  ·  POST /reminders   ·  GET | PUT | DELETE /reminders/:id   (ADR-031)
 GET    /demos  ·  POST /demos
 POST   /studio/generate                    full config → drafts with provenance
 POST   /questions/:id/accept | /reject | /regenerate

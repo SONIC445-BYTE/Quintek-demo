@@ -236,12 +236,9 @@ class Database:
             (user_id, email, name, role, tz, salt,
              self._hash_password(password, salt), now_iso()),
         )
-        # Every user gets notification preferences immediately, so the rest of
-        # the engine can read them without a "row might not exist" branch.
-        self.execute(
-            "INSERT INTO notification_prefs (user_id, timezone) VALUES (?,?)",
-            (user_id, tz),
-        )
+        # No notification row is created here any more. The one-trigger model
+        # that needed a prefs row per learner is retired (ADR-031); a reminder
+        # exists only when the learner creates one.
         return user_id
 
     def verify_password(self, email: str, password: str) -> str | None:

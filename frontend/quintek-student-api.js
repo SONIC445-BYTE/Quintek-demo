@@ -389,28 +389,43 @@ export async function completeSession(sessionId) {
               '/complete', {});
 }
 
-export async function notificationPrefs() {
-  return call('GET', '/settings/notifications');
-}
-
-export async function setNotificationPrefs(prefs) {
-  return call('PUT', '/settings/notifications', prefs || {});
-}
-
-/* Fire one reminder now, through the same path the schedule uses.
+/* Reminders (ADR-031): any number, each the learner's own words at a date and
+ * time they chose.
  *
- * The "Send test" button used to set a flag in memory and relabel itself
- * "Sent". Nothing was delivered and nothing recorded it, so the one control
- * whose entire purpose is to prove delivery works was the control least
- * connected to delivery. This posts to the route that actually fires, and
- * `notificationHistory` reads back what it wrote. */
-export async function testNotification() {
-  return call('POST', '/settings/notifications/test', {});
+ * The label is sent exactly as typed -- not trimmed, not rewritten -- because
+ * the server stores it verbatim and hands it back verbatim when it fires.
+ * Trimming here would make the client the one place the text changed.
+ *
+ * `listReminders` returns the whole payload, not just the rows:
+ * `delivery_configured` is false on every deployment today, and the screen
+ * needs it to say so. */
+export async function listReminders() {
+  const res = await call('GET', '/reminders');
+  return {
+    reminders: (res && res.reminders) || [],
+    delivery_configured: !!(res && res.delivery_configured),
+  };
 }
 
-export async function notificationHistory() {
-  const res = await call('GET', '/settings/notifications/history');
-  return (res && res.history) || [];
+export async function createReminder({ label, localDate, localTime, timezone }) {
+  return call('POST', '/reminders', {
+    label, local_date: localDate, local_time: localTime, timezone,
+  });
+}
+
+/* Only the fields given are changed; the rest stay as saved. */
+export async function updateReminder(id, { label, localDate, localTime, timezone } = {}) {
+  const body = {};
+  if (label !== undefined) body.label = label;
+  if (localDate !== undefined) body.local_date = localDate;
+  if (localTime !== undefined) body.local_time = localTime;
+  if (timezone !== undefined) body.timezone = timezone;
+  return call('PUT', '/reminders/' + encodeURIComponent(id), body);
+}
+
+/* Cancel, not delete: the row stays on the learner's list marked cancelled. */
+export async function cancelReminder(id) {
+  return call('DELETE', '/reminders/' + encodeURIComponent(id));
 }
 
 /* What this deployment is actually running, for the screen that discloses it. */

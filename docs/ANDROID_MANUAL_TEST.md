@@ -83,7 +83,7 @@ Two failure modes matter more than the rest, so check for them everywhere:
 | Notebook list | `/notebooks` |
 | Question bank / studio | `/questions` |
 | Demonstrations | `/demos` |
-| Reminder settings | `/settings/notifications` + its delivery log |
+| Reminders | `/reminders` — list, create, edit, cancel (ADR-031; the single-trigger `/settings/notifications` it replaced is gone) |
 | Revision dashboard | `/revision/dashboard`, and the strategy picker now offers the six names the server accepts |
 
 **Two things this pass found that the sweep was supposed to find:**
