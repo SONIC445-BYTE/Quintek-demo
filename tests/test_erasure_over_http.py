@@ -181,15 +181,39 @@ def test_the_credentials_stop_working_and_cannot_be_used_again(live):
 
 
 @ERASURE_BLOCKED
-def test_the_uploaded_file_leaves_the_disk_too(live, tmp_path):
+@pytest.fixture
+def live_with_storage(tmp_path):
+    """`live`, plus an ingestion engine and a storage directory.
+
+    `live` builds its server with no AI and therefore no engine, so the file
+    half of the test below SKIPPED -- and while erasure of a used account was
+    refused, the xfail on this test hid that. The skip surfaced when ADR-029
+    was resolved; this fixture is so the file deletion is actually exercised.
+    """
+    from student.api import StudentAPI
+    from student.ingestion import IngestionEngine
+    db_path = tmp_path / "q.db"
+    db = Database(db_path)
+    engine = IngestionEngine(db, storage_dir=tmp_path / "storage")
+    api = StudentAPI(db, engine=engine)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(api))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    yield {"origin": f"http://127.0.0.1:{httpd.server_address[1]}",
+           "db": Database(db_path), "api": api}
+    httpd.shutdown()
+    engine.stop()
+
+
+def test_the_uploaded_file_leaves_the_disk_too(live_with_storage, tmp_path):
     """Erasure that clears the database and leaves the PDF is not erasure.
 
     The file is the most identifying thing a learner gives this system -- it is
     their own notes, possibly a photograph of a page with a patient on it -- and
     it lives outside the database, where a CASCADE cannot reach it.
     """
+    live = live_with_storage
     db = live["db"]
-    storage = Path(live["api"].engine.storage_dir) if live["api"].engine else tmp_path
+    storage = Path(live["api"].engine.storage_dir)
     storage.mkdir(parents=True, exist_ok=True)
 
     _, out = request(live["origin"], "POST", "/auth/register",
@@ -208,10 +232,6 @@ def test_the_uploaded_file_leaves_the_disk_too(live, tmp_path):
     (storage / other_key).write_bytes(b"%PDF-1.4 not theirs")
 
     assert request(live["origin"], "DELETE", "/account", token=token)[0] == 200
-
-    if live["api"].engine is None:
-        pytest.skip("no ingestion engine on this build, so no storage directory "
-                    "is wired; the database half is covered by the tests above")
 
     assert not (storage / key).exists(), (
         "the account was erased and the learner's uploaded file is still on disk")
