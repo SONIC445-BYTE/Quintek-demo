@@ -68,6 +68,82 @@ RETAINED_ANONYMISED = {
 }
 
 
+#: The placeholder severed attempts point to (ADR-029). A FIXED id that
+#: `new_id` can never produce ("erased" is not hex), an email with no "@" so
+#: nobody can register it, and no usable password. Its role is 'learner'
+#: because `users.role` is CHECKed to learner|admin and a CHECK cannot be
+#: changed in place on SQLite; it can never be logged into either way.
+#: One row for every erased learner -- not one per learner -- so severed rows
+#: cannot even be grouped back into a single anonymous person's history.
+ERASED_USER = "usr_erased"
+ERASED_NOTEBOOK = "nb_erased"
+
+
+def _ensure_placeholders(db: Database) -> None:
+    db.execute(
+        "INSERT OR IGNORE INTO users (id, email, name, role, timezone, password_salt,"
+        " password_hash, created_at) VALUES (?,?,?,?,?,?,?,?)",
+        (ERASED_USER, "erased", "", "learner", "UTC", "", UNUSABLE_PASSWORD_HASH, now_iso()))
+    db.execute(
+        "INSERT OR IGNORE INTO notebooks (id, owner_id, title, subject, created_at)"
+        " VALUES (?,?,?,?,?)", (ERASED_NOTEBOOK, ERASED_USER, "", "", now_iso()))
+    # OR IGNORE also swallows a CHECK or NOT NULL failure on SQLite -- the
+    # first draft of this used a role the CHECK refuses, and nothing said so.
+    # So confirm the rows are really there before anything points at them.
+    if db.query_one("SELECT 1 FROM notebooks n JOIN users u ON u.id = n.owner_id"
+                    " WHERE n.id = ? AND u.id = ?", (ERASED_NOTEBOOK, ERASED_USER)) is None:
+        raise AccountError("the erased-accounts placeholder could not be created; "
+                           "nothing has been erased")
+
+
+def _sever(db: Database, user_id: str) -> dict:
+    """Detach the learner's attempts, and the questions they answered, from
+    the learner -- BEFORE anything is deleted, because deleting the notebook
+    would cascade to those questions and then to the attempts, which the
+    immutability trigger refuses (that refusal WAS ADR-029).
+
+    Attempts: moved to ERASED_USER with the session, typed gap labels and
+    upload pointers cleared. Every evidence column is untouched; the trigger
+    permits exactly this and nothing else.
+
+    Questions the learner answered: kept, because an attempt must name its
+    question, but moved to ERASED_NOTEBOOK and stripped of everything derived
+    from the learner's uploads -- stem, option text (the NUMBER of options is
+    kept, so the recorded answer index still means something), rationale, the
+    source and passage pointers, their demonstrations and the validator's
+    notes, which quote the stem. What remains is structure: family,
+    difficulty, the correct index, which model wrote it, its validation
+    status and its concept tags.
+
+    Reports on those questions (retained, see RETAINED_ANONYMISED) lose the
+    reporter AND the words they typed, and the frozen provenance, which holds
+    the stem and the passage."""
+    _ensure_placeholders(db)
+    kept = [r["question_id"] for r in db.query(
+        "SELECT DISTINCT a.question_id FROM attempts a"
+        " JOIN questions q ON q.id = a.question_id"
+        " JOIN notebooks n ON n.id = q.primary_notebook_id"
+        " WHERE a.user_id = ? OR n.owner_id = ?", (user_id, user_id))]
+    attempts = db.execute(
+        "UPDATE attempts SET user_id = ?, session_id = NULL, knowledge_gaps_json = '[]',"
+        " source_refs_json = '[]' WHERE user_id = ?", (ERASED_USER, user_id)).rowcount
+    for qid in kept:
+        row = db.query_one("SELECT options_json FROM questions WHERE id = ?", (qid,))
+        try:
+            count = len(json.loads(row["options_json"] or "[]"))
+        except (TypeError, ValueError):
+            count = 0
+        db.execute(
+            "UPDATE questions SET primary_notebook_id = ?, stem = '', options_json = ?,"
+            " rationale = '', source_id = NULL, chunk_id = NULL, demo_ids_json = '[]',"
+            " validation_json = '{}' WHERE id = ?",
+            (ERASED_NOTEBOOK, json.dumps([""] * count), qid))
+    reports = db.execute(
+        "UPDATE question_reports SET user_id = ?, note = '', provenance_json = '{}'"
+        " WHERE user_id = ?", (ERASED_USER, user_id)).rowcount
+    return {"attempts": attempts, "questions": len(kept), "question_reports": reports}
+
+
 class AccountError(RuntimeError):
     """The account operation cannot be performed, and the message says why."""
 
@@ -194,9 +270,12 @@ def erase(db: Database, user_id: str, *, confirm: str) -> dict:
         raise AccountError(
             "erasure must be confirmed with the user id being erased. This is the "
             "only irreversible operation here and it takes no defaults.")
+    if user_id == ERASED_USER:
+        raise AccountError("the erased-accounts placeholder is not an account")
     if db.query_one("SELECT id FROM users WHERE id = ?", (user_id,)) is None:
         raise AccountError(f"no such user: {user_id}")
 
+    severed = _sever(db, user_id)
     removed: dict[str, int] = {}
     anonymised: dict[str, int] = {}
     for table, column in tables_holding_user_data(db):
@@ -215,10 +294,10 @@ def erase(db: Database, user_id: str, *, confirm: str) -> dict:
         "DELETE FROM users WHERE id = ?", (user_id,)).rowcount
 
     # The check. Without it, "your data is deleted" is a claim nobody verified.
+    # EVERY table, the retained ones included: an anonymised row still
+    # carrying the id would be a row that was not anonymised.
     survivors = {}
     for table, column in tables_holding_user_data(db):
-        if table in RETAINED_ANONYMISED:
-            continue
         left = db.query_one(
             f'SELECT COUNT(*) AS n FROM "{table}" WHERE {column} = ?', (user_id,))
         if left and left["n"]:
@@ -229,7 +308,7 @@ def erase(db: Database, user_id: str, *, confirm: str) -> dict:
             "account has NOT been erased and the caller must not report that it "
             "has.")
     return {"user_id": user_id, "erased_at": now_iso(), "removed": removed,
-            "anonymised": anonymised,
+            "severed": severed, "anonymised": anonymised,
             "anonymised_because": {t: RETAINED_ANONYMISED[t] for t in anonymised}}
 
 

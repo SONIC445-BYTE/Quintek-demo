@@ -780,7 +780,7 @@ and hold no learner data.
 
 ## ADR-029 — A learner who has used the app cannot delete their account
 
-**Date/phase:** 2026-09-17 · **Status:** PARTLY FIXED · one half OPEN for the owner
+**Date/phase:** 2026-09-17 · **Status:** RESOLVED 2026-09-24 by severance — see *Resolution* at the end of this entry
 
 Found by writing a test that inspects the DATABASE after `DELETE /account`
 rather than the response code. The existing coverage asserted
@@ -862,6 +862,66 @@ Until it is decided: **`DELETE /account` returns 500 to any learner who has
 answered a question.** `tests/test_erasure_over_http.py` carries three
 `xfail(strict=True)` tests, so whichever option is taken, they fail the moment
 it lands and cannot be left behind.
+
+### Resolution (2026-09-24): sever, don't delete
+
+**The owner's decision:** remove or irreversibly anonymise everything that
+identifies the person, and sever the attempt rows from the account, keeping
+the rows with no path back to a human. An attempt stops being personal data
+once nothing links it to a person, so both invariants survive.
+
+**Was severing possible? Yes — every structural link could be cut:**
+
+| Link from an attempt to the person | How it is cut |
+|---|---|
+| `attempts.user_id` (NOT NULL, FK to `users`) | moved to one fixed placeholder, `usr_erased`: no `@` in its address so nobody can register it, no usable password, shared by every erased learner so rows cannot be regrouped |
+| `attempts.session_id` → `revision_sessions.user_id` | set NULL |
+| `attempts.knowledge_gaps_json` — labels the learner typed | cleared to `[]` |
+| `attempts.source_refs_json` — pointers into their uploads | cleared to `[]` |
+| `attempts.question_id` → question → notebook → owner | the answered questions are kept (an attempt must name one) but moved to a placeholder notebook owned by `usr_erased`, and stripped of stem, option text, rationale, source and passage pointers, demonstrations and validator notes; the option COUNT, correct index, family, difficulty, generating model, validation status and concept tags stay |
+| `question_reports` on those questions (retained) | reporter moved to the placeholder; their typed note and the frozen provenance (stem + passage) wiped |
+
+Everything else the learner owns is then deleted as before, and the final
+check now covers the retained tables too.
+
+**The trigger.** `attempts_are_immutable_delete` is unchanged — no attempt can
+ever be deleted. `attempts_are_immutable_update` now permits exactly one
+update: a severance, one way, with every evidence column (question, answer,
+correctness, colour, concepts, time) required to be unchanged, written as
+`(...) IS NOT TRUE` so a NULL cannot slip an edit through. Two supporting
+changes were needed for it to reach real databases: the trigger translator
+learned `WHEN` (Postgres `FOR EACH ROW WHEN (...)`), and SQLite now drops and
+re-creates the schema's triggers on start, as Postgres already did — otherwise
+an existing SQLite database would have kept the old absolute rule.
+
+**Verified by reading the database**, on both backends: a learner with
+attempts, a gap named after the reveal, a report, a reminder, a demonstration,
+a notebook and an upload is erased; then every text column of every table is
+searched for their address, id and eleven planted markers (with a positive
+control that the search finds each one beforehand), every value is checked
+for the id, the attempts' evidence columns are compared before and after, and
+a bystander's data is compared unchanged. 17 mutations, all killed. The three
+held `xfail` tests pass.
+
+**Found on the way.** The placeholder first used role `'erased'`, which
+`users.role`'s CHECK forbids; `INSERT OR IGNORE` swallowed that silently on
+SQLite (Postgres would have raised). The placeholder is now a `learner` it is
+impossible to log into, and its creation is verified before anything points
+at it. Separately, retained report rows were "anonymised" to `user_id = ''`,
+which the foreign key refuses — unreached until now only because the
+notebook deletion cascaded those reports away first.
+
+**Residuals, recorded rather than hidden:**
+
+* **Concept names** extracted from the learner's material are global
+  vocabulary shared across learners and are not removed. They are medical
+  terms in practice, but nothing guarantees that.
+* **Timestamps.** A severed attempt keeps `created_at`. Someone holding both
+  this database and an outside record of when a person used the app (request
+  logs, which carry paths and times but no account id) could try to
+  correlate the two. Nothing inside the database links them.
+* **The server does not learn what the phone delivered** (ADR-031), so there
+  is nothing on the server about reminder delivery to erase.
 
 ## ADR-030 — Revision sessions serve other learners' questions
 

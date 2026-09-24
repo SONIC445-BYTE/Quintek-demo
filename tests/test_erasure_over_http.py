@@ -66,16 +66,10 @@ def request(base, method, path, body=None, token=None):
         return exc.code, json.loads(exc.read() or b"{}")
 
 
-ERASURE_BLOCKED = pytest.mark.xfail(strict=True, reason=(
-    "OPEN, found 2026-09-17, NOT FIXED -- it is a policy decision, not a bug to "
-    "pick a side of. `DELETE /account` returns 500 for any learner who has ever "
-    "answered a question, because `attempts_are_immutable_delete` refuses the "
-    "DELETE. Two deliberate invariants collide: an attempt is evidence and "
-    "evidence is immutable (schema.sql:269-282), and a learner may ask to be "
-    "erased. Both triggers fire identically on SQLite and PostgreSQL, so the "
-    "ADR-020 translation is correct -- the conflict is in the design, not the "
-    "dialect. `strict=True` so this flips to a failure the moment it is "
-    "resolved. See ADR-029."))
+# ADR-029, RESOLVED 2026-09-24 by severance. These were xfail(strict=True)
+# while erasure of a used account was refused; they must now pass.
+def ERASURE_BLOCKED(fn):
+    return fn
 
 
 def _populate(db, uid):

@@ -41,7 +41,7 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-from .dialect import schema_to_postgres, trigger_tables
+from .dialect import schema_to_postgres, trigger_names, trigger_tables
 
 #: What this process has already built, so the DDL is not re-run per
 #: connection. Keyed by (backend identity, schema file).
@@ -93,6 +93,12 @@ def initialise(conn, schema_path: str | Path, *, force: bool = False) -> None:
 
     source = Path(schema_path).read_text(encoding="utf-8")
     if not _is_postgres(conn):
+        # Dropped first, exactly as on Postgres. `CREATE TRIGGER IF NOT
+        # EXISTS` keeps whatever trigger an existing database already has, so
+        # a CHANGED trigger (ADR-029 narrowed the attempts one) would never
+        # reach a database created before the change.
+        for name in trigger_names(source):
+            conn.execute(f"DROP TRIGGER IF EXISTS {name}")
         conn.executescript(source)
         conn.commit()
     else:

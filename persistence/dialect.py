@@ -56,13 +56,19 @@ import re
 #: Statements SQLite needs and Postgres neither needs nor understands.
 _PRAGMA = re.compile(r"^\s*PRAGMA\b[^;]*;\s*$", re.IGNORECASE | re.MULTILINE)
 
-#: `CREATE TRIGGER name BEFORE <event> ON <table> BEGIN
+#: `CREATE TRIGGER name BEFORE <event> ON <table> [WHEN <condition>] BEGIN
 #:      SELECT RAISE(ABORT, 'message'); END;`
 #: The only trigger shape either schema uses. Anything else is left alone and
 #: will fail loudly on Postgres rather than being silently mistranslated.
+#:
+#: The optional WHEN (ADR-029) must be written in the SQL both engines share:
+#: NEW./OLD. column references, =, <>, AND/OR, IS NULL, string literals and
+#: `IS NOT TRUE`. It becomes Postgres's `FOR EACH ROW WHEN (<condition>)`,
+#: which evaluates the same row images.
 _SQLITE_TRIGGER = re.compile(
     r"CREATE\s+TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?(?P<name>\w+)\s+"
     r"BEFORE\s+(?P<event>UPDATE|DELETE)\s+ON\s+(?P<table>\w+)\s+"
+    r"(?:WHEN\s+(?P<when>.+?)\s+)?"
     r"BEGIN\s+SELECT\s+RAISE\s*\(\s*ABORT\s*,\s*'(?P<message>(?:[^']|'')*)'\s*\)\s*;\s*END\s*;",
     re.IGNORECASE | re.DOTALL,
 )
@@ -131,6 +137,8 @@ def _trigger_to_plpgsql(match: re.Match) -> str:
     event = match.group("event").upper()
     table = match.group("table")
     message = match.group("message")
+    when = match.group("when")
+    condition = f" WHEN ({when.strip()})" if when else ""
     # Dollar-quoted with the trigger's own name as the tag ($name$ ... $name$),
     # so a message containing a quote or a dollar sign cannot terminate the
     # body early.
@@ -140,7 +148,7 @@ def _trigger_to_plpgsql(match: re.Match) -> str:
         f"BEGIN RAISE EXCEPTION '{message}'; END;\n"
         f"${name}$;\n"
         f"CREATE TRIGGER {name} BEFORE {event} ON {table}\n"
-        f"    FOR EACH ROW EXECUTE FUNCTION {name}_fn();"
+        f"    FOR EACH ROW{condition} EXECUTE FUNCTION {name}_fn();"
     )
 
 

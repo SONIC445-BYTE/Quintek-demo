@@ -269,8 +269,34 @@ CREATE INDEX IF NOT EXISTS ix_attempts_question ON attempts(question_id);
 -- See 2. above. An attempt is evidence; evidence that can be edited is not
 -- evidence. Corrections are made by recording a new attempt, never by
 -- rewriting an old one.
+--
+-- ONE update is permitted, and only one way: SEVERANCE, when the learner is
+-- erased (ADR-029). It moves the row to the erased-accounts placeholder
+-- 'usr_erased' and clears the three fields that point at the person -- the
+-- session, the gap labels they TYPED, and the pointers into their uploads --
+-- while every evidence column (question, answer, correctness, colour,
+-- concepts, time) must be unchanged. A severed row cannot be moved again or
+-- moved back. `IS NOT TRUE` rather than NOT, so a NULL anywhere in the
+-- comparison refuses instead of slipping through. 'usr_erased' is
+-- `accounts.ERASED_USER`; a test holds the two equal.
 CREATE TRIGGER IF NOT EXISTS attempts_are_immutable_update
 BEFORE UPDATE ON attempts
+WHEN (
+    OLD.user_id <> 'usr_erased'
+    AND NEW.user_id = 'usr_erased'
+    AND NEW.session_id IS NULL
+    AND NEW.knowledge_gaps_json = '[]'
+    AND NEW.source_refs_json = '[]'
+    AND NEW.id = OLD.id
+    AND NEW.question_id = OLD.question_id
+    AND (NEW.user_answer = OLD.user_answer
+         OR (NEW.user_answer IS NULL AND OLD.user_answer IS NULL))
+    AND NEW.correct_answer = OLD.correct_answer
+    AND NEW.is_correct = OLD.is_correct
+    AND NEW.user_colour = OLD.user_colour
+    AND NEW.concepts_tested_json = OLD.concepts_tested_json
+    AND NEW.created_at = OLD.created_at
+) IS NOT TRUE
 BEGIN
     SELECT RAISE(ABORT, 'attempts are immutable: record a new attempt instead of updating one');
 END;

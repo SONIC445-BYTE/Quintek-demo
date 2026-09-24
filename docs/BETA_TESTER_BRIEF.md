@@ -72,26 +72,24 @@ found by whoever it misleads. Better that they get reported than believed.
 
 * **Export it** any time: `GET /account/export` returns everything held about
   you, as JSON. It excludes your password hash.
-* **Delete it** — **CURRENTLY BROKEN, and you should know before you start.**
-  `DELETE /account` works for an account that has not yet answered a question.
-  Once you have recorded a single attempt it returns a 500 and deletes
-  nothing. The cause is a deliberate rule that attempts cannot be removed
-  (they are the evidence every colour and priority is derived from) colliding
-  with this promise, and resolving it is a decision about what "delete my
-  data" should mean here rather than a bug with an obvious fix. It is written
-  up as ADR-029.
-
-  Until it is resolved: **assume anything you put in cannot be taken out.**
-  Do not upload a source you would mind leaving behind, and if you want your
-  account removed, ask — it can be done directly against the database.
-
-  What the operation does when it succeeds: it removes your uploaded files
-  too, verifies that nothing is left, and fails loudly rather than reporting a
-  deletion it did not complete. That verification is what caught this.
-* Two things survive, with your id removed rather than the row: incident
-  records (evidence that the system failed — a fault should not disappear
-  because the person who hit it left) and any question reports you filed (a
-  wrong question does not stop being wrong).
+* **Delete it** — `DELETE /account`. It works whether or not you have
+  answered questions (fixed 2026-09-24, ADR-029). It removes your account,
+  sign-ins, notebooks and their names, uploaded files and their text, the gap
+  labels you typed, your reminders, your demonstrations, your revision
+  sessions and your progress — then checks the database and fails loudly
+  rather than report a deletion it did not complete.
+* **What is kept, and why.** Your answers are kept **as evidence with nothing
+  linking them to you**: which question, which option, right or wrong, the
+  colour you chose, and when. They are moved to one shared "erased accounts"
+  placeholder that every deleted learner's answers go to, so they cannot even
+  be grouped back into one person's history. The questions you answered are
+  kept only as structure — the wording, options, explanation and the passage
+  they came from are wiped. Question reports you filed keep what kind of
+  problem you reported and lose your note. Incident and spend records keep
+  the event and lose your id.
+* One residual, stated plainly: the medical CONCEPT names extracted from your
+  material ("Renal tubular acidosis") are shared vocabulary across all
+  learners and are not removed.
 * Your account can be suspended by an administrator — reversibly, with a
   recorded reason and a named person who made the decision. Suspension keeps
   your data; it does not delete it.
