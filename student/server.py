@@ -338,6 +338,30 @@ def _access_log(method: str, path: str, status: int, ms: float, address: str) ->
         pass
 
 
+BOOTSTRAP_ADMIN_ENV = "QUINTEK_BOOTSTRAP_ADMIN_EMAIL"
+
+
+def bootstrap_admin_from_env(db) -> dict | None:
+    """Create the first admin if the operator asked for one.
+
+    Out of band on purpose (see `accounts.bootstrap_admin`). The account gets
+    no password; the log says what to run next. A refusal is printed and the
+    server still starts -- a misconfigured bootstrap must not take the
+    learner service down with it."""
+    import os
+    from . import accounts
+    email = (os.environ.get(BOOTSTRAP_ADMIN_ENV) or "").strip()
+    if not email:
+        return None
+    try:
+        out = accounts.bootstrap_admin(db, email)
+    except accounts.AccountError as exc:
+        print(f"Quintek: admin bootstrap REFUSED: {exc}")
+        return {"created": False, "outcome": str(exc)}
+    print(f"Quintek: admin bootstrap: {out['user_id']} {out['outcome']}")
+    return out
+
+
 def serve(*, host: str = "127.0.0.1", port: int = 8500,
           db_path: str | Path | None = None, with_ai: bool = True,
           with_billing: bool = True, billing_db: str | Path | None = None,
@@ -360,6 +384,7 @@ def serve(*, host: str = "127.0.0.1", port: int = 8500,
     billing = build_billing(billing_db) if with_billing else None
     recorder, cost_sink = build_cost_sink(billing)
     api = build_api(db_path, with_ai=with_ai, cost_sink=cost_sink)
+    bootstrap_admin_from_env(api.db)
     analytics = build_console(**(console_kwargs or {})) if with_console else None
     server = ThreadingHTTPServer((host, port), make_handler(api, billing, analytics))
     print(f"Quintek student API on http://{host}:{port}  (Ctrl+C to stop)")

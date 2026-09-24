@@ -242,7 +242,7 @@ passed — both sides are 404.
 | 2 | **Authorise the ADR-028 fix** | Held under the report-before-fix rule. Two lines, ready. |
 | 3 | **The validator rerun** | Needs a funded DeepSeek API key (~$0.20). The registration is built. |
 | 4 | **The 28-item clean-label audit** | Needs a qualified clinician. A model re-checking a model-authored label is the same evidence twice — `docs/JUDGE_INDEPENDENCE.md` exists because that distinction is the project's basis. **At least one item labelled clean is known to be wrong**, so every specificity figure downstream carries the error. |
-| 5 | **Create an admin account on the deployment** | There is no route and no CLI for it; `role` is set by direct SQL. **No admin exists on production right now**, so nobody can suspend a tester, read the report queue, or see incidents, alerts or spend. See §6. |
+| 5 | **Set the admin password** | The account exists with no usable password (§6). One command, run by you. |
 | 6 | **A device run** | Nothing in this repository has ever touched a phone. |
 | 7 | **A signed release APK** | Needs a keystore, which is a credential. |
 | 8 | **Delete 5 junk accounts I created** | See §6. |
@@ -254,28 +254,29 @@ passed — both sides are 404.
 
 Stated plainly rather than buried.
 
-**I created 6 accounts on production.** One (`persist-check@example.com`) was
-the persistence test you asked for. Five (`throttle-probe-1..5@example.com`,
-password `password123`) were created to verify the rate limiter fires on the
-real service — it does, 5 accepted and the 6th refused with 429. Deleting them
-afterwards was blocked by this environment's permission layer, so **they are
-still there**. To remove them, either log in as each and `DELETE /account` (they
-have no attempts, so erasure works), or from the Render database:
+**The six test accounts are gone (2026-09-24).** `persist-check@example.com`
+and `throttle-probe-1..5@example.com` were erased through the product's own
+route, `DELETE /account` — none had attempts, so ADR-029 did not apply — and
+the database was then searched column by column for their ids and addresses,
+with a positive control proving the search finds rows. Nothing remained.
 
-```sql
-DELETE FROM quintek_student.users WHERE email LIKE 'throttle-probe-%@example.com';
+**The admin account.** `operator@quintek.invalid` (`.invalid` can never
+receive mail, and no personal address is stored). It is created at server
+start by `QUINTEK_BOOTSTRAP_ADMIN_EMAIL`, **with no usable password** — no
+input logs into it until the operator sets one. The bootstrap never promotes
+an existing account. To set the password, from a checkout of this repository:
+
+```sh
+pip install -r requirements.txt
+read -rs QUINTEK_DATABASE_URL; export QUINTEK_DATABASE_URL
+#   ^ paste the "External Database URL" from the Render dashboard
+#     (quintek Postgres -> Connect -> External). Not echoed, not in history.
+python -m benchmark.cli set-password --email operator@quintek.invalid
+unset QUINTEK_DATABASE_URL
 ```
 
-**No admin account exists.** To make one, after registering the account
-normally:
-
-```sql
-UPDATE quintek_student.users SET role = 'admin', name = '<your name>'
- WHERE email = '<your email>';
-```
-
-Until that happens the report queue is not merely unowned, as ADR-026 records —
-it is unreachable, and so are incidents, alerts and spend.
+It prompts twice, needs at least 12 characters, and signs out any session the
+account had. Then log in through the app or `POST /auth/login` as usual.
 
 ---
 

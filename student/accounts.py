@@ -46,7 +46,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .db import Database, now_iso
+import secrets
+
+from .db import UNUSABLE_PASSWORD_HASH, Database, new_id, now_iso
 
 ACTIVE = "active"
 SUSPENDED = "suspended"
@@ -253,3 +255,60 @@ def erase_uploads(storage_dir: str | Path, storage_keys: list[str]) -> int:
         except OSError:
             continue
     return gone
+
+
+# ---------------------------------------------------------------------------
+# The first admin, and setting a password nobody else chose
+# ---------------------------------------------------------------------------
+#
+# There is no route that makes an admin, deliberately: an HTTP path to
+# privilege is a path an attacker can find. The first admin is made OUT OF
+# BAND -- at server start, from an environment variable only the operator can
+# set -- and it is made WITHOUT a password. The operator then sets one with
+# `python -m benchmark.cli set-password`, which prompts for it and never puts
+# it on a command line, in a log, or in anything this code prints.
+
+ADMIN = "admin"
+PASSWORD_MIN = 12
+
+
+def bootstrap_admin(db: Database, email: str) -> dict:
+    """Create the admin account named by `email`, with no usable password.
+
+    Idempotent. Never ELEVATES: if the address already belongs to a learner
+    it is refused, because otherwise anyone who registered that address before
+    the operator's deploy would be handed admin rights by it."""
+    email = (email or "").strip().lower()
+    if not email or "@" not in email:
+        raise AccountError("the bootstrap admin email is not an email address")
+    row = db.query_one("SELECT id, role FROM users WHERE email = ?", (email,))
+    if row is not None:
+        if (row["role"] or "") == ADMIN:
+            return {"user_id": row["id"], "created": False, "outcome": "already an admin"}
+        raise AccountError(
+            f"{email} already exists as a {row['role']} account; the bootstrap never "
+            "promotes an existing account. Use another address.")
+    user_id = new_id("usr")
+    db.execute(
+        "INSERT INTO users (id, email, name, role, timezone, password_salt,"
+        " password_hash, created_at) VALUES (?,?,?,?,?,?,?,?)",
+        (user_id, email, "Operator", ADMIN, "UTC", secrets.token_hex(16),
+         UNUSABLE_PASSWORD_HASH, now_iso()))
+    return {"user_id": user_id, "created": True,
+            "outcome": "created with no password; run set-password"}
+
+
+def set_password(db: Database, email: str, password: str) -> str:
+    """Give an account a new password and sign out every session it has."""
+    email = (email or "").strip().lower()
+    if not isinstance(password, str) or len(password) < PASSWORD_MIN:
+        raise AccountError(f"the password must be at least {PASSWORD_MIN} characters")
+    row = db.query_one("SELECT id FROM users WHERE email = ?", (email,))
+    if row is None:
+        raise AccountError(f"no account with the address {email}")
+    salt = secrets.token_hex(16)
+    db.execute("UPDATE users SET password_salt = ?, password_hash = ? WHERE id = ?",
+               (salt, Database._hash_password(password, salt), row["id"]))
+    # A password change that leaves old sessions alive is not a reset.
+    db.execute("DELETE FROM sessions_auth WHERE user_id = ?", (row["id"],))
+    return row["id"]

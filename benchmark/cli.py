@@ -120,6 +120,33 @@ def cmd_serve_student(args) -> int:
     return 0
 
 
+def cmd_set_password(args) -> int:
+    """
+    Set an account's password from a prompt, and sign out its sessions.
+
+    The password is read with getpass -- never an argument, never an
+    environment variable -- so it does not land in shell history, a process
+    listing or a log. Against production, set QUINTEK_DATABASE_URL for this
+    one command (see docs/INVENTORY.md §6); nothing is sent over HTTP.
+    """
+    import getpass
+    from student import accounts
+    from student.db import Database
+
+    first = getpass.getpass(f"New password for {args.email}: ")
+    again = getpass.getpass("Again: ")
+    if first != again:
+        print("The two entries differ; nothing was changed.")
+        return 1
+    try:
+        uid = accounts.set_password(Database(args.db), args.email, first)
+    except accounts.AccountError as exc:
+        print(f"Not changed: {exc}")
+        return 1
+    print(f"Password set for {uid}; every existing session for it was signed out.")
+    return 0
+
+
 def cmd_notify(args) -> int:
     """
     Fire every reminder whose time has arrived, then exit.
@@ -188,6 +215,12 @@ def main(argv=None) -> int:
     ss.add_argument("--runs-root", default="runs",
                     help="benchmark archive the mounted console reads")
     ss.set_defaults(func=cmd_serve_student)
+
+    sp = sub.add_parser("set-password", help="set an account's password from a prompt")
+    sp.add_argument("--email", required=True)
+    sp.add_argument("--db", default="quintek.db",
+                    help="SQLite path; ignored when QUINTEK_DATABASE_URL is set")
+    sp.set_defaults(func=cmd_set_password)
 
     nt = sub.add_parser("notify", help="fire every reminder whose time has come, once, then exit")
     nt.add_argument("--db", default="quintek.db")

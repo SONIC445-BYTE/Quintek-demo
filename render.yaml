@@ -20,6 +20,13 @@
 # Every `sync: false` value is entered in the Render dashboard and is never
 # committed here, printed at startup, or included in /health. The boot banner
 # reports whether each one is CONFIGURED, never what it is.
+# ADMIN BOOTSTRAP
+# ---------------
+# QUINTEK_BOOTSTRAP_ADMIN_EMAIL, if set, makes that address an admin at start
+# WITH NO USABLE PASSWORD, and never promotes an existing account. The
+# password is then set with `python -m benchmark.cli set-password` (see
+# docs/INVENTORY.md §6). It is not a secret, but it is set in the dashboard
+# rather than here so a fork of this blueprint does not inherit an admin.
 services:
   - type: web
     name: quintek-api

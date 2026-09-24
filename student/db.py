@@ -81,6 +81,12 @@ def new_id(prefix: str = "") -> str:
     return f"{prefix}_{raw}" if prefix else raw
 
 
+#: Stored in `password_hash` for an account that has no password yet. It is
+#: not hex, so no PBKDF2 digest can ever equal it, and `verify_password`
+#: refuses it explicitly as well rather than relying on that.
+UNUSABLE_PASSWORD_HASH = "!unusable"
+
+
 class Database:
     """A connection factory plus the handful of operations that are about the
     database itself rather than about any one domain object."""
@@ -251,6 +257,12 @@ class Database:
             return None
         expected = row["password_hash"]
         actual = self._hash_password(password, row["password_salt"])
+        if expected == UNUSABLE_PASSWORD_HASH:
+            # An account created without a password (the admin bootstrap). No
+            # input may log into it until `set-password` gives it one. The
+            # hash above still ran, so the timing is the same as a wrong
+            # password.
+            return None
         return row["id"] if secrets.compare_digest(expected, actual) else None
 
     def issue_token(self, user_id: str, *, ttl_hours: int = 24 * 30) -> str:
