@@ -262,3 +262,109 @@ test('the page registers the hook the phone calls after the prompt', () => {
   assert.ok(kotlin.includes('window.__quintekNotificationPermissionChanged()'),
     'the Android side calls a different name than the page registers');
 });
+
+// ---------------------------------------------------------------------------
+// Deeper cases (2026-09-24)
+// ---------------------------------------------------------------------------
+
+test('two reminders at the same minute are both handed to the phone', async () => {
+  await learner();
+  const a = await add('first at 20:00', '2099-03-01', '20:00');
+  const b = await add('second at 20:00', '2099-03-01', '20:00');
+  const phone = fakePhone();
+  const inst = screen(phone);
+  await inst.loadReminders();
+  const plan = phone.synced.at(-1);
+  assert.deepEqual(plan.map((x) => x.id).sort(), [a.id, b.id].sort());
+  assert.equal(plan[0].at, plan[1].at, 'same minute, same instant');
+  assert.notEqual(plan[0].id, plan[1].id, 'the phone keys alarms by id; one would replace the other');
+});
+
+test('an edit after the phone has it supersedes the old alarm, text and time', async () => {
+  await learner();
+  const r = await add('old words', '2099-03-01', '20:00');
+  const phone = fakePhone();
+  const inst = screen(phone);
+  await inst.loadReminders();
+  await api.updateReminder(r.id, { label: 'new words', localTime: '06:45' });
+  await inst.loadReminders();
+  const plan = phone.synced.at(-1);
+  assert.equal(plan.length, 1, 'the phone was left holding both the old and the new alarm');
+  assert.deepEqual(plan[0], { id: r.id, label: 'new words',
+                              at: Date.parse('2099-03-01T01:15:00Z') });
+});
+
+test('a cancel after the phone has it leaves the phone holding nothing', async () => {
+  await learner();
+  const r = await add('cancel me', '2099-03-01', '20:00');
+  const phone = fakePhone();
+  const inst = screen(phone);
+  await inst.loadReminders();
+  assert.equal(phone.synced.at(-1).length, 1);
+  await api.cancelReminder(r.id);
+  await inst.loadReminders();
+  assert.deepEqual(phone.synced.at(-1), [],
+    'an empty plan is what tells the phone to disarm; anything else leaves the alarm set');
+});
+
+test('a device timezone change does not move a reminder', async () => {
+  // Set in Kolkata. The phone then travels. The reminder still means 20:00 in
+  // Kolkata -- the zone it was set in, which the list shows -- so the instant
+  // handed to the phone must not change.
+  await learner();
+  const r = await add('set in Kolkata', '2099-03-01', '20:00');
+  const phone = fakePhone();
+  const kolkata = screen(phone);
+  await kolkata.loadReminders();
+  const before = phone.synced.at(-1)[0].at;
+  const saved = process.env.TZ;
+  try {
+    process.env.TZ = 'America/New_York';
+    assert.equal(new Date(0).getTimezoneOffset(), 300, 'the timezone change did not take');
+    const travelled = screen(phone);
+    travelled.deviceTimezone = () => 'America/New_York';
+    await travelled.loadReminders();
+    assert.equal(phone.synced.at(-1)[0].at, before, 'the alarm moved with the phone');
+    const v = travelled.renderVals();
+    assert.equal(v.reminderRows[0].when, '2099-03-01 · 20:00 · Asia/Kolkata');
+    assert.match(v.remTzNote, /America\/New_York, this device’s timezone/,
+      'a NEW reminder should be in the device’s current zone, and say so');
+  } finally {
+    process.env.TZ = saved;
+  }
+  void r;
+});
+
+test('a reminder a year and more ahead is handed over exactly', async () => {
+  await learner();
+  await add('a year out', '2027-09-24', '20:00');
+  await add('far out', '2099-12-31', '23:59');
+  const phone = fakePhone();
+  const inst = screen(phone);
+  await inst.loadReminders();
+  assert.deepEqual(phone.synced.at(-1).map((x) => x.at), [
+    Date.parse('2027-09-24T14:30:00Z'), Date.parse('2099-12-31T18:29:00Z')]);
+});
+
+test('a missed reminder says it was missed, is not re-armed, and cannot be edited', async () => {
+  await learner();
+  const r = await add('missed one', '2099-03-01', '20:00');
+  const phone = fakePhone({ outcomes: { [r.id]: 'missed' } });
+  const inst = screen(phone, Date.parse('2099-03-02T00:00:00Z'));
+  await inst.loadReminders();
+  const row = inst.renderVals().reminderRows[0];
+  assert.equal(row.status,
+    'Missed — this phone was off or asleep when it was due, so it was not shown late');
+  assert.equal(row.pending, false);
+  assert.deepEqual(phone.synced.at(-1), [], 'a passed reminder was handed back to fire late');
+});
+
+test('the app syncs the phone when it opens, not only on the Reminders screen', () => {
+  // A cancel made in a browser would otherwise leave the phone's alarm set
+  // until the learner happened to open Reminders on the phone. componentDidMount
+  // loads the reminders, and loading them is what syncs (tested above).
+  const page = Component.toString();
+  const mount = page.slice(page.indexOf('componentDidMount()'),
+                           page.indexOf('componentDidMount()') + 4000);
+  assert.match(mount, /this\.loadReminders\(api\)/);
+});

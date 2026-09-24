@@ -366,3 +366,82 @@ def test_an_unknown_reminder_is_a_404(api):
     for method in ("GET", "PUT", "DELETE"):
         st, _ = call(api, method, "/reminders/rem_nope", {"label": "x"})
         assert st == 404
+
+
+# ---------------------------------------------------------------------------
+# Deeper time cases (2026-09-24). Every transition below was read from
+# zoneinfo, not remembered.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("d, t, tz", [
+    ("2027-03-14", "02:30", "America/New_York"),     # US spring forward, 02:00 -> 03:00
+    ("2026-10-04", "02:30", "Australia/Sydney"),     # southern-hemisphere spring
+    ("2026-10-04", "02:15", "Australia/Lord_Howe"),  # a THIRTY-minute shift, 02:00 -> 02:30
+    ("2027-09-05", "00:30", "America/Santiago"),     # the gap is at MIDNIGHT
+    ("2027-03-28", "01:59", "Europe/London"),        # last minute inside the gap
+])
+def test_more_times_the_clocks_skip_are_refused(d, t, tz):
+    with pytest.raises(ReminderError, match="does not exist"):
+        to_utc(d, t, tz)
+
+
+@pytest.mark.parametrize("d, t, tz", [
+    ("2026-11-01", "01:30", "America/New_York"),     # US fall back, 02:00 -> 01:00
+    ("2027-04-04", "02:30", "Australia/Sydney"),     # southern-hemisphere autumn
+    ("2027-04-04", "01:45", "Australia/Lord_Howe"),  # half-hour overlap, 02:00 -> 01:30
+    ("2027-04-03", "23:30", "America/Santiago"),     # overlap ending at midnight
+])
+def test_more_times_the_clocks_repeat_are_refused(d, t, tz):
+    with pytest.raises(ReminderError, match="happens twice"):
+        to_utc(d, t, tz)
+
+
+@pytest.mark.parametrize("d, t, tz, utc", [
+    ("2027-03-14", "03:00", "America/New_York", "2027-03-14T07:00:00Z"),   # first real minute
+    ("2027-03-14", "01:59", "America/New_York", "2027-03-14T06:59:00Z"),   # last before
+    ("2026-10-04", "02:30", "Australia/Lord_Howe", "2026-10-03T15:30:00Z"),
+    ("2026-10-04", "01:59", "Australia/Lord_Howe", "2026-10-03T15:29:00Z"),
+    ("2027-04-04", "03:00", "Australia/Sydney", "2027-04-03T17:00:00Z"),
+    ("2027-09-05", "01:00", "America/Santiago", "2027-09-05T04:00:00Z"),
+    ("2026-11-01", "02:00", "America/New_York", "2026-11-01T07:00:00Z"),
+])
+def test_times_at_the_edges_of_a_transition_land_on_the_right_instant(d, t, tz, utc):
+    assert to_utc(d, t, tz).strftime("%Y-%m-%dT%H:%M:%SZ") == utc
+
+
+def test_a_reminder_set_in_winter_for_summer_uses_the_summer_offset(svc):
+    winter = datetime(2027, 1, 10, 12, 0, tzinfo=timezone.utc)
+    r = svc.create(svc.a, label="summer", local_date="2027-07-01", local_time="20:00",
+                   tz="Europe/London", now=winter)
+    assert r["fire_at"] == "2027-07-01T19:00:00Z", "20:00 BST is 19:00 UTC"
+
+
+@pytest.mark.parametrize("d, t, tz, utc", [
+    ("2027-09-23", "12:01", "UTC", "2027-09-23T12:01:00Z"),            # a year out
+    ("2031-09-23", "20:00", "Asia/Kolkata", "2031-09-23T14:30:00Z"),   # five years
+    ("2099-12-31", "23:59", "UTC", "2099-12-31T23:59:00Z"),
+    # Past 2037 zoneinfo stops listing transitions and applies the zone's
+    # standing rule; BST must still be applied in July.
+    ("2199-07-01", "20:00", "Europe/London", "2199-07-01T19:00:00Z"),
+])
+def test_a_reminder_far_in_the_future_is_accepted_and_exact(svc, d, t, tz, utc):
+    r = svc.create(svc.a, label="far", local_date=d, local_time=t, tz=tz, now=NOW)
+    assert r["fire_at"] == utc
+
+
+def test_two_reminders_at_the_same_minute_are_both_kept_and_both_fire(svc):
+    sent = []
+    svc.sender = lambda p: sent.append(p["label"]) or True
+    a = make(svc, label="first at 20:00")
+    b = make(svc, label="second at 20:00")
+    assert a["id"] != b["id"] and a["fire_at"] == b["fire_at"]
+    assert {r["label"] for r in svc.list(svc.a)} == {"first at 20:00", "second at 20:00"}
+    assert svc.run_due(at=LATER) == {"due": 2, "sent": 2, "failed": 0}
+    assert sorted(sent) == ["first at 20:00", "second at 20:00"]
+
+
+def test_editing_moves_the_one_reminder_rather_than_adding_one(svc):
+    r = make(svc, label="move me", t="20:00")
+    moved = svc.update(svc.a, r["id"], local_time="21:30", now=NOW)
+    assert moved["id"] == r["id"]
+    assert [x["fire_at"] for x in svc.list(svc.a)] == ["2027-01-10T16:00:00Z"]

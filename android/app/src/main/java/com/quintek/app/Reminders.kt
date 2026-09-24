@@ -62,6 +62,19 @@ private const val KEY_OUTCOMES = "outcomes"     // id -> "delivered" | "blocked"
 private const val CHANNEL = "reminders"
 private const val EXTRA_ID = "com.quintek.app.REMINDER_ID"
 private const val EXTRA_LABEL = "com.quintek.app.REMINDER_LABEL"
+private const val EXTRA_AT = "com.quintek.app.REMINDER_AT"
+
+/**
+ * How late a reminder may still be shown. An inexact alarm can be deferred a
+ * few minutes in Doze; that is expected and still useful. Beyond this -- the
+ * phone was off, or Android held the alarm far longer -- the reminder is NOT
+ * shown late. It is recorded as "missed", and the list says so. "Revise patho
+ * at 8pm" arriving at 3am is not a reminder, it is noise.
+ */
+const val LATE_TOLERANCE_MS = 15 * 60 * 1000L
+
+/** The one rule both paths use: may a reminder due at `at` be shown at `now`? */
+fun stillOnTime(at: Long, now: Long): Boolean = now - at <= LATE_TOLERANCE_MS
 
 /** What this phone has scheduled and what happened to it. SharedPreferences,
  *  because alarms do not survive a reboot and have to be rebuilt from here. */
@@ -90,9 +103,10 @@ object ReminderStore {
 
 object ReminderScheduler {
 
-    private fun intentFor(ctx: Context, id: String, label: String?): PendingIntent? {
+    private fun intentFor(ctx: Context, id: String, label: String?, at: Long = 0L): PendingIntent? {
         val intent = Intent(ctx, ReminderReceiver::class.java).setAction("com.quintek.app.REMINDER.$id")
         if (label != null) intent.putExtra(EXTRA_ID, id).putExtra(EXTRA_LABEL, label)
+            .putExtra(EXTRA_AT, at)
         val flags = PendingIntent.FLAG_IMMUTABLE or
             (if (label == null) PendingIntent.FLAG_NO_CREATE else PendingIntent.FLAG_UPDATE_CURRENT)
         // The action carries the id, so each reminder is its own PendingIntent
@@ -102,7 +116,7 @@ object ReminderScheduler {
 
     private fun arm(ctx: Context, id: String, label: String, at: Long) {
         val alarms = ctx.getSystemService(AlarmManager::class.java) ?: return
-        val pending = intentFor(ctx, id, label) ?: return
+        val pending = intentFor(ctx, id, label, at) ?: return
         alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
     }
 
@@ -134,13 +148,17 @@ object ReminderScheduler {
         return after.length()
     }
 
-    /** After a reboot or an app update Android has dropped every alarm. One
-     *  whose time passed while the phone was off fires as soon as it is set. */
+    /** After a reboot or an app update Android has dropped every alarm. Each
+     *  is put back -- except one whose time passed while the phone was off,
+     *  beyond the tolerance: that is recorded as missed, not fired late. */
     fun rearmAll(ctx: Context) {
         val all = ReminderStore.scheduled(ctx)
-        for (id in all.keys()) {
+        val now = System.currentTimeMillis()
+        for (id in all.keys().asSequence().toList()) {
             val entry = all.getJSONObject(id)
-            arm(ctx, id, entry.getString("label"), entry.getLong("at"))
+            val at = entry.getLong("at")
+            if (stillOnTime(at, now)) arm(ctx, id, entry.getString("label"), at)
+            else ReminderStore.recordOutcome(ctx, id, "missed")
         }
     }
 
@@ -157,6 +175,11 @@ class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         val id = intent.getStringExtra(EXTRA_ID) ?: return
         val label = intent.getStringExtra(EXTRA_LABEL) ?: return
+        val at = intent.getLongExtra(EXTRA_AT, 0L)
+        if (at > 0L && !stillOnTime(at, System.currentTimeMillis())) {
+            ReminderStore.recordOutcome(ctx, id, "missed")
+            return
+        }
         if (!ReminderScheduler.notificationsAllowed(ctx)) {
             // Recorded, so the Reminders screen can say it was NOT shown
             // rather than leaving the learner to assume it was.
@@ -231,7 +254,8 @@ class ReminderBridge(
         if (allowed()) askPermission()
     }
 
-    /** `{id: "delivered" | "blocked"}` for reminders this phone has fired. */
+    /** `{id: "delivered" | "blocked" | "missed"}` for reminders this phone
+     *  has dealt with. */
     @JavascriptInterface
     fun outcomes(): String = if (allowed()) ReminderStore.outcomes(ctx).toString() else "{}"
 }

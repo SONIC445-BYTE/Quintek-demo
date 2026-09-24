@@ -1156,8 +1156,12 @@ How it works:
 * **The phone** (`android/.../Reminders.kt`): `setAndAllowWhileIdle` alarms
   (inexact; no exact-alarm permission, may be a few minutes late in Doze),
   a notification whose text is the label verbatim, alarms re-armed after a
-  reboot or an app update, and a per-reminder record of *shown* or *blocked*
-  that the list displays. The bridge exists only on the learner screen and
+  reboot or an app update, and a per-reminder record of *shown*, *blocked*
+  or *missed* that the list displays. **Not fired late** (2026-09-24): an
+  alarm more than 15 minutes past its time — the phone was off, or Android
+  deferred it — is recorded as missed instead of shown; the boot re-arm
+  applies the same rule. Sync happens whenever the app opens, not only on
+  the Reminders screen. The bridge exists only on the learner screen and
   refuses unless that screen's own bundle is loaded.
 * **Permission**: POST_NOTIFICATIONS is asked for from the Reminders screen
   (a button beside "Notifications are off…"), never at launch.

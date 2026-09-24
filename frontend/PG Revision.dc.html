@@ -2688,6 +2688,10 @@ class Component extends DCLogic {
       if (outcome === 'blocked') {
         return ['Not shown — notifications were off on this phone', '#BC4C43', '#BC4C43'];
       }
+      if (outcome === 'missed') {
+        return ['Missed — this phone was off or asleep when it was due, so it was not shown late',
+                '#BC4C43', '#BC4C43'];
+      }
       const passed = r.status === 'pending' && Date.parse(r.fire_at) <= now;
       if (live && passed) {
         return [bridge ? 'Time passed — this phone did not show it'

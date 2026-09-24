@@ -157,17 +157,35 @@ hardware, and nothing in this repository can close that.
 |---|---|---|
 | U | **Release build refuses cleartext** — install `app-release-unsigned.apk` (after signing) and point it at `http://…` | The request fails. This is ADR-022 working |
 | V | **Persistence survives a redeploy** — with the backend on Postgres, restart the server process and reopen the app | Account, notebooks and progress are all still there. This is the entire point of ADR-020 |
-| W | **Reminder permission** (Android 13+) — Settings → Reminders on a fresh install | The line "Notifications are off for Quintek on this phone" and an **Allow notifications** button. Tap it: the system prompt appears. Allow: the line changes to "This phone shows your reminders…" without reopening the screen |
-| X | **A reminder fires, verbatim** — add one 3 minutes ahead with text `  revise patho` + a new line + `  ch. 4 ` (leading spaces, a line break) | A notification titled "Quintek reminder" whose text is the label exactly, line break and spaces kept when expanded. It may be a few minutes late in Doze — inexact alarm, by design. Reopen Reminders: the row reads **Shown on this phone** |
-| Y | **Cancel disarms** — add one 3 minutes ahead, cancel it, stay on the screen | No notification. (The cancel re-syncs; the alarm is disarmed.) |
-| Z | **Survives a reboot** — add one 10 minutes ahead, restart the phone before it fires, do NOT open the app | It still fires. If its time passed while the phone was off, it fires as soon as the phone is up |
-| AA | **Notifications denied** — deny the prompt (or turn them off in system settings), let one come due | No notification; the row reads **Not shown — notifications were off on this phone** |
+| W | **Permission prompt** (Android 13+) — fresh install, open Settings → Reminders | "Notifications are off for Quintek on this phone" and an **Allow notifications** button. Tap it: the SYSTEM prompt appears. Allow: the line changes to "This phone shows your reminders…" without reopening the screen. Deny: the line and button stay |
+| X | **Fires, verbatim** — add one 3 minutes ahead with text `  revise patho`, a line break, `  ch. 4 ` | One notification, title "Quintek reminder", text exactly the label — expand it: the line break and the leading spaces are there. May be a few minutes late (inexact alarm). Reopen Reminders: **Shown on this phone** |
+| X2 | **Two at the same minute** — two reminders, same date and time, different text | TWO notifications, each with its own text. One replacing the other is a defect |
+| Y | **Cancel disarms** — add one 3 minutes ahead, cancel it on the phone | No notification |
+| Y2 | **Cancel from elsewhere** — add one 5 minutes ahead on the phone, cancel it in a browser, then open the app on the phone (any screen) before it is due | No notification. Opening the app is what syncs; if the phone app is NOT opened in between, the alarm still fires — that is the accepted limit of on-device delivery |
+| Y3 | **Edit supersedes** — add one 3 minutes ahead, edit it to 6 minutes ahead with new text | Nothing at 3 minutes; ONE notification at 6 minutes with the NEW text |
+| Z | **Reboot, still on time** — add one 10 minutes ahead, restart the phone, do NOT open the app | It fires at its time |
+| Z2 | **Reboot, missed** — add one 3 minutes ahead, switch the phone OFF until 20+ minutes after it was due, switch on, wait a minute | NO notification (it is not fired late). Open Reminders: **Missed — this phone was off or asleep when it was due, so it was not shown late** |
+| AA | **Notifications denied** — deny the prompt (or turn Quintek's notifications off in system settings), let one come due | No notification; the row reads **Not shown — notifications were off on this phone** |
+| AB | **Travel** — set one for 20:00 Asia/Kolkata, then change the phone's timezone to Europe/London before it fires | It fires at 20:00 Kolkata time (14:30 London in summer, 15:30 in winter), and the row still reads `… · 20:00 · Asia/Kolkata` |
 
-**W–AA are the only verification the native half of reminders has.** The
-decision of what to schedule is tested in JavaScript
-(`tests/frontend/device_reminders_live.test.mjs`) and the Kotlin compiles into
-the APK, but nothing in this repository can run AlarmManager or post a
-notification.
+**The boundary, stated exactly.**
+
+*Verified in this repository, by execution:* which reminders the phone is
+handed (pending and future only, labels byte-for-byte, the server's UTC
+instant — including two at one minute, a year and more ahead, and after the
+device's timezone changes); that an edit or a cancel changes what the phone
+is handed; that the app hands it over whenever it opens; what each row says
+for shown, blocked, missed and passed; the server's handling of every DST
+case in `tests/test_reminders.py` (gaps and overlaps in New York, Sydney,
+Lord Howe's 30-minute shift, Santiago's midnight gap, London, and the
+post-2037 rule era).
+
+*NOT verified — needs a device, and W–AB are the only check it gets:* that
+AlarmManager fires at all; that an equal PendingIntent really replaces the
+earlier alarm on edit and is really cancelled on cancel; the notification's
+text and layout; the permission prompt; re-arming on boot; the 15-minute
+lateness rule in `stillOnTime` (Kotlin, not executable here); that an RTC
+alarm ignores a timezone change; and Doze behaviour.
 
 ## What this pass closed, and what it did not
 

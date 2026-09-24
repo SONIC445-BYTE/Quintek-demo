@@ -219,12 +219,15 @@ anything being due, and it does not start a revision session.
 app, opening Reminders hands the phone every pending, future reminder;
 Android's AlarmManager holds each one and a notification shows the label,
 verbatim, at its time (inexact — possibly a few minutes late in Doze).
-Alarms are re-armed after a reboot. The phone asks for notification permission
+Alarms are re-armed after a reboot, except one whose time has passed by more
+than 15 minutes: that is recorded as *missed* and not shown late (the same
+rule applies if Android holds an alarm that long). The phone asks for notification permission
 from this screen, not at launch, and says so plainly when it is off. Each row
 shows what the phone did: *Shown on this phone*, *Not shown — notifications
 were off*, or *Time passed — this phone did not show it* for one it never
-synced. A reminder only fires on a phone that has opened Reminders since it
-was added or changed; that limitation is accepted for this phase.
+synced. The phone picks up changes whenever the app is opened, so a reminder
+added, edited or cancelled elsewhere only takes effect on the phone once the
+app has been opened there; that limitation is accepted for this phase.
 
 **What does not happen.**
 
