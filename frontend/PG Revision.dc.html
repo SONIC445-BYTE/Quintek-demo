@@ -660,6 +660,9 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
             <sc-if value="{{ b.needsReview }}" hint-placeholder-val="{{ true }}">
               <div style="padding:8px 10px;background:rgba(181,129,43,.1);border-left:2px solid #B5812B;border-radius:3px;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:10.5px;line-height:1.5;color:#8a5f13">{{ b.reviewNote }}</div>
             </sc-if>
+            <sc-if value="{{ b.myReport }}" hint-placeholder-val="{{ false }}">
+              <span style="font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:10.5px;font-weight:600;color:#8a5f13">{{ b.myReport }}</span>
+            </sc-if>
             <sc-if value="{{ b.canReport }}" hint-placeholder-val="{{ true }}">
               <button onClick="{{ b.report }}" style="align-self:flex-start;background:none;border:none;padding:2px 0;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:10.5px;font-weight:600;color:#BC4C43">Report a problem with this question</button>
             </sc-if>
@@ -2783,7 +2786,7 @@ class Component extends DCLogic {
            * `undefined` into the template, and `sc-if` on undefined is a
            * hidden control rather than a visible error -- which is how a
            * report button quietly disappears. */
-          needsReview: false, reviewNote: '',
+          needsReview: false, reviewNote: '', myReport: '',
           canReport: false, report: this.noopPick,
           lastColour: null, lastColourLabel: attempts, lastColourFg: '#C9C5BA',
         }));
@@ -2799,9 +2802,19 @@ class Component extends DCLogic {
         id: q.id,
         /* Withheld content is SAID to be withheld. A blank row would read as a
          * question with no text; this says why there is none. ADR-030. */
-        stem: q.withheld
-          ? 'Awaiting validation \u2014 the question is not shown until it passes.'
-          : (q.stem || ''),
+        stem: !q.withheld ? (q.stem || '')
+          : q.withheld_reason === 'withdrawn'
+            ? 'Withdrawn \u2014 a report on this question was upheld, so it is no longer shown or served.'
+            : 'Awaiting validation \u2014 the question is not shown until it passes.',
+        /* What happened to the learner's own report on this question, if
+         * they made one. The report button used to be the end of the story:
+         * nothing on any screen said whether anyone read it. */
+        myReport: q.my_report
+          ? 'You reported this \u00b7 ' + ({
+            open: 'waiting for review', acknowledged: 'seen by a reviewer',
+            upheld: 'upheld \u2014 withdrawn', rejected: 'reviewed, not upheld',
+          }[q.my_report] || q.my_report)
+          : '',
         validation: title(q.validation_status),
         family: q.family || '',
         notebook: q.notebook_title || '',

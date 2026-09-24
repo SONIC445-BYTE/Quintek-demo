@@ -166,16 +166,50 @@ def resolve(db: Database, report_id: str, *, resolution: str,
         raise ReportRejected(
             "a resolution needs the name of whoever made it; an anonymous "
             "resolution is indistinguishable from nobody having looked")
-    row = db.query_one("SELECT id FROM question_reports WHERE id = ?", (report_id,))
+    row = db.query_one("SELECT id, question_id FROM question_reports WHERE id = ?",
+                       (report_id,))
     if row is None:
         raise ReportRejected(f"no such report: {report_id}")
+    stamp = now_iso()
     db.execute(
         "UPDATE question_reports SET resolution = ?, resolved_by = ?,"
         " resolution_note = ?, resolved_at = ? WHERE id = ?",
         (resolution, resolved_by.strip(), (note or "").strip()[:4000],
-         now_iso(), report_id))
-    return _inflate(db.query_one(
+         stamp, report_id))
+    withdrawn = resolution == UPHELD and _withdraw(
+        db, row["question_id"], report_id=report_id, by=resolved_by.strip(), at=stamp)
+    out = _inflate(db.query_one(
         "SELECT * FROM question_reports WHERE id = ?", (report_id,)))
+    out["question_withdrawn"] = bool(withdrawn)
+    return out
+
+
+def _withdraw(db: Database, question_id: str, *, report_id: str, by: str, at: str) -> bool:
+    """An upheld report takes its question out of service.
+
+    Upholding a report is an operator agreeing the question is wrong -- the
+    content, the key, the source, or that it is unsafe. Until 2026-09-24 it
+    changed only the report row, so a question an operator had just confirmed
+    was keyed wrong went on being served as 'approved'. It is now 'flagged',
+    which the one servability rule (ADR-030) already refuses everywhere, and
+    the validation record says which report withdrew it and who upheld it.
+
+    One-way. Re-resolving the report later does not put the question back:
+    returning a withdrawn question to service is a fresh validation, not a
+    change of mind on a report."""
+    q = db.query_one("SELECT validation_status, validation_json FROM questions WHERE id = ?",
+                     (question_id,))
+    if q is None:
+        return False
+    try:
+        record = json.loads(q["validation_json"] or "{}")
+    except ValueError:
+        record = {}
+    record["withdrawn"] = {"report_id": report_id, "by": by, "at": at,
+                           "previous_status": q["validation_status"]}
+    db.execute("UPDATE questions SET validation_status = 'flagged', validation_json = ?"
+               " WHERE id = ?", (json.dumps(record), question_id))
+    return True
 
 
 def gold_candidates(db: Database) -> list[dict]:

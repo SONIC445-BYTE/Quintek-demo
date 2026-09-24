@@ -71,8 +71,13 @@ def _withhold_unvalidated(row: dict) -> dict:
     if row.get("validation_status") != SERVABLE_STATUS:
         row["stem"] = None
         row["withheld"] = True
+        # WHY it is withheld, where the row says. "Awaiting validation" is
+        # wrong for a question an operator withdrew after upholding a report.
+        row["withheld_reason"] = ("withdrawn" if int(row.get("upheld_reports") or 0)
+                                  else "unvalidated")
     else:
         row["withheld"] = False
+        row["withheld_reason"] = None
     return row
 
 
@@ -620,6 +625,17 @@ class StudentAPI:
             uid = self.db.verify_password(body.get("email", ""), body.get("password", ""))
             if uid is None:
                 raise ApiError(401, "email or password is incorrect")
+            # A suspended account is refused HERE, with the reason, and gets
+            # no session. It used to be handed a 200 and a fresh token that
+            # failed on first use: a "successful" login the learner could not
+            # use, and a session row for an account that was switched off.
+            # Checked only after the password is right, so the refusal tells
+            # nobody but the account holder that the account is suspended.
+            row = self.db.query_one("SELECT status, status_reason FROM users WHERE id = ?",
+                                    (uid,))
+            if (row["status"] or accounts.ACTIVE) == accounts.SUSPENDED:
+                raise ApiError(403, "this account is suspended: "
+                               + (row["status_reason"] or "no reason was recorded"))
             return 200, {"user_id": uid, "token": self.db.issue_token(uid)}
 
         if seg == ["logout"] and method == "POST":
@@ -972,11 +988,17 @@ class StudentAPI:
                            WHERE a.question_id = q.id AND a.user_id = ?) AS attempt_count,
                          (SELECT a2.user_colour FROM attempts a2
                            WHERE a2.question_id = q.id AND a2.user_id = ?
-                           ORDER BY a2.created_at DESC LIMIT 1) AS last_colour
+                           ORDER BY a2.created_at DESC LIMIT 1) AS last_colour,
+                         (SELECT r.resolution FROM question_reports r
+                           WHERE r.question_id = q.id AND r.user_id = ?
+                           ORDER BY r.created_at DESC LIMIT 1) AS my_report,
+                         (SELECT COUNT(*) FROM question_reports r2
+                           WHERE r2.question_id = q.id AND r2.resolution = 'upheld')
+                           AS upheld_reports
                     FROM questions q
                     JOIN notebooks n ON n.id = q.primary_notebook_id AND n.owner_id = ?
                LEFT JOIN source_chunks ch ON ch.id = q.chunk_id"""]
-        params: list = [uid, uid, uid]
+        params: list = [uid, uid, uid, uid]
         # THE FILTERS GO IN A WHERE CLAUSE, never onto a join's ON.
         #
         # They used to be appended as bare `AND ...` fragments, which attached
@@ -1082,6 +1104,12 @@ class StudentAPI:
         # subclass that does. Normalising here means one code path behaves the
         # same on both, which is the whole point of the persistence layer.
         who = dict(admin)
+        # The display name first, deliberately: the learner sees who resolved
+        # their report, and an operator's email address is not theirs to be
+        # handed. The cost, recorded rather than fixed: names are not unique,
+        # so two admins with the same name ("Operator" is the bootstrap
+        # default) would resolve reports indistinguishably. Suspensions, which
+        # a learner is not shown, record the email.
         named = (body.get("resolved_by") or "").strip() \
             or (who.get("name") or "").strip() \
             or who.get("email", "")
