@@ -47,3 +47,7 @@ alpha0_runs/
 
 # Backup written by tools_mark_test_records.py
 executions.jsonl.before-marking
+
+# Durable test-failure log (tests/failure_capture.py). Local diagnostics, never
+# committed: it holds tracebacks and captured output from whatever ran.
+.test-failures/

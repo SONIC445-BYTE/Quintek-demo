@@ -58,6 +58,13 @@ proves the redirect is in force rather than assuming it.
 from __future__ import annotations
 import os
 import pytest
+
+# --- 3. failure capture -----------------------------------------------------
+# Every failing test, with its traceback, appended to a durable log, plus one
+# line per run. See tests/failure_capture.py for why: an intermittent failure
+# whose name was lost with the terminal cannot be diagnosed.
+from failure_capture import (  # noqa: E402,F401  -- pytest finds hooks by name
+    pytest_runtest_logreport, pytest_sessionfinish, pytest_sessionstart)
 import uuid
 
 # ---------------------------------------------------------------------------
