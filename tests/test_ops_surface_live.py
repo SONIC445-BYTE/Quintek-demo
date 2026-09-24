@@ -249,14 +249,7 @@ def test_the_ceiling_is_per_account(live):
 # Who can see any of it
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason=(
-    "OPEN DISCLOSURE ROUTE, found 2026-09-17, NOT YET FIXED. Held for the "
-    "owner under the standing stop condition: a new disclosure route is "
-    "reported before it is fixed. The status codes were harmonised to 404 and "
-    "the BODIES were not, so an authenticated learner can enumerate the whole "
-    "operator surface by comparing error strings. `strict=True` means this "
-    "flips to a failure the moment the fix lands, so it cannot be forgotten. "
-    "See ADR-028."))
+# ADR-028, FIXED 2026-09-24. Held as xfail(strict=True) while it was open.
 @pytest.mark.parametrize("path", ["/ops/incidents", "/ops/alerts", "/ops/spend"])
 def test_an_ops_route_is_indistinguishable_from_one_that_does_not_exist(live, path):
     """The property is INDISTINGUISHABILITY, not a particular status code.
@@ -283,9 +276,18 @@ def test_an_ops_route_is_indistinguishable_from_one_that_does_not_exist(live, pa
     ops.record(live["db"], operation=ops.INGESTION, error=ValueError("something"))
     control = "/definitely-not-a-route/" + path.strip("/").replace("/", "-")
 
+    # The not-found body echoes the requested path, so two different paths can
+    # never be byte-identical. What must match is everything ELSE: each
+    # response with its own path taken out. A body that differed in any other
+    # way -- "no such route" against "no such endpoint", which is what this
+    # caught -- still fails.
+    def shape(body, asked):
+        return json.loads(json.dumps(body).replace(asked, "<path>"))
+
     for label, token in (("anonymous", None), ("a learner", live["learner"])):
         got_status, got_body = live["request"]("GET", path, token)
         ctl_status, ctl_body = live["request"]("GET", control, token)
+        got_body, ctl_body = shape(got_body, path), shape(ctl_body, control)
         assert (got_status, got_body) == (ctl_status, ctl_body), (
             f"to {label}, {path} answered {got_status} {got_body} while a "
             f"nonexistent path answered {ctl_status} {ctl_body}. The operator "
@@ -353,3 +355,68 @@ def test_a_failed_ingestion_writes_an_incident_an_operator_can_read(tmp_path):
     # The FILENAME, never the contents. An incident is read by an operator who
     # is not this learner.
     assert "text" not in context or context.get("text") is None
+
+
+# ---------------------------------------------------------------------------
+# ADR-028 across the WHOLE operator surface, not three GET routes
+# ---------------------------------------------------------------------------
+#
+# Every route guarded by `_require_admin`, each with the method it serves.
+# `test_every_admin_guard_is_in_this_list` counts the guards in the source, so
+# an admin route added later without a line here fails rather than going
+# unchecked -- the fixture-shaped blind spot ADR-030 was.
+OPERATOR_ROUTES = [
+    ("GET", "/ops/incidents"),
+    ("GET", "/ops/alerts"),
+    ("GET", "/ops/spend"),
+    ("GET", "/ops/reports"),
+    ("GET", "/ops/reports/gold-candidates"),
+    ("POST", "/ops/reports/rpt_x"),
+    ("GET", "/admin/users/usr_x"),
+    ("POST", "/admin/users/usr_x/suspend"),
+]
+
+
+def test_every_admin_guard_is_in_this_list():
+    import re
+    from pathlib import Path
+    src = Path("student/api.py").read_text()
+    guards = len(re.findall(r"self\._require_admin\(token, method, seg\)", src))
+    assert guards == len(OPERATOR_ROUTES), (
+        f"student/api.py has {guards} admin guards and this list names "
+        f"{len(OPERATOR_ROUTES)} routes. Add the new route here.")
+
+
+@pytest.mark.parametrize("method, path", OPERATOR_ROUTES)
+def test_no_operator_route_is_distinguishable_to_a_learner(tmp_path, method, path):
+    from student.api import StudentAPI
+    from student.db import Database as DB
+    api = StudentAPI(DB(tmp_path / "surface.db"))
+    tok = api.handle("POST", "/auth/register", {},
+                     {"email": "curious@example.com", "password": "correct-horse"},
+                     None)[1]["token"]
+    body = {"resolution": "upheld", "reason": "x"}
+    got = api.handle(method, path, {}, body, tok)
+    control = path.replace("/ops/", "/opz/").replace("/admin/", "/admim/")
+    ctl = api.handle(method, control, {}, body, tok)
+    assert got[0] == ctl[0] == 404
+    assert got[1] == {"error": f"no such endpoint: {method} {path}"}, got
+    assert ctl[1] == {"error": f"no such endpoint: {method} {control}"}, ctl
+
+
+def test_an_admin_gets_the_same_not_found_as_everyone_else(tmp_path):
+    """Only an admin reaches the fall-throughs under /admin/users. They must
+    answer with the one not-found body too, so there is a single shape to
+    keep indistinguishable rather than two."""
+    from student import accounts
+    from student.api import StudentAPI
+    from student.db import Database as DB
+    api = StudentAPI(DB(tmp_path / "admin.db"))
+    accounts.bootstrap_admin(api.db, "op@quintek.invalid")
+    accounts.set_password(api.db, "op@quintek.invalid", "an operator passphrase")
+    tok = api.handle("POST", "/auth/login", {}, {"email": "op@quintek.invalid",
+                     "password": "an operator passphrase"}, None)[1]["token"]
+    for method, path in (("GET", "/admin/users/usr_x"),
+                         ("POST", "/admin/users/usr_x/promote")):
+        st, body = api.handle(method, path, {}, {}, tok)
+        assert (st, body) == (404, {"error": f"no such endpoint: {method} {path}"})

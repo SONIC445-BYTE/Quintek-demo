@@ -697,7 +697,7 @@ also not known to be right.
 
 ## ADR-028 — The operator surface is enumerable by any logged-in learner
 
-**Date/phase:** 2026-09-17 · **Status:** OPEN — FOUND, REPORTED, NOT FIXED
+**Date/phase:** 2026-09-17 · **Status:** CLOSED 2026-09-24 — see *Resolution* at the end of this entry
 
 Held unfixed under the standing stop condition: a new disclosure route is
 shown to the owner before it is closed.
@@ -760,6 +760,23 @@ that the surface stops being enumerable.
 
 `tests/test_ops_surface_live.py` carries the check as `xfail(strict=True)`, so
 it **fails the moment the fix lands** and cannot be quietly left behind.
+
+### Resolution (2026-09-24)
+
+One not-found answer, raised from one place: `StudentAPI._no_such_endpoint`,
+`404 {"error": "no such endpoint: <METHOD> /<path>"}`. `_require_admin` now
+takes the request's method and path and raises exactly that, as do the two
+`/admin/users` fall-throughs and the generic fallback.
+
+The held test compared against a control path byte for byte, which a body that
+echoes its own path can never satisfy. It now compares each response with its
+own path taken out, which still fails on any other difference — including the
+original one. Coverage was three GET routes; it is now every route behind
+`_require_admin`, with a check that counts the guards in the source so a new
+operator route cannot go unlisted. Five mutations, all killed. Billing's
+`/admin/*` already answered with the generic body; the console routes mounted
+by `--with-console` are the deliberately public, read-only benchmark surface
+and hold no learner data.
 
 ## ADR-029 — A learner who has used the app cannot delete their account
 

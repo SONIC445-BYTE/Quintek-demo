@@ -218,7 +218,13 @@ class StudentAPI:
                      + (row["status_reason"] or "no reason was recorded"))
         return row
 
-    def _require_admin(self, token: str | None):
+    @staticmethod
+    def _no_such_endpoint(method: str, seg: list[str]) -> "ApiError":
+        """The one not-found answer. Every refusal that must not reveal a
+        route exists raises exactly this."""
+        return ApiError(404, f"no such endpoint: {method} /{'/'.join(seg)}")
+
+    def _require_admin(self, token: str | None, method: str, seg: list[str]):
         """
         Operational data is not a learner's business.
 
@@ -228,7 +234,11 @@ class StudentAPI:
         """
         user = self._user(token)
         if (user["role"] or "") != "admin":
-            raise ApiError(404, "no such route")
+            # The SAME body a path that does not exist gets, not merely the
+            # same status. "no such route" here against "no such endpoint:
+            # GET /x" there let any learner map the operator surface by
+            # diffing two strings (ADR-028).
+            raise self._no_such_endpoint(method, seg)
         return user
 
     def _route(self, method: str, path: str, params: dict, body: dict,
@@ -270,16 +280,16 @@ class StudentAPI:
         # user ids. A deployment discovers an outage from here rather than from
         # a learner's message.
         if seg == ["ops", "incidents"] and method == "GET":
-            self._require_admin(token)
+            self._require_admin(token, method, seg)
             return 200, operations.since(
                 self.db, hours=float(params.get("hours") or 24))
 
         if seg == ["ops", "alerts"] and method == "GET":
-            self._require_admin(token)
+            self._require_admin(token, method, seg)
             return 200, {"alerts": operations.alerts(self.db)}
 
         if seg == ["ops", "spend"] and method == "GET":
-            self._require_admin(token)
+            self._require_admin(token, method, seg)
             return 200, operations.spend_summary(
                 self.db, hours=float(params.get("hours") or 24))
 
@@ -298,7 +308,7 @@ class StudentAPI:
         # the queue names other learners' ids and the stems they complained
         # about.
         if seg == ["ops", "reports"] and method == "GET":
-            self._require_admin(token)
+            self._require_admin(token, method, seg)
             return 200, {"reports": safety.open_reports(
                 self.db, limit=int(params.get("limit") or 200))}
 
@@ -308,11 +318,11 @@ class StudentAPI:
         # asserts the corpus is wrong" -- and an upheld report belongs in the
         # second long after it has left the first.
         if seg == ["ops", "reports", "gold-candidates"] and method == "GET":
-            self._require_admin(token)
+            self._require_admin(token, method, seg)
             return 200, {"candidates": safety.gold_candidates(self.db)}
 
         if len(seg) == 3 and seg[:2] == ["ops", "reports"] and method == "POST":
-            admin = self._require_admin(token)
+            admin = self._require_admin(token, method, seg)
             return 200, self.resolve_report(admin, seg[2], body)
 
         # --- an account being turned off, and erased on request ---
@@ -335,11 +345,11 @@ class StudentAPI:
                 raise ApiError(400, str(exc))
 
         if len(seg) == 3 and seg[0] == "admin" and seg[1] == "users":
-            self._require_admin(token)
-            raise ApiError(404, "no such route")
+            self._require_admin(token, method, seg)
+            raise self._no_such_endpoint(method, seg)
 
         if len(seg) == 4 and seg[:2] == ["admin", "users"] and method == "POST":
-            admin = self._require_admin(token)
+            admin = self._require_admin(token, method, seg)
             target, action = seg[2], seg[3]
             try:
                 if action == "suspend":
@@ -350,7 +360,7 @@ class StudentAPI:
                     return 200, accounts.reinstate(self.db, target, by=admin["email"])
             except accounts.AccountError as exc:
                 raise ApiError(400, str(exc))
-            raise ApiError(404, "no such route")
+            raise self._no_such_endpoint(method, seg)
 
         if seg == ["scope"] and method == "GET":
             return 200, {"scope_statement": safety.SCOPE_STATEMENT,
@@ -538,7 +548,7 @@ class StudentAPI:
         if seg and seg[0] == "ai":
             return self._ai(method, seg[1:], params)
 
-        raise ApiError(404, f"no such endpoint: {method} /{'/'.join(seg)}")
+        raise self._no_such_endpoint(method, seg)
 
     def _ai(self, method: str, seg: list[str], params: dict) -> tuple[int, dict]:
         if method != "GET":
