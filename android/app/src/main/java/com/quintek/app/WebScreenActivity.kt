@@ -1,8 +1,10 @@
 package com.quintek.app
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.ViewGroup
 import android.webkit.ValueCallback
@@ -51,6 +53,22 @@ abstract class WebScreenActivity : AppCompatActivity() {
 
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
 
+    /** The page on screen, updated on the UI thread and read by the reminder
+     *  bridge on the WebView's JS thread -- hence volatile. */
+    @Volatile private var currentUrl: String? = null
+
+    /** The Android 13+ notification prompt. The answer is handed back to the
+     *  page, which re-syncs so its "notifications are off" line updates. */
+    private val notificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> permissionChanged() }
+
+    private fun permissionChanged() {
+        webView.evaluateJavascript(
+            "window.__quintekNotificationPermissionChanged && " +
+            "window.__quintekNotificationPermissionChanged()", null)
+    }
+
     private val fileChooser = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -98,7 +116,33 @@ abstract class WebScreenActivity : AppCompatActivity() {
             }
         }
 
+        if (screen == Screen.STUDENT) {
+            // Only the learner's app schedules reminders; the console never
+            // gets the bridge at all.
+            webView.addJavascriptInterface(ReminderBridge(
+                applicationContext,
+                allowed = { currentUrl == screen.url },
+                askPermission = {
+                    runOnUiThread {
+                        if (Build.VERSION.SDK_INT >= 33) {
+                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            // Below 13 there is no runtime prompt: notifications are on
+                            // unless turned off in system settings, which the page is
+                            // told to re-check.
+                            permissionChanged()
+                        }
+                    }
+                },
+            ), "QuintekReminders")
+        }
+
         webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                currentUrl = url
+                super.onPageStarted(view, url, favicon)
+            }
+
             override fun shouldInterceptRequest(
                 view: WebView,
                 request: WebResourceRequest,

@@ -122,7 +122,7 @@ test('a new learner sees an empty list and is told delivery is off', async () =>
   assert.deepEqual(plain(v.reminderRows), []);
   assert.equal(v.remDeliveryOff, true,
     'no sender is configured, and the screen does not say so');
-  assert.match(v.remDeliveryNote, /not switched on/);
+  assert.match(v.remDeliveryNote, /Nothing delivers reminders in this browser/);
   assert.equal(v.remSubmitLabel, 'Add reminder');
 });
 

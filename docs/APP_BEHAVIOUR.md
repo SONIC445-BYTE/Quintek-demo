@@ -29,9 +29,8 @@ So the two statements to keep separate are:
 
 - *The engine is not built.* — **No longer true.** Accounts, ingestion, concept
   resolution, generation, validation, attempts, gap tracking and spaced
-  repetition are implemented and tested in `student/`. Reminders are stored,
-  edited and fired up to the point of a sender; nothing delivers them and
-  nothing schedules them (§2.8).
+  repetition are implemented and tested in `student/`. Reminders are stored and
+  edited on the server and delivered by the Android app on the phone (§2.8).
 - *The screens the learner touches are still simulated.* — **Still true.** Every
   interaction in the sections below runs on in-file constants. Wiring the
   screens to `student/api.py` is real remaining work, not a configuration flag.
@@ -185,7 +184,7 @@ right:
   One day is not a streak, so `studyStreak` returning 0 or 1 falls back to the
   attempt count, which is a fact either way.
 
-### 2.8 Reminders — REAL up to delivery; DELIVERY AND SCHEDULING NOT BUILT
+### 2.8 Reminders — REAL; delivered by the phone (Android app), not by the server
 
 **Rewritten 2026-09-23 (ADR-031).** The single daily "trigger" setting this
 section used to describe is gone, not patched. It answered "when should the
@@ -216,23 +215,26 @@ anything being due, and it does not start a revision session.
   refused rather than resolved, because picking one of two instants would be
   the app deciding when the learner meant.
 
-**What does not happen.** *Nothing is delivered and nothing is scheduled.*
+**Who delivers (decided 2026-09-24, ADR-031): the phone.** In the Android
+app, opening Reminders hands the phone every pending, future reminder;
+Android's AlarmManager holds each one and a notification shows the label,
+verbatim, at its time (inexact — possibly a few minutes late in Doze).
+Alarms are re-armed after a reboot. The phone asks for notification permission
+from this screen, not at launch, and says so plainly when it is off. Each row
+shows what the phone did: *Shown on this phone*, *Not shown — notifications
+were off*, or *Time passed — this phone did not show it* for one it never
+synced. A reminder only fires on a phone that has opened Reminders since it
+was added or changed; that limitation is accepted for this phase.
 
-* `ReminderService.fire` claims a due reminder (so two runs cannot both send
-  it) and hands `{user_id, reminder_id, label, fire_at}` to an injected
-  sender. **No sender exists on any deployment**, so a reminder whose time
-  comes is recorded *failed* with "no notification sender is configured" and
-  shows as *Not sent* with that reason.
-* **Nothing runs the scheduler.** `python -m benchmark.cli notify` runs the due
-  reminders once and exits; no cron job or platform job calls it (Render's
-  free web service has none, and spins down when idle).
-* The screen says so **above the form**, before anyone relies on a reminder:
-  "Delivery is not switched on yet…". It reads that from the server
-  (`delivery_configured`), so the sentence goes away when a sender exists.
-* No OS notification is posted and no notification permission is requested.
+**What does not happen.**
 
-ADR-031 has the recommended channel and the scheduling options; each needs a
-credential or a plan change, which is why neither is built.
+* **In a browser, nothing delivers a reminder**, and the screen says so.
+* **The server delivers nothing.** `ReminderService.fire` still stops at an
+  unset sender, and `python -m benchmark.cli notify` is scheduled by nothing.
+  Scheduling it without a sender would mark every due reminder failed.
+* The phone does not report back, so the server's status for a reminder stays
+  `pending` after the phone has shown it; the list shows the phone's record.
+* The native half is verified only on a device (ANDROID_MANUAL_TEST W–AA).
 
 **The retired tables.** `notification_prefs` and `notification_log` are kept
 in the schema, unread and unwritten. On production they held six rows, all
@@ -439,7 +441,7 @@ configuration that warning is not a formality.
 | Source ingestion, extraction, concept resolution | **Built and tested** in `student/`; the UI still simulates it |
 | Question generation and validation | **Built and tested** in `student/`; never yet run against a live model |
 | Spaced repetition, persistence, accounts | **Built and tested** in `student/`; the UI still simulates it |
-| Reminders | **Built and tested** up to the sender, and live on the settings screen; **delivery and scheduling not built** (§2.8, ADR-031) |
+| Reminders | **Built and tested**; delivered on the phone by the Android app, verified on a device only by the manual checklist; no server-side delivery (§2.8, ADR-031) |
 | Learner-facing AI transparency (Quintek AI Benchmark) | **Built** — data layer, routes, and honest empty states |
 | Benchmark → production promotion | **Built** — the gate is code, refusals are explained |
 | The screens calling that backend | **Not done.** The `.dc.html` still runs on in-file constants |

@@ -1073,6 +1073,44 @@ Choices were drop, migrate, or leave:
   comment so existing and new databases agree; erasure still clears them
   because they carry `user_id`.
 
+### Decision (2026-09-24): delivered by the phone
+
+**The owner chose on-device scheduling, not FCM.** It needs no Firebase
+credential, no cron job, no paid Render tier and no always-on instance, which
+removes every blocker listed above at once. Its weakness — a reminder fires
+only on a phone that has synced it — is acceptable for a single-user testing
+phase and for a revision reminder, which is not time-critical the way an alert
+is. **FCM remains the recorded path** for multi-device or guaranteed delivery.
+Only one is built.
+
+How it works:
+
+* **What to schedule** is `reminderSyncPlan` (client module): pending
+  reminders whose server UTC instant is in the future, label byte-for-byte. A
+  reminder whose time passed before the phone saw it is not fired late; the
+  row says it passed. Tested directly, in a non-UTC timezone.
+* **Sync** happens every time the Reminders list loads. The page hands the
+  plan to `window.QuintekReminders.sync`; the phone arms exactly that set and
+  disarms anything else it held — so a cancel or an edit takes effect on the
+  next visit.
+* **The phone** (`android/.../Reminders.kt`): `setAndAllowWhileIdle` alarms
+  (inexact; no exact-alarm permission, may be a few minutes late in Doze),
+  a notification whose text is the label verbatim, alarms re-armed after a
+  reboot or an app update, and a per-reminder record of *shown* or *blocked*
+  that the list displays. The bridge exists only on the learner screen and
+  refuses unless that screen's own bundle is loaded.
+* **Permission**: POST_NOTIFICATIONS is asked for from the Reminders screen
+  (a button beside "Notifications are off…"), never at launch.
+* **The server's `notify` path is unchanged** and still scheduled by nothing.
+  The warning stands: scheduling it without a sender marks every due reminder
+  failed.
+
+What is verified where: the plan and the screen, by
+`tests/frontend/device_reminders_live.test.mjs` against a live server (15
+mutations, all killed); the Kotlin, by compiling into the APK and the packaged
+manifest; the behaviour on a phone, by items W–AA of
+`docs/ANDROID_MANUAL_TEST.md` and nothing else — there is no device here.
+
 ## ADR-032 — No answer given through the live app's colour buttons was ever recorded
 
 **Date/phase:** 2026-09-23 · **Status:** FIXED the same day. Found while writing the dashboard how-to, not a disclosure route.

@@ -151,12 +151,23 @@ clips, a control that cannot be tapped — those still need item T walked on
 hardware, and nothing in this repository can close that.
 
 
-## Two extra checks worth doing
+## Extra checks worth doing
 
 | # | Test | Expected |
 |---|---|---|
 | U | **Release build refuses cleartext** — install `app-release-unsigned.apk` (after signing) and point it at `http://…` | The request fails. This is ADR-022 working |
 | V | **Persistence survives a redeploy** — with the backend on Postgres, restart the server process and reopen the app | Account, notebooks and progress are all still there. This is the entire point of ADR-020 |
+| W | **Reminder permission** (Android 13+) — Settings → Reminders on a fresh install | The line "Notifications are off for Quintek on this phone" and an **Allow notifications** button. Tap it: the system prompt appears. Allow: the line changes to "This phone shows your reminders…" without reopening the screen |
+| X | **A reminder fires, verbatim** — add one 3 minutes ahead with text `  revise patho` + a new line + `  ch. 4 ` (leading spaces, a line break) | A notification titled "Quintek reminder" whose text is the label exactly, line break and spaces kept when expanded. It may be a few minutes late in Doze — inexact alarm, by design. Reopen Reminders: the row reads **Shown on this phone** |
+| Y | **Cancel disarms** — add one 3 minutes ahead, cancel it, stay on the screen | No notification. (The cancel re-syncs; the alarm is disarmed.) |
+| Z | **Survives a reboot** — add one 10 minutes ahead, restart the phone before it fires, do NOT open the app | It still fires. If its time passed while the phone was off, it fires as soon as the phone is up |
+| AA | **Notifications denied** — deny the prompt (or turn them off in system settings), let one come due | No notification; the row reads **Not shown — notifications were off on this phone** |
+
+**W–AA are the only verification the native half of reminders has.** The
+decision of what to schedule is tested in JavaScript
+(`tests/frontend/device_reminders_live.test.mjs`) and the Kotlin compiles into
+the APK, but nothing in this repository can run AlarmManager or post a
+notification.
 
 ## What this pass closed, and what it did not
 

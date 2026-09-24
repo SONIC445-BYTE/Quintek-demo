@@ -1159,7 +1159,10 @@ a{color:#1E7A57;text-decoration:none}a:hover{color:#2A9C70}
           <div style="display:flex;flex-direction:column;gap:10px;padding:13px;background:#fff;border:1px solid #E6E4DE;border-radius:6px">
             <span style="font-size:12px;line-height:1.5;color:#6f7679;text-wrap:pretty">Write anything, pick a date and a time. At that moment Quintek hands your words back to you exactly as you wrote them. Add as many as you like; each one is separate.</span>
             <sc-if value="{{ remDeliveryOff }}" hint-placeholder-val="{{ true }}">
-              <span style="font-size:11.5px;line-height:1.5;color:#8a5f13;padding:9px 10px;background:#F5F3EC;border-radius:5px;text-wrap:pretty">{{ remDeliveryNote }}</span>
+              <span style="font-size:11.5px;line-height:1.5;color:{{ remDeliveryFg }};padding:9px 10px;background:#F5F3EC;border-radius:5px;text-wrap:pretty">{{ remDeliveryNote }}</span>
+            </sc-if>
+            <sc-if value="{{ remAskPermission }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ remRequestPermission }}" style="align-self:flex-start;min-height:40px;padding:0 14px;background:#fff;border:1px solid #1E7A57;border-radius:5px;cursor:pointer;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:12.5px;font-weight:600;color:#1E7A57">Allow notifications</button>
             </sc-if>
             <input value="{{ remLabel }}" onChange="{{ setRemLabel }}" maxlength="200" placeholder="e.g. revise patho" style="min-height:44px;padding:0 11px;background:#fff;border:1px solid #E0DDD4;border-radius:5px;outline:none;font-family:'Space Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;font-size:13px;color:#16191A" />
             <div style="display:flex;gap:8px">
@@ -2109,6 +2112,7 @@ class Component extends DCLogic {
     remLabel: '', remDate: '', remTime: '', remEditing: null, remBusy: '',
     remFormError: '',
     guideOpen: null,
+    deviceReminders: null, deviceOutcomes: {},
     demosState: 'off', demosError: '',
     weakFilter: 'All', query: '', cptFrom: 'weak', qCount: 10, strategy: 'adaptive',
     studio: {}, studioOut: false, studioAct: null, bankFilter: 'All',
@@ -2554,10 +2558,14 @@ class Component extends DCLogic {
     const fresh = ready && (s.liveProgress.attempts_total || 0) === 0;
     const open = s.guideOpen === null || s.guideOpen === undefined ? fresh : !!s.guideOpen;
     const delivery = !s.studentApi ? ''
-      : s.remState !== 'ready' ? 'Settings shows whether reminder delivery is switched on.'
+      : this.deviceBridge()
+        ? 'This phone shows them, with notifications allowed. It picks up new and '
+          + 'changed reminders when you open Reminders, so open it once after adding one '
+          + 'elsewhere.'
+      : s.remState !== 'ready' ? 'Settings shows how reminders are delivered.'
       : s.remDelivery ? ''
-      : 'Delivery is not switched on for this server yet, so for now a reminder whose '
-        + 'time comes is marked “Not sent” on your list instead of reaching you.';
+      : 'Nothing delivers them in a browser. The Quintek Android app shows them on your '
+        + 'phone once you have opened Reminders there.';
     return {
       guideOpen: open,
       toggleGuide: () => this.setState({ guideOpen: !open }),
@@ -2643,6 +2651,49 @@ class Component extends DCLogic {
       : rows.length === 0 ? 'You have no reminders yet.'
       : rows.length + (rows.length === 1 ? ' reminder' : ' reminders');
     const editing = s.remEditing;
+    const now = this.nowMs();
+    /* Who delivers. On the Android app, THIS PHONE (ADR-031): the bridge is
+     * present and says whether notifications are allowed. In a browser,
+     * nothing does unless the server has a sender, and the page says so. */
+    const bridge = live ? this.deviceBridge() : null;
+    const device = s.deviceReminders;
+    const outcomes = s.deviceOutcomes || {};
+    let deliveryNote = '', deliveryFg = '#8a5f13', askPermission = false;
+    if (live && bridge) {
+      if (!device) {
+        deliveryNote = '';
+      } else if (device.error) {
+        deliveryNote = 'This phone could not schedule your reminders — ' + device.error;
+        deliveryFg = '#BC4C43';
+      } else if (device.permission !== 'granted') {
+        deliveryNote = 'Notifications are off for Quintek on this phone, so a reminder '
+          + 'cannot be shown when its time comes.';
+        deliveryFg = '#BC4C43';
+        askPermission = true;
+      } else {
+        deliveryNote = 'This phone shows your reminders at their time. It schedules them '
+          + 'whenever you open this screen, so one added or changed on another device '
+          + 'reaches this phone only after you open Reminders here.';
+      }
+    } else if (live && s.remState === 'ready' && !s.remDelivery) {
+      deliveryNote = 'Nothing delivers reminders in this browser. The Quintek Android app '
+        + 'shows them on your phone once you have opened Reminders there.';
+    }
+    const statusOf = (r) => {
+      const outcome = bridge ? outcomes[r.id] : undefined;
+      if (outcome === 'delivered') return ['Shown on this phone', '#1E7A57', '#1E7A57'];
+      if (outcome === 'blocked') {
+        return ['Not shown — notifications were off on this phone', '#BC4C43', '#BC4C43'];
+      }
+      const passed = r.status === 'pending' && Date.parse(r.fire_at) <= now;
+      if (live && passed) {
+        return [bridge ? 'Time passed — this phone did not show it'
+                       : 'Time passed — nothing in this browser delivers it',
+                '#BC4C43', '#DDD9CF'];
+      }
+      const [label, fg, edge] = STATUS[r.status] || [String(r.status), '#5d6467', '#DDD9CF'];
+      return [r.status === 'failed' && r.detail ? label + ' — ' + r.detail : label, fg, edge];
+    };
     return {
       remLabel: s.remLabel, remDate: s.remDate, remTime: s.remTime,
       setRemLabel: (e) => this.setState({ remLabel: e.target.value, remFormError: '' }),
@@ -2655,20 +2706,23 @@ class Component extends DCLogic {
       remSubmit: this.submitReminder,
       remSubmitLabel: s.remBusy === 'saving' ? 'Saving…' : editing ? 'Save changes' : 'Add reminder',
       remFormError: s.remFormError,
-      remDeliveryOff: live && s.remState === 'ready' && !s.remDelivery,
-      remDeliveryNote: 'Delivery is not switched on yet. No notification channel is '
-        + 'connected on this server, so when a reminder’s time comes it is marked '
-        + '“Not sent” on this list instead of reaching you. You can still set them now.',
+      remDeliveryOff: !!deliveryNote,
+      remDeliveryNote: deliveryNote, remDeliveryFg: deliveryFg,
+      remAskPermission: askPermission, remRequestPermission: this.requestNotificationPermission,
       remListNote: listNote,
       remListFg: s.remState === 'error' ? '#BC4C43' : '#8a9093',
       reminderRows: rows.map((r) => {
-        const [status, fg, edge] = STATUS[r.status] || [String(r.status), '#5d6467', '#DDD9CF'];
+        const [status, fg, edge] = statusOf(r);
+        const passed = r.status === 'pending' && Date.parse(r.fire_at) <= now;
         return {
           id: r.id, label: r.label,
           when: r.local_date + ' · ' + r.local_time + ' · ' + r.timezone,
-          status: r.status === 'failed' && r.detail ? status + ' — ' + r.detail : status,
-          statusFg: fg, edge,
-          pending: r.status === 'pending',
+          status, statusFg: fg, edge,
+          /* Edit and cancel only while it can still fire. The server keeps a
+           * passed reminder 'pending' (nothing marks it), but offering to edit
+           * one whose time has gone would move it to a time the learner did
+           * not set. */
+          pending: r.status === 'pending' && !(live && passed),
           edit: this.editReminder(r), cancel: this.cancelReminder(r.id),
         };
       }),
@@ -2958,14 +3012,49 @@ class Component extends DCLogic {
     if (!api || !api.listReminders) { this.setState({ remState: 'off' }); return null; }
     this.setState({ remState: 'loading', remError: '' });
     return api.listReminders()
-      .then((res) => this.setState({
-        remState: 'ready', liveReminders: (res && res.reminders) || [],
-        remDelivery: !!(res && res.delivery_configured),
-      }))
+      .then((res) => {
+        const rows = (res && res.reminders) || [];
+        this.setState({
+          remState: 'ready', liveReminders: rows,
+          remDelivery: !!(res && res.delivery_configured),
+        });
+        this.syncDevice(rows, api);
+      })
       .catch((err) => this.setState({
         remState: 'error', liveReminders: null,
         remError: (err && err.message) ? err.message : String(err),
       }));
+  };
+
+  /* The Android app's reminder bridge, or null in a browser. A method so a
+   * test can hand the component a fake phone. */
+  deviceBridge = () => (typeof window !== 'undefined' && window.QuintekReminders) || null;
+  nowMs = () => Date.now();
+
+  /* Hand the phone exactly the reminders it should be holding. Runs every
+   * time the list is read -- which is what "synced" means in ADR-031 -- so a
+   * cancel or an edit disarms or moves the phone's alarm the next time the
+   * learner is on this screen. WHICH ones is `reminderSyncPlan`, in the client
+   * module, where it is tested. */
+  syncDevice = (rows, client) => {
+    const bridge = this.deviceBridge();
+    const api = client || this.state.studentApi;
+    if (!bridge || !api || !api.reminderSyncPlan) return null;
+    try {
+      const plan = api.reminderSyncPlan(rows || [], this.nowMs());
+      const res = JSON.parse(bridge.sync(JSON.stringify(plan)) || '{}');
+      const outcomes = JSON.parse((bridge.outcomes && bridge.outcomes()) || '{}');
+      this.setState({ deviceReminders: res, deviceOutcomes: outcomes });
+      return res;
+    } catch (err) {
+      this.setState({ deviceReminders: { error: (err && err.message) || String(err) } });
+      return null;
+    }
+  };
+
+  requestNotificationPermission = () => {
+    const bridge = this.deviceBridge();
+    if (bridge && bridge.requestPermission) bridge.requestPermission();
   };
 
   /* The device's IANA timezone, shown on the form so the learner can see which
@@ -3175,6 +3264,12 @@ class Component extends DCLogic {
 
   componentDidMount() {
     this.initGraph();
+    /* The phone calls this after the notification prompt is answered, so the
+     * "notifications are off" line reflects the answer without a reload. */
+    if (typeof window !== 'undefined') {
+      window.__quintekNotificationPermissionChanged =
+        () => this.syncDevice(this.state.liveReminders || []);
+    }
     import('./quintek-eval-api.js')
       .then((api) => this.setState({ evalApi: api, evalState: api.state }))
       .catch(() => this.setState({ evalState: 'error' }));

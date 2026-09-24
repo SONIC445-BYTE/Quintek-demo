@@ -550,7 +550,7 @@ def test_a_reminder_shows_the_learners_words_as_typed(browser, backend, learner)
     page = open_app(browser, backend, learner)
     nav(page, "More")
     nav(page, "Settings")
-    page.wait_for_selector("text=Delivery is not switched on", timeout=15_000)
+    page.wait_for_selector("text=Nothing delivers reminders in this browser", timeout=15_000)
     # innerText of a pre-wrap span keeps the newline and the leading spaces; a
     # span without pre-wrap would collapse them and fail this.
     rendered = page.evaluate(

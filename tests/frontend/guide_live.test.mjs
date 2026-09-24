@@ -169,11 +169,11 @@ test('the reminders item says delivery is off, because the server says so', asyn
   const listed = await api.listReminders();
   assert.equal(listed.delivery_configured, false);
   const note = item(inst.renderVals(), 'Reminders').note;
-  assert.match(note, /not switched on/);
+  assert.match(note, /Nothing delivers them in a browser/);
   // And it states nothing either way until the server has answered.
   inst.setState({ remState: 'loading' });
-  assert.match(item(inst.renderVals(), 'Reminders').note, /Settings shows whether/);
-  // With a sender configured, the "not switched on" sentence goes.
+  assert.match(item(inst.renderVals(), 'Reminders').note, /Settings shows how reminders are delivered/);
+  // With a sender configured, the "nothing delivers them" sentence goes.
   inst.setState({ remState: 'ready', remDelivery: true });
   assert.equal(item(inst.renderVals(), 'Reminders').note, '');
 });

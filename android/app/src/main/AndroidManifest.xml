@@ -10,6 +10,18 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!--
+      Reminders are delivered by the phone (ADR-031): AlarmManager holds each
+      one and a notification shows the learner's words at its time.
+      POST_NOTIFICATIONS is asked for at runtime on Android 13+, only when the
+      learner is setting reminders. RECEIVE_BOOT_COMPLETED puts the alarms
+      back after a restart, which Android otherwise drops. No exact-alarm
+      permission: an inexact alarm may run a few minutes late in Doze, which a
+      revision reminder can afford.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -60,6 +72,19 @@
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:parentActivityName=".MainActivity" />
+
+        <receiver
+            android:name=".ReminderReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".ReminderBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

@@ -430,6 +430,28 @@ export async function updateReminder(id, { label, localDate, localTime, timezone
   return call('PUT', '/reminders/' + encodeURIComponent(id), body);
 }
 
+/* What the phone should have scheduled, from the learner's reminder list.
+ *
+ * The Android app delivers reminders itself (ADR-031): it hands each one to
+ * the phone's AlarmManager. THIS is the decision of which ones, kept here, in
+ * plain JavaScript, because it can be tested here and the Kotlin cannot be in
+ * this repository's build. The native side schedules exactly this list and
+ * disarms anything it had that is not on it.
+ *
+ *   * pending only -- a cancelled, fired or failed reminder is not scheduled;
+ *   * in the future only -- a reminder whose time passed before this phone
+ *     ever saw it is NOT fired late as a surprise; the screen says it passed;
+ *   * `at` is the server's UTC instant in epoch ms, so the phone's own
+ *     timezone cannot move it;
+ *   * the label exactly as stored -- no trim, no rewrite.
+ */
+export function reminderSyncPlan(reminders, nowMs) {
+  return (reminders || [])
+    .filter((r) => r && r.status === 'pending')
+    .map((r) => ({ id: String(r.id), label: r.label, at: Date.parse(r.fire_at) }))
+    .filter((r) => Number.isFinite(r.at) && r.at > nowMs && typeof r.label === 'string');
+}
+
 /* Cancel, not delete: the row stays on the learner's list marked cancelled. */
 export async function cancelReminder(id) {
   return call('DELETE', '/reminders/' + encodeURIComponent(id));
