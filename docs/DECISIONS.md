@@ -1234,3 +1234,45 @@ original values; all fail a test.
 are offline design copies last touched 2026-08-19. They carry the old
 `JUDGEMENTS` but have no backend client, so the 400 cannot occur in them; they
 are not built from source and are left as they are.
+
+## ADR-033 — The operator surface's first real use
+
+**Date/phase:** 2026-09-24 · **Status:** two defects FIXED; one limitation RECORDED; production walk BLOCKED on the admin password not yet being set
+
+The admin routes had never been used by anyone. They were walked end to end
+as an admin, over HTTP, by a script that prints only statuses
+(`operator_walk.py`, kept out of the repository because it is a one-off):
+every `/ops/*` route, suspension and reinstatement, the report queue from a
+learner's report through an operator's resolution back to the learner, and
+ADR-028's indistinguishability from the learner's side.
+
+**Where.** A local instance with the production schema, on SQLite and on
+PostgreSQL: 34/34 checks on each. **Production could not be walked**: the
+admin account there still has no password — `set-password` has not been run
+(checked read-only: the hash is still the unusable marker) — so no password
+can log into it. One login attempt was refused; nothing was changed.
+
+**Fixed:**
+
+1. *A suspended learner could log in.* Login returned 200 and a fresh token
+   that failed on first use, leaving a session row for a switched-off
+   account. Login now answers 403 with the reason and issues nothing — only
+   after the password is right, so a wrong password reveals nothing.
+2. *An upheld report withdrew nothing.* A question an operator had just
+   confirmed was keyed wrong stayed `approved`, served and selected into
+   sessions. Upholding now sets it `flagged` (refused everywhere by
+   ADR-030's rule), records which report withdrew it and who upheld it, and
+   keeps the validator's record. One-way.
+3. *The learner never learned the outcome.* No screen showed a report's
+   fate. Bank rows now carry the learner's own report status, and a
+   withdrawn question says it was withdrawn rather than "awaiting validation".
+
+**Recorded, not changed:** resolutions are recorded under the admin's display
+name, which is not unique — two admins both named "Operator" would be
+indistinguishable in the record. It stays the name because the learner sees
+who resolved their report and an operator's email is not theirs to be handed;
+an existing test pins it. Suspensions, which learners do not see, record the
+email.
+
+`tests/test_operator_surface.py` (both backends) and
+`tests/frontend/bank_reports.test.mjs`; 11 mutations, all killed.

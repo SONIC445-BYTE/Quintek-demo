@@ -278,6 +278,10 @@ unset QUINTEK_DATABASE_URL
 It prompts twice, needs at least 12 characters, and signs out any session the
 account had. Then log in through the app or `POST /auth/login` as usual.
 
+**As of 2026-09-24 this has not been run**: the production admin still has no
+usable password (checked read-only), so the operator surface has been walked
+only on local instances with the production schema (ADR-033).
+
 ---
 
 ## 7. State of the thing the project is actually about
