@@ -158,10 +158,10 @@ failure paths, naming the affected account and the filename — never the
 file's contents, since an incident is read by an operator who is not that
 learner. Removing the two call lines fails the new test.
 
-**Still open:** the spend ceiling. Connecting it needs a number — how many
-generation calls one account may make per period — and that is a business
-decision, not an implementation detail. Inventing one would put a made-up
-figure in the path of every learner's spend. See §5.
+**Closed 2026-09-24:** the spend ceiling is charged by question generation —
+50 model calls per account per rolling 24 hours, configurable with
+`QUINTEK_GENERATION_CALLS_PER_DAY`; a starting value for testing, not a
+researched limit.
 
 ---
 

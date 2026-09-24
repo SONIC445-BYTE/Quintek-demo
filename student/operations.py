@@ -30,18 +30,20 @@ journal key. `spend_guard()` wraps it and adds the only thing an ingestion loop
 needs that a validator run does not: a per-user ceiling, because a runaway loop
 belongs to one account.
 
-**NOT WIRED. `spend_guard()` and `charge()` have no production call site.**
+**WIRED to question generation (2026-09-24).** `QuestionGenerator.generate`
+charges one GENERATION unit immediately before its model call: 50 per account
+per rolling 24 hours by default, `QUINTEK_GENERATION_CALLS_PER_DAY` to change
+it. 50 is a starting value chosen for the testing phase, not a researched
+limit. A refused call never reaches the model and is not written as spend;
+the API answers 429.
 
-This paragraph previously said `spend_guard()` "wraps it for the ingestion and
-generation paths", which was never true. The ceiling works, is tested against a
-running server, refuses correctly and reloads from history rather than from
-memory -- and nothing charges against it, so nothing is ceilinged.
-
-Connecting it needs a number: how many generation calls one account may make
-per period. That is a business decision rather than an implementation detail,
-and inventing one here would put a made-up figure in the path of every
-learner's spend. Recorded in `docs/NOT_BUILT.md` and `docs/INVENTORY.md` as
-waiting on that decision.
+Two things are NOT ceilinged, deliberately and visibly: concept extraction
+during ingestion and the validator's calls. The ceiling as decided is on
+generation calls. And the check and the write are two statements, so
+requests racing in parallel can each pass the check before either writes:
+the ceiling can be overshot by the number of requests in flight at once.
+For one tester that is at most a handful; a hard guarantee would need a
+row lock or a counter row, recorded rather than built.
 
 `record()`, by contrast, needs no such number and IS wired: see
 `IngestionEngine._record_incident`.

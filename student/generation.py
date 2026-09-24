@@ -162,11 +162,40 @@ def _rejection_reason(item: dict) -> str:
     return "unknown"
 
 
+#: The per-account ceiling on generation model calls, in a rolling 24 hours.
+#: 50 is a STARTING VALUE chosen for the testing phase, not a researched
+#: limit: enough for a tester to use the app freely, small enough that a
+#: runaway client cannot spend without bound. Override with the environment
+#: variable below; the value must be a positive integer.
+GENERATION_CALLS_PER_DAY_ENV = "QUINTEK_GENERATION_CALLS_PER_DAY"
+DEFAULT_GENERATION_CALLS_PER_DAY = 50
+
+
+def generation_calls_per_day() -> int:
+    """The configured ceiling. A value that is not a positive integer is an
+    error at startup, not a silent fallback: a typo that quietly restored the
+    default -- or removed the ceiling -- would be the failure this prevents."""
+    import os
+    raw = (os.environ.get(GENERATION_CALLS_PER_DAY_ENV) or "").strip()
+    if not raw:
+        return DEFAULT_GENERATION_CALLS_PER_DAY
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 0
+    if value < 1:
+        raise ValueError(f"{GENERATION_CALLS_PER_DAY_ENV} must be a positive integer, "
+                         f"got {raw!r}")
+    return value
+
+
 class QuestionGenerator:
-    def __init__(self, db: Database, ai: AIEngine):
+    def __init__(self, db: Database, ai: AIEngine, *, calls_per_day: int | None = None):
         self.db = db
         self.ai = ai
         self.store = ConceptStore(db)
+        self.calls_per_day = (generation_calls_per_day() if calls_per_day is None
+                              else int(calls_per_day))
 
     # -- context assembly --
 
@@ -392,6 +421,24 @@ class QuestionGenerator:
         trace.prompt(prompt=prompt, task_type="QUESTION_GENERATION",
                      prompt_version=GENERATION_PROMPT_VERSION, temperature=0.2,
                      max_tokens=400 * count + 600, demos=demo_ids)
+
+        # THE SPEND CEILING, charged at the one place a generation model call
+        # is made, immediately before it -- so a request refused earlier (no
+        # passages, bad count) costs nothing, and every call that does go out
+        # is counted whether or not the reply is usable: the provider bills
+        # either way. The existing machinery, not a second counter:
+        # `spend_guard` loads this account's rolling-24h spend from
+        # `spend_log` into a `Budget`, and `charge` refuses BEFORE it writes,
+        # so a refused call is not recorded as spend.
+        from . import operations as ops
+        budget = ops.spend_guard(self.db, user_id=owner_id, max_calls=self.calls_per_day,
+                                 operation=ops.GENERATION)
+        try:
+            ops.charge(self.db, user_id=owner_id, operation=ops.GENERATION, budget=budget,
+                       note=f"question generation, notebook {notebook_id}, count {count}")
+        except ops.SpendCeilingReached as exc:
+            trace.failed("spend_ceiling", exc)
+            raise
 
         try:
             result = self.ai.call("QUESTION_GENERATION", prompt,

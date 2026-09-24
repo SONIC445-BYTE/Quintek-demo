@@ -856,6 +856,7 @@ class StudentAPI:
         attribution = self._attribute(batch_id, uid)
 
         from .generation import GenerationFailed
+        from .operations import SpendCeilingReached
         try:
             with attribution:
                 ids = self.generator.generate(
@@ -872,6 +873,14 @@ class StudentAPI:
                     owner_id=uid)
         except GenerationFailed as exc:
             raise ApiError(422, str(exc))
+        except SpendCeilingReached:
+            # 429, and a sentence a learner can act on. The exception's own
+            # text names the account id, which is for the log, not the screen.
+            limit = getattr(self.generator, "calls_per_day", None)
+            raise ApiError(429, (
+                f"You have made {limit} question-generation requests in the last 24 "
+                "hours, which is this account's limit for now. It frees up as each "
+                "request passes 24 hours old."), limit=limit)
         except Exception as exc:
             raise ApiError(502, f"generation failed: {exc}")
 
